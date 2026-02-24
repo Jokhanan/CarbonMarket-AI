@@ -1,0 +1,38 @@
+standard: GoldStandard
+doc_type: MR
+
+rules:
+  - id: GS_MR_001
+    type: required_section
+    section: "Monitoring Period"
+    severity: ERROR
+
+  - id: GS_MR_002
+    type: required_section
+    section: "Project Description"
+    severity: ERROR
+
+  - id: GS_MR_003
+    type: required_section
+    section: "Baseline Emissions"
+    severity: ERROR
+
+  - id: GS_MR_004
+    type: required_section
+    section: "Project Emissions"
+    severity: ERROR
+
+  - id: GS_MR_005
+    type: required_section
+    section: "Emission Reductions"
+    severity: ERROR
+
+  - id: GS_MR_006
+    type: required_section
+    section: "Data Quality"
+    severity: WARNING
+
+  - id: GS_MR_007
+    type: required_section
+    section: "Safeguards"
+    severity: WARNING
