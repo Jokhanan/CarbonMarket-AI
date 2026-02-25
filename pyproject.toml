@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.133.0",
+    "openai>=2.24.0",
     "pytest>=9.0.2",
     "python-docx>=1.2.0",
     "python-multipart>=0.0.22",

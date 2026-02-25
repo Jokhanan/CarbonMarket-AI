@@ -1,0 +1,60 @@
+Implement "AI Review Mode" using an LLM, based on the internal Gold Standard MR Template Guide (PerfCert v1.2).
+
+Goal:
+After structural/rule checks, run an AI review:
+- Section-by-section review using guide requirements
+- Global document review summarizing cross-section issues
+
+Requirements:
+1) Add a new endpoint POST /ai-review
+Request:
+{
+  "standard": "GoldStandard",
+  "doc_type": "MR",
+  "version": "PerfCert_v1_2",
+  "doc_path": "<uploaded doc path>"
+}
+
+Response should include:
+- per_section_reviews: list of {section_id, section_title, completeness_score_0_100, issues[], suggested_fixes[], questions_for_user[]}
+- global_summary: {overall_risk: LOW/MED/HIGH, top_issues[], top_actions[], coherence_flags[]}
+
+2) INTERNAL GUIDE:
+Create a new file carbongpt/guides/gs_mr_perfcert_v1_2.py (or .json) containing structured requirements per subsection.
+Example structure:
+{
+ "A.1": {"title":"General description", "must_include":[...], "examples":[...], "failure_modes":[...]}
+ "A.2": {"title":"Location of project", "must_include":["physical address","map","coordinates"], ...}
+ ...
+}
+
+We do NOT need the full guide in v1, start with Sections A and B only (A.1-A.4, B.1-B.3) as MVP, but design so we can add C-D-E-F-G later.
+
+3) LLM:
+Use environment variable OPENAI_API_KEY.
+Use OpenAI Chat Completions with a structured JSON schema response (strict).
+Prompt strategy:
+For each subsection:
+- Provide: subsection text + guide requirements (must_include, failure_modes)
+- Ask model to output issues/fixes/questions + score.
+Then do one final global call using all section results.
+
+4) SAFETY:
+- Model must never invent numbers or facts.
+- If info is missing, it must say "missing" and ask a question.
+- Suggested text must be clearly marked as "draft" and must not fabricate data.
+
+5) UI:
+Add a toggle "AI Review (beta)".
+When enabled, after Analyze it calls /ai-review and displays:
+- Accordion per section with score + issues + suggested fixes
+- Global summary at top
+
+6) Tests:
+Add unit tests for guide structure loading and response shape validation (mock LLM).
+
+Deliver:
+- New endpoint
+- Guide structure file (A & B only)
+- UI integration
+- Tests passing
