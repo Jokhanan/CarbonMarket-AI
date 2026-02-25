@@ -244,6 +244,56 @@ def _check_not_applicable_required_when_blank(
     )
 
 
+def _check_must_mention_keywords(
+    rule: dict[str, Any],
+    sections: dict[str, str],
+    section_map: dict[str, str | None],
+) -> Finding | None:
+    """
+    Count how many distinct keywords from the rule's list appear
+    (case-insensitive) in the section text.  If fewer than *min_hits*
+    are found, emit a finding listing the missing keywords.
+    """
+    section_name: str = rule.get("section", "")
+    keywords: list[str] = rule.get("keywords", [])
+    min_hits: int = rule.get("min_hits", 1)
+
+    if not section_name or not keywords:
+        return None
+
+    raw_text = _get_section_text(section_name, sections, section_map)
+    if raw_text is None:
+        return None
+
+    section_text = _normalize_text(raw_text).lower()
+
+    found: list[str] = []
+    missing: list[str] = []
+    for kw in keywords:
+        if kw.lower() in section_text:
+            found.append(kw)
+        else:
+            missing.append(kw)
+
+    if len(found) >= min_hits:
+        return None
+
+    custom_msg = rule.get("message", "")
+    if custom_msg:
+        detail = custom_msg
+    else:
+        detail = (
+            f"Section '{section_name}' mentions {len(found)}/{min_hits} "
+            f"required keywords. Missing: {', '.join(missing)}"
+        )
+
+    return Finding(
+        rule_id=rule["id"],
+        severity=rule.get("severity", "ERROR"),
+        message=detail,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Handler dispatch table
 # ---------------------------------------------------------------------------
@@ -253,6 +303,7 @@ _RULE_HANDLERS = {
     "required_field": _check_required_field,
     "date_format_ddmmyyyy": _check_date_format_ddmmyyyy,
     "not_applicable_required_when_blank": _check_not_applicable_required_when_blank,
+    "must_mention_keywords": _check_must_mention_keywords,
 }
 
 

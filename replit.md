@@ -37,7 +37,7 @@ carbongpt/
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (81 total)
+python -m pytest carbongpt/tests/ -v  # Tests (93 total)
 ```
 
 ## Endpoints
@@ -64,6 +64,7 @@ Registry defined in `carbongpt/templates/registry.yaml`.  Users do NOT upload te
 | required_field                      | Regex patterns match inside a section's body text                   |
 | date_format_ddmmyyyy                | Dates in a section use DD/MM/YYYY (not YYYY-MM-DD or DD-MM-YYYY)   |
 | not_applicable_required_when_blank  | Short sections (<N chars) must contain "N/A" or "Not Applicable"   |
+| must_mention_keywords               | Section text must mention N of M keywords (case-insensitive)       |
 
 ## Compliance Score
 

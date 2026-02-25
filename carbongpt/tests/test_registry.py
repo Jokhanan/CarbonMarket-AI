@@ -68,14 +68,20 @@ class TestAnalyzeSelected:
             ),
             "SECTION A. DESCRIPTION OF PROJECT": "Solar cookstove distribution.",
             "SECTION B. IMPLEMENTATION OF PROJECT": "Implemented in rural Kenya.",
-            "SECTION C. DESCRIPTION OF MONITORING SYSTEM APPLIED BY THE PROJECT": "Monitoring system details.",
-            "SECTION D. DATA AND PARAMETERS": "Parameters measured.",
+            "SECTION C. DESCRIPTION OF MONITORING SYSTEM APPLIED BY THE PROJECT": "Monitoring system with data source from spreadsheet.",
+            "SECTION D. DATA AND PARAMETERS": (
+                "Parameters measured using sampling and random selection. "
+                "Confidence level 90/10. KPT Kitchen Performance Test applied."
+            ),
             "SECTION E. CALCULATION OF SDG IMPACTS": (
                 "Baseline emissions: 15000 tCO2e. "
                 "Project emissions: 500 tCO2e. "
                 "Emission reductions: 14500 tCO2e."
             ),
-            "SECTION F. SAFEGUARDS REPORTING": "Environmental safeguards applied comprehensively for the project area.",
+            "SECTION F. SAFEGUARDS REPORTING": (
+                "Environmental safeguards applied comprehensively. "
+                "Grievance mechanism in place. Stakeholder engagement completed."
+            ),
             "SECTION G. STAKEHOLDER INPUTS AND LEGAL DISPUTES": "No disputes reported during monitoring period for the project.",
         })
 

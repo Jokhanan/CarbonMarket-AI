@@ -21,6 +21,7 @@ from carbongpt.tools.rule_engine import (
     _check_required_field,
     _check_date_format_ddmmyyyy,
     _check_not_applicable_required_when_blank,
+    _check_must_mention_keywords,
     _normalize_text,
 )
 from carbongpt.tools.section_mapper import map_sections
@@ -307,6 +308,101 @@ class TestNotApplicableRequiredWhenBlank:
 
 
 # ---------------------------------------------------------------------------
+# _check_must_mention_keywords
+# ---------------------------------------------------------------------------
+
+class TestMustMentionKeywords:
+    def _rule(self, keywords=None, min_hits=1, section="SECTION D"):
+        return {
+            "id": "K001", "type": "must_mention_keywords",
+            "section": section, "severity": "ERROR",
+            "keywords": keywords or ["sampling", "random", "sample size"],
+            "min_hits": min_hits,
+        }
+
+    def test_enough_hits(self):
+        sections = {"SECTION D": "We used sampling with random selection."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map) is None
+
+    def test_exact_min_hits(self):
+        sections = {"SECTION D": "Sampling was applied."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(self._rule(min_hits=1), sections, section_map) is None
+
+    def test_not_enough_hits(self):
+        sections = {"SECTION D": "Data was collected."}
+        section_map = {"SECTION D": "SECTION D"}
+        finding = _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map)
+        assert finding is not None
+        assert "0/2" in finding.message
+        assert finding.severity == "ERROR"
+
+    def test_missing_keywords_listed(self):
+        sections = {"SECTION D": "We used sampling."}
+        section_map = {"SECTION D": "SECTION D"}
+        finding = _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map)
+        assert finding is not None
+        assert "random" in finding.message
+        assert "sample size" in finding.message
+
+    def test_case_insensitive(self):
+        sections = {"SECTION D": "SAMPLING and RANDOM selection."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map) is None
+
+    def test_section_missing_no_finding(self):
+        sections = {}
+        section_map = {"SECTION D": None}
+        assert _check_must_mention_keywords(self._rule(), sections, section_map) is None
+
+    def test_custom_message(self):
+        rule = self._rule()
+        rule["message"] = "Custom message about missing keywords"
+        sections = {"SECTION D": "No relevant content."}
+        section_map = {"SECTION D": "SECTION D"}
+        finding = _check_must_mention_keywords(rule, sections, section_map)
+        assert finding is not None
+        assert finding.message == "Custom message about missing keywords"
+
+    def test_aggregated_text_across_duplicates(self):
+        sections = {
+            "section d. data and parameters": "We collected sampling data.",
+            "SECTION D. DATA AND PARAMETERS": "Using random selection method.",
+        }
+        section_map = {"SECTION D": "SECTION D. DATA AND PARAMETERS"}
+        finding = _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map)
+        assert finding is None
+
+    def test_text_normalization_with_newlines(self):
+        sections = {"SECTION D": "We used\nsampling\n\nwith random\r\nselection."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(self._rule(min_hits=2), sections, section_map) is None
+
+    def test_confidence_precision_keywords(self):
+        rule = self._rule(keywords=["90/10", "confidence", "precision"], min_hits=1)
+        sections = {"SECTION D": "Confidence level of 95%."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(rule, sections, section_map) is None
+
+    def test_kpt_keyword_warning(self):
+        rule = {
+            "id": "K003", "type": "must_mention_keywords",
+            "section": "SECTION D", "severity": "WARNING",
+            "keywords": ["KPT", "Kitchen Performance Test"], "min_hits": 1,
+        }
+        sections = {"SECTION D": "KPT results show improvement."}
+        section_map = {"SECTION D": "SECTION D"}
+        assert _check_must_mention_keywords(rule, sections, section_map) is None
+
+    def test_grievance_keywords(self):
+        rule = self._rule(keywords=["grievance", "complaint", "stakeholder"], section="SECTION F")
+        sections = {"SECTION F": "Stakeholder consultation was conducted."}
+        section_map = {"SECTION F": "SECTION F"}
+        assert _check_must_mention_keywords(rule, sections, section_map) is None
+
+
+# ---------------------------------------------------------------------------
 # compliance_score
 # ---------------------------------------------------------------------------
 
@@ -364,14 +460,20 @@ class TestEndToEnd:
             ),
             "SECTION A. DESCRIPTION OF PROJECT": "Solar cookstove distribution in rural Kenya.",
             "SECTION B. IMPLEMENTATION OF PROJECT": "Implemented across 5 counties.",
-            "SECTION C. MONITORING SYSTEM": "Continuous monitoring with sensors.",
-            "SECTION D. DATA AND PARAMETERS": "Parameters measured quarterly.",
+            "SECTION C. MONITORING SYSTEM": "Continuous monitoring with data source from spreadsheet sensors.",
+            "SECTION D. DATA AND PARAMETERS": (
+                "Parameters measured quarterly using sampling and random selection. "
+                "Confidence level 90/10. KPT Kitchen Performance Test conducted."
+            ),
             "SECTION E. CALCULATION OF SDG IMPACTS": (
                 "Baseline emissions: 15,000 tCO2e. "
                 "Project emissions: 500 tCO2e. "
                 "Emission reductions: 14,500 tCO2e net reductions."
             ),
-            "SECTION F. SAFEGUARDS REPORTING": "Environmental and social safeguards assessment completed for the project area.",
+            "SECTION F. SAFEGUARDS REPORTING": (
+                "Environmental and social safeguards assessment completed. "
+                "Grievance mechanism in place. Stakeholder consultation conducted."
+            ),
             "SECTION G. STAKEHOLDER INPUTS": "No disputes reported during the monitoring period for the project.",
         })
 

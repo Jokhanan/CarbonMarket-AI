@@ -175,6 +175,44 @@ rules:
       - "\\d{2}/\\d{2}/\\d{4}"
 
   # -----------------------------------------------------------------------
+  # Must-mention keyword checks
+  # -----------------------------------------------------------------------
+  - id: GS_MR_K001
+    type: must_mention_keywords
+    section: "SECTION D"
+    severity: ERROR
+    keywords: ["sampling", "random", "sample size", "representative"]
+    min_hits: 2
+
+  - id: GS_MR_K002
+    type: must_mention_keywords
+    section: "SECTION D"
+    severity: ERROR
+    keywords: ["90/10", "confidence", "precision"]
+    min_hits: 1
+
+  - id: GS_MR_K003
+    type: must_mention_keywords
+    section: "SECTION D"
+    severity: WARNING
+    keywords: ["KPT", "Kitchen Performance Test"]
+    min_hits: 1
+
+  - id: GS_MR_K004
+    type: must_mention_keywords
+    section: "SECTION C"
+    severity: ERROR
+    keywords: ["data source", "spreadsheet", "database"]
+    min_hits: 1
+
+  - id: GS_MR_K005
+    type: must_mention_keywords
+    section: "SECTION F"
+    severity: ERROR
+    keywords: ["grievance", "complaint", "stakeholder"]
+    min_hits: 1
+
+  # -----------------------------------------------------------------------
   # Not-applicable when blank
   # -----------------------------------------------------------------------
   - id: GS_MR_NA001
