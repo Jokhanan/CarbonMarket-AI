@@ -2,8 +2,11 @@
 section_mapper.py — Fuzzy heading matcher for CarbonGPT.
 
 Normalises heading text (lowercase, strip punctuation, collapse whitespace)
-and uses rapidfuzz to find the best match for each expected section among
-the headings actually found in a document.
+and uses a multi-strategy approach to find the best match:
+
+1. Exact normalized match
+2. Prefix/contains match (e.g. "SECTION A" matches "SECTION A. DESCRIPTION OF PROJECT")
+3. Fuzzy match via rapidfuzz token_sort_ratio
 
 Public API
 ----------
@@ -20,10 +23,6 @@ import unicodedata
 from rapidfuzz import fuzz, process
 
 
-# ---------------------------------------------------------------------------
-# Normalisation
-# ---------------------------------------------------------------------------
-
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 _MULTI_SPACE_RE = re.compile(r"\s+")
 
@@ -31,13 +30,6 @@ _MULTI_SPACE_RE = re.compile(r"\s+")
 def normalize_heading(text: str) -> str:
     """
     Lowercase, strip accents, remove punctuation, and collapse whitespace.
-
-    Examples
-    --------
-    >>> normalize_heading("B.1  Monitoring Period")
-    'b1 monitoring period'
-    >>> normalize_heading("  Project Description!!! ")
-    'project description'
     """
     text = unicodedata.normalize("NFKD", text)
     text = text.lower()
@@ -46,11 +38,31 @@ def normalize_heading(text: str) -> str:
     return text
 
 
-# ---------------------------------------------------------------------------
-# Fuzzy matching
-# ---------------------------------------------------------------------------
-
 DEFAULT_THRESHOLD: int = 85
+
+
+def _prefix_match(
+    norm_exp: str,
+    normalised_found: dict[str, str],
+) -> str | None:
+    """
+    Return the original heading if *norm_exp* is a prefix of (or is
+    contained at the start of) any normalised found heading.
+    Picks the longest match to prefer more specific sections.
+    """
+    if not norm_exp:
+        return None
+
+    best: str | None = None
+    best_norm: str = ""
+
+    for norm_key, original in normalised_found.items():
+        if norm_key.startswith(norm_exp) or norm_key.startswith(norm_exp + " "):
+            if best is None or len(norm_key) > len(best_norm):
+                best = original
+                best_norm = norm_key
+
+    return best
 
 
 def map_sections(
@@ -59,21 +71,12 @@ def map_sections(
     threshold: int = DEFAULT_THRESHOLD,
 ) -> dict[str, str | None]:
     """
-    For each *expected* heading, find the best fuzzy match among *found*.
+    For each *expected* heading, find the best match among *found*.
 
-    Parameters
-    ----------
-    expected:
-        List of section names the document should contain.
-    found:
-        List of headings actually present in the document.
-    threshold:
-        Minimum similarity score (0-100) to accept a match.  Defaults to 85.
-
-    Returns
-    -------
-    Mapping of ``{expected_section: matched_heading_or_None}``.
-    A value of ``None`` means no heading in *found* met the threshold.
+    Strategy order:
+    1. Exact normalized match
+    2. Prefix match (expected is a prefix of a found heading)
+    3. Fuzzy match via rapidfuzz
     """
     if not found:
         return {name: None for name in expected}
@@ -85,6 +88,15 @@ def map_sections(
 
     for exp in expected:
         norm_exp = normalize_heading(exp)
+
+        if norm_exp in normalised_found:
+            mapping[exp] = normalised_found[norm_exp]
+            continue
+
+        prefix_result = _prefix_match(norm_exp, normalised_found)
+        if prefix_result is not None:
+            mapping[exp] = prefix_result
+            continue
 
         result = process.extractOne(
             norm_exp,

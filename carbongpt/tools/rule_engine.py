@@ -21,6 +21,7 @@ not_applicable_required_when_blank
     the text to contain "Not Applicable" or "N/A".
 """
 
+import re
 from pathlib import Path
 from typing import Any
 import yaml
@@ -33,6 +34,39 @@ from carbongpt.tools.regex_utils import any_pattern_matches, find_all_matches, i
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _normalize_text(text: str) -> str:
+    """Normalize section text for pattern matching: collapse whitespace, strip."""
+    text = re.sub(r"[\r\n]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _get_section_text(
+    section_name: str,
+    sections: dict[str, str],
+    section_map: dict[str, str | None],
+) -> str | None:
+    """
+    Get combined text for a section, aggregating all document sections
+    whose names match the mapped heading (case-insensitive).  Returns
+    None if the section was not mapped at all.
+    """
+    matched_heading = section_map.get(section_name)
+    if matched_heading is None:
+        return None
+
+    matched_lower = matched_heading.lower().strip()
+    parts: list[str] = []
+
+    for key, text in sections.items():
+        if key == matched_heading:
+            parts.append(text)
+        elif key.lower().strip() == matched_lower:
+            parts.append(text)
+
+    return " ".join(parts)
+
 
 def _load_yaml(rule_file: str | Path) -> dict:
     """Read and parse a YAML rule file."""
@@ -110,11 +144,11 @@ def _check_required_field(
     if not section_name or not field_name:
         return None
 
-    matched_heading = section_map.get(section_name)
-    if matched_heading is None:
+    raw_text = _get_section_text(section_name, sections, section_map)
+    if raw_text is None:
         return None
 
-    section_text = sections.get(matched_heading, "")
+    section_text = _normalize_text(raw_text)
 
     if any_pattern_matches(section_text, patterns):
         return None
@@ -142,11 +176,11 @@ def _check_date_format_ddmmyyyy(
     if not section_name or not date_patterns:
         return None
 
-    matched_heading = section_map.get(section_name)
-    if matched_heading is None:
+    raw_text = _get_section_text(section_name, sections, section_map)
+    if raw_text is None:
         return None
 
-    section_text = sections.get(matched_heading, "")
+    section_text = _normalize_text(raw_text)
     found_dates = find_all_matches(section_text, date_patterns)
 
     if not found_dates:
@@ -187,13 +221,13 @@ def _check_not_applicable_required_when_blank(
     if not section_name:
         return None
 
-    matched_heading = section_map.get(section_name)
-    if matched_heading is None:
+    raw_text = _get_section_text(section_name, sections, section_map)
+    if raw_text is None:
         return None
 
-    section_text = sections.get(matched_heading, "")
+    section_text = _normalize_text(raw_text)
 
-    if len(section_text.strip()) >= min_chars:
+    if len(section_text) >= min_chars:
         return None
 
     lower_text = section_text.lower()

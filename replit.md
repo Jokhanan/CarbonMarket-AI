@@ -37,7 +37,7 @@ carbongpt/
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (75 total)
+python -m pytest carbongpt/tests/ -v  # Tests (81 total)
 ```
 
 ## Endpoints

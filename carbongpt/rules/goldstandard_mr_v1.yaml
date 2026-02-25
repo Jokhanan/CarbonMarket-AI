@@ -3,7 +3,7 @@ doc_type: MR
 
 rules:
   # -----------------------------------------------------------------------
-  # Required sections
+  # Required sections — using actual GS MR heading names
   # -----------------------------------------------------------------------
   - id: GS_MR_001
     type: required_section
@@ -12,37 +12,37 @@ rules:
 
   - id: GS_MR_002
     type: required_section
-    section: "Project Description"
+    section: "SECTION A"
     severity: ERROR
 
   - id: GS_MR_003
     type: required_section
-    section: "Monitoring Period"
+    section: "SECTION B"
     severity: ERROR
 
   - id: GS_MR_004
     type: required_section
-    section: "Baseline Emissions"
+    section: "SECTION C"
     severity: ERROR
 
   - id: GS_MR_005
     type: required_section
-    section: "Project Emissions"
+    section: "SECTION D"
     severity: ERROR
 
   - id: GS_MR_006
     type: required_section
-    section: "Emission Reductions"
+    section: "SECTION E"
     severity: ERROR
 
   - id: GS_MR_007
     type: required_section
-    section: "Data Quality"
+    section: "SECTION F"
     severity: WARNING
 
   - id: GS_MR_008
     type: required_section
-    section: "Safeguards"
+    section: "SECTION G"
     severity: WARNING
 
   # -----------------------------------------------------------------------
@@ -74,9 +74,10 @@ rules:
     field_name: "version_number_monitoring_report"
     severity: ERROR
     patterns:
-      - "(?i)version\\s*(?:number|no\\.?|#)?\\s*[:.]?\\s*\\d+"
+      - "(?i)version\\s+number\\s+of\\s+the\\s+monitoring\\s+report"
+      - "(?i)version\\s+(?:number|no\\.?|#)?\\s*(?:of\\s+)?(?:the\\s+)?(?:monitoring|MR)"
+      - "(?i)version\\s*[:.]?\\s*\\d+"
       - "(?i)v\\d+\\.\\d+"
-      - "(?i)monitoring\\s+report\\s+version"
 
   - id: GS_MR_F004
     type: required_field
@@ -95,7 +96,8 @@ rules:
     field_name: "monitoring_period_number"
     severity: ERROR
     patterns:
-      - "(?i)monitoring\\s+period\\s*(?:number|no\\.?|#)?\\s*[:.]?\\s*\\d+"
+      - "(?i)monitoring\\s+period\\s+number"
+      - "(?i)monitoring\\s+period\\s*(?:no\\.?|#)?\\s*[:.]?\\s*\\d+"
       - "(?i)(?:period|MP)\\s*#?\\s*\\d+"
 
   - id: GS_MR_F006
@@ -104,9 +106,10 @@ rules:
     field_name: "duration_monitoring_period"
     severity: ERROR
     patterns:
-      - "(?i)duration\\s+(?:of\\s+)?(?:this\\s+)?(?:monitoring\\s+)?period"
-      - "\\d{2}/\\d{2}/\\d{4}\\s*[-–to]+\\s*\\d{2}/\\d{2}/\\d{4}"
-      - "\\d{4}-\\d{2}-\\d{2}\\s*[-–to]+\\s*\\d{4}-\\d{2}-\\d{2}"
+      - "(?i)duration\\s+of\\s+(?:this\\s+)?(?:monitoring\\s+)?period"
+      - "(?i)duration\\s+(?:of\\s+)?(?:this\\s+)?monitoring\\s+period"
+      - "\\d{2}/\\d{2}/\\d{4}\\s*[-–]\\s*\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{2}/\\d{2}/\\d{4}.*(?:to).*\\d{2}/\\d{2}/\\d{4}"
       - "(?i)from\\s+.*\\s+to\\s+"
 
   - id: GS_MR_F007
@@ -116,8 +119,6 @@ rules:
     severity: ERROR
     patterns:
       - "(?i)host\\s+country"
-      - "(?i)country\\s*[:.]?\\s*\\w+"
-      - "(?i)\\b(?:Kenya|India|China|Brazil|Indonesia|Uganda|Rwanda|Ethiopia|Nepal|Vietnam|Bangladesh|Colombia|Peru|Mexico|Ghana|Tanzania|Mozambique|Cambodia|Myanmar|Philippines|Thailand|South Africa|Nigeria)\\b"
 
   - id: GS_MR_F008
     type: required_field
@@ -125,10 +126,41 @@ rules:
     field_name: "methodology_and_version"
     severity: ERROR
     patterns:
-      - "(?i)methodology\\s+(?:applied|used|version)"
+      - "(?i)methodolog(?:y|ies)\\s+.*version"
+      - "(?i)methodolog(?:y|ies)\\s+(?:applied|used)"
+      - "(?i)methodolog(?:y|ies)\\s*\\(\\s*ies\\s*\\)\\s+applied"
       - "(?i)(?:AMS|ACM|AM)[-\\s]?[IVX]*[-\\.]?\\d+"
-      - "(?i)methodology\\s*[:.]?\\s*\\w+"
-      - "(?i)version\\s*(?:number|no\\.?)?\\s*[:.]?\\s*\\d+"
+
+  # -----------------------------------------------------------------------
+  # Emissions-related field checks in relevant sections
+  # -----------------------------------------------------------------------
+  - id: GS_MR_F009
+    type: required_field
+    section: "SECTION E"
+    field_name: "baseline_estimate"
+    severity: ERROR
+    patterns:
+      - "(?i)baseline\\s+(?:emissions?|estimate|value|situation)"
+      - "(?i)calculation\\s+of\\s+baseline"
+
+  - id: GS_MR_F010
+    type: required_field
+    section: "SECTION E"
+    field_name: "project_estimate"
+    severity: ERROR
+    patterns:
+      - "(?i)project\\s+(?:emissions?|estimate|value|situation)"
+      - "(?i)calculation\\s+of\\s+project"
+
+  - id: GS_MR_F011
+    type: required_field
+    section: "SECTION E"
+    field_name: "emission_reductions"
+    severity: ERROR
+    patterns:
+      - "(?i)emission\\s+reductions?"
+      - "(?i)net\\s+benefit"
+      - "(?i)calculation\\s+of\\s+(?:net|emission)"
 
   # -----------------------------------------------------------------------
   # Date format checks (DD/MM/YYYY required)
@@ -142,26 +174,17 @@ rules:
       - "\\d{2}-\\d{2}-\\d{4}"
       - "\\d{2}/\\d{2}/\\d{4}"
 
-  - id: GS_MR_D002
-    type: date_format_ddmmyyyy
-    section: "Monitoring Period"
-    severity: WARNING
-    date_patterns:
-      - "\\d{4}-\\d{2}-\\d{2}"
-      - "\\d{2}-\\d{2}-\\d{4}"
-      - "\\d{2}/\\d{2}/\\d{4}"
-
   # -----------------------------------------------------------------------
   # Not-applicable when blank
   # -----------------------------------------------------------------------
   - id: GS_MR_NA001
     type: not_applicable_required_when_blank
-    section: "Data Quality"
+    section: "SECTION F"
     severity: WARNING
     min_chars: 40
 
   - id: GS_MR_NA002
     type: not_applicable_required_when_blank
-    section: "Safeguards"
+    section: "SECTION G"
     severity: WARNING
     min_chars: 40

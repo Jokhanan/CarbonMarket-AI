@@ -59,7 +59,8 @@ class TestAnalyzeSelected:
         path = self._make_docx({
             "KEY PROJECT INFORMATION": (
                 "GS ID: GS-1234 Title of the project: Solar Cookstoves "
-                "Version number: v2.0 Completion date: 15/06/2024 "
+                "Version number of the monitoring report: v2.0 "
+                "Completion date: 15/06/2024 "
                 "Monitoring period number: MP #3 "
                 "Duration of this monitoring period: from 01/01/2024 to 31/12/2024 "
                 "Host Country: Kenya "
@@ -69,9 +70,13 @@ class TestAnalyzeSelected:
             "SECTION B. IMPLEMENTATION OF PROJECT": "Implemented in rural Kenya.",
             "SECTION C. DESCRIPTION OF MONITORING SYSTEM APPLIED BY THE PROJECT": "Monitoring system details.",
             "SECTION D. DATA AND PARAMETERS": "Parameters measured.",
-            "SECTION E. CALCULATION OF SDG IMPACTS": "15000 tCO2e reduced.",
+            "SECTION E. CALCULATION OF SDG IMPACTS": (
+                "Baseline emissions: 15000 tCO2e. "
+                "Project emissions: 500 tCO2e. "
+                "Emission reductions: 14500 tCO2e."
+            ),
             "SECTION F. SAFEGUARDS REPORTING": "Environmental safeguards applied comprehensively for the project area.",
-            "SECTION G. STAKEHOLDER INPUTS AND LEGAL DISPUTES": "No disputes reported during monitoring period.",
+            "SECTION G. STAKEHOLDER INPUTS AND LEGAL DISPUTES": "No disputes reported during monitoring period for the project.",
         })
 
         result = run_selected_analysis(
