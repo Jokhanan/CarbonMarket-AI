@@ -13,7 +13,7 @@ carbongpt/
 │   ├── models.py          Pydantic request/response types (incl. compliance_score)
 │   └── orchestrator.py    Pipeline coordinator (docx → rules → response)
 ├── tools/
-│   ├── parse_docx.py      Heading-based section extractor for .docx files
+│   ├── parse_docx.py      Two-pass section extractor (heading styles + heuristic fallback)
 │   ├── section_mapper.py  Fuzzy heading normaliser & matcher (rapidfuzz)
 │   ├── rule_engine.py     YAML rule loader; 4 rule types supported
 │   └── regex_utils.py     Compiled regex utils: pattern matching, date validation
@@ -29,14 +29,15 @@ carbongpt/
 └── tests/
     ├── test_section_mapper.py   17 tests (exact/fuzzy/missing sections)
     ├── test_required_field.py   31 tests (all rule types, score, end-to-end)
-    └── test_registry.py         10 tests (registry lookup, /analyze-selected)
+    ├── test_registry.py         10 tests (registry lookup, /analyze-selected)
+    └── test_parse_docx.py       17 tests (heading styles, heuristic, tables, debug)
 ```
 
 ## Running
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (58 total)
+python -m pytest carbongpt/tests/ -v  # Tests (75 total)
 ```
 
 ## Endpoints
@@ -48,6 +49,7 @@ python -m pytest carbongpt/tests/ -v  # Tests (58 total)
 | POST   | /analyze                 | Analyse file against YAML rules (all rule types)       |
 | POST   | /analyze-with-template   | Compare file against a user-supplied template           |
 | POST   | /analyze-selected        | Analyse using internally registered template + rules   |
+| GET    | /debug/sections?path=... | Diagnose section detection (raw paragraphs + markers)  |
 
 ## Template Registry
 

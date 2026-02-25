@@ -1,0 +1,51 @@
+We have a bug: our parser only finds one section ("PREAMBLE") in real GS Monitoring Reports, so the compliance results are wrong. The issue is that GS documents often do NOT use true Word Heading styles for section titles (they can be uppercase text, bold, or inside tables).
+
+Task: improve DOCX section detection to reliably detect GS MR structure even when Heading styles are missing.
+
+Requirements (do all):
+
+1) Update carbongpt/tools/parse_docx.py:
+   - Keep the current heading-based extraction.
+   - Add a fallback heuristic extractor that scans ALL paragraphs (not only Heading styles) and detects section boundaries using regex patterns.
+   - It must detect at least these “top-level” sections in typical Gold Standard MR:
+       - "KEY PROJECT INFORMATION"
+       - "SECTION A"
+       - "SECTION B"
+       - "SECTION C"
+       - "SECTION D"
+       - "SECTION E"
+       - "SECTION F"
+       - "SECTION G"
+     plus "PREAMBLE" if present.
+   - Use regex patterns like:
+       - r"^KEY\\s+PROJECT\\s+INFORMATION\\b"
+       - r"^SECTION\\s+[A-G]\\b"
+       - also allow variants like "SECTION A." or "SECTION A –" etc.
+   - Normalization: uppercase comparisons, strip punctuation, collapse whitespace.
+   - Output format stays:
+       { "sections": { "<SECTION NAME>": "<text under section>" }, "debug": {...optional...} }
+
+2) Important: include table text too (Word tables often contain critical headings/labels):
+   - Extract text from all tables and include it in a "full_text" stream used by the heuristic detector OR append table cell text into the paragraph stream.
+   - The detector should be able to find "KEY PROJECT INFORMATION" even if it appears in a table.
+
+3) Add a DEBUG endpoint in carbongpt/app/main.py:
+   - GET /debug/sections?path=<docx_path>
+   - It returns:
+       - first 30 detected raw paragraphs (normalized + original)
+       - all detected section markers (with their paragraph index)
+       - final section names returned by parse_docx
+   This is to diagnose why only PREAMBLE is detected.
+
+4) Update tests:
+   - Add at least 1 unit test that creates a .docx where section titles are NOT Heading styles (just bold/uppercase normal paragraphs) and confirm parser detects SECTION A/B/C etc.
+   - Add at least 1 unit test where KEY PROJECT INFORMATION is inside a table cell and confirm it is detected.
+
+5) Do NOT change the existing rule engine logic beyond what is needed to use the improved parse_docx output.
+
+Deliver:
+- updated parse_docx.py
+- new /debug/sections endpoint code
+- new/updated tests
+- test results (pytest)
+- short explanation of how the fallback heuristic works

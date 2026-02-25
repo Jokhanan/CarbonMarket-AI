@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from carbongpt.app.config import (
@@ -32,6 +32,7 @@ from carbongpt.core.orchestrator import (
     run_selected_analysis,
     run_template_analysis,
 )
+from carbongpt.tools.parse_docx import debug_sections
 
 app = FastAPI(
     title=APP_TITLE,
@@ -165,6 +166,20 @@ def analyze_selected(request: AnalyzeSelectedRequest) -> AnalyzeSelectedResponse
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
 
     return result
+
+
+@app.get(
+    "/debug/sections",
+    tags=["debug"],
+    summary="Diagnose section detection for a document",
+)
+def debug_doc_sections(path: str = Query(..., description="Path to the .docx file")) -> dict:
+    if not Path(path).exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    try:
+        return debug_sections(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":
