@@ -2,6 +2,9 @@ standard: GoldStandard
 doc_type: MR
 
 rules:
+  # -----------------------------------------------------------------------
+  # Required sections
+  # -----------------------------------------------------------------------
   - id: GS_MR_001
     type: required_section
     section: "Monitoring Period"
@@ -36,3 +39,59 @@ rules:
     type: required_section
     section: "Safeguards"
     severity: WARNING
+
+  # -----------------------------------------------------------------------
+  # Required fields within sections
+  # -----------------------------------------------------------------------
+  - id: GS_MR_F001
+    type: required_field
+    section: "Project Description"
+    field_name: "project_start_date"
+    severity: ERROR
+    patterns:
+      - "\\d{4}-\\d{2}-\\d{2}"
+      - "\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
+      - "(?i)(?:project\\s+)?start\\s+date"
+      - "(?i)commenced|started\\s+(?:on|in)"
+
+  - id: GS_MR_F002
+    type: required_field
+    section: "Monitoring Period"
+    field_name: "monitoring_period_start"
+    severity: ERROR
+    patterns:
+      - "\\d{4}-\\d{2}-\\d{2}"
+      - "\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
+      - "(?i)(?:start|from|beginning)\\s+(?:of\\s+)?(?:the\\s+)?(?:monitoring|period)"
+
+  - id: GS_MR_F003
+    type: required_field
+    section: "Monitoring Period"
+    field_name: "monitoring_period_end"
+    severity: ERROR
+    patterns:
+      - "\\d{4}-\\d{2}-\\d{2}"
+      - "\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
+      - "(?i)(?:end|to|until|through)\\s+(?:of\\s+)?(?:the\\s+)?(?:monitoring|period)"
+
+  - id: GS_MR_F004
+    type: required_field
+    section: "Project Description"
+    field_name: "crediting_period"
+    severity: ERROR
+    patterns:
+      - "(?i)crediting\\s+period"
+      - "(?i)\\d{4}\\s*[-–]\\s*\\d{4}"
+      - "(?i)(?:renewable|fixed)\\s+crediting"
+
+  - id: GS_MR_F005
+    type: required_field
+    section: "Project Description"
+    field_name: "location_country"
+    severity: ERROR
+    patterns:
+      - "(?i)(?:located|location|country|region|site)\\s*[:.]?\\s*\\w+"
+      - "(?i)\\b(?:Kenya|India|China|Brazil|Indonesia|Uganda|Rwanda|Ethiopia|Nepal|Vietnam|Bangladesh|Colombia|Peru|Mexico|Ghana|Tanzania|Mozambique|Cambodia|Myanmar|Philippines)\\b"

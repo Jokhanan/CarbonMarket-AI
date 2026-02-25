@@ -99,6 +99,12 @@ class AnalyzeResponse(BaseModel):
         ...,
         description="True only when no ERROR-level findings are present.",
     )
+    compliance_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Score starting at 100, reduced by -10 per ERROR and -3 per WARNING.  Floor 0.",
+    )
 
 
 class SectionMatch(BaseModel):
@@ -129,4 +135,10 @@ class AnalyzeWithTemplateResponse(BaseModel):
     )
     compliant: bool = Field(
         ..., description="True only when no ERROR-level findings are present."
+    )
+    compliance_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Score starting at 100, reduced by -10 per ERROR and -3 per WARNING.  Floor 0.",
     )

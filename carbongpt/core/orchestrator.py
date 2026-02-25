@@ -16,7 +16,7 @@ from carbongpt.core.models import (
     SectionMatch,
 )
 from carbongpt.tools.parse_docx import parse_docx
-from carbongpt.tools.rule_engine import run_rules, run_template_rules
+from carbongpt.tools.rule_engine import run_rules, run_template_rules, compute_compliance_score
 
 
 def run_analysis(
@@ -50,6 +50,7 @@ def run_analysis(
         sections_found=list(sections.keys()),
         findings=findings,
         compliant=not has_errors,
+        compliance_score=metadata.get("compliance_score", 100),
     )
 
 
@@ -96,4 +97,5 @@ def run_template_analysis(
         section_matches=matches,
         findings=findings,
         compliant=not has_errors,
+        compliance_score=compute_compliance_score(findings),
     )

@@ -9,6 +9,12 @@ required_section
     sufficiently close to the rule's ``section`` value exists in the
     document.  Returns an ERROR/WARNING/INFO finding when it is missing.
 
+required_field
+    Checks that specific content (detected via regex patterns) exists
+    inside a matched section.  If the parent section itself is missing,
+    a single "section missing" finding is emitted instead (no duplicate
+    field-level noise).
+
 Extending the engine
 --------------------
 Add new rule types by:
@@ -22,6 +28,7 @@ import yaml
 
 from carbongpt.core.models import Finding
 from carbongpt.tools.section_mapper import map_sections
+from carbongpt.tools.regex_utils import any_pattern_matches
 
 
 # ---------------------------------------------------------------------------
@@ -29,19 +36,7 @@ from carbongpt.tools.section_mapper import map_sections
 # ---------------------------------------------------------------------------
 
 def _load_yaml(rule_file: str | Path) -> dict:
-    """
-    Read and parse a YAML rule file.
-
-    Parameters
-    ----------
-    rule_file:
-        Absolute path to the YAML file.
-
-    Raises
-    ------
-    FileNotFoundError — if the file does not exist.
-    ValueError        — if the file cannot be parsed.
-    """
+    """Read and parse a YAML rule file."""
     path = Path(rule_file)
     if not path.exists():
         raise FileNotFoundError(f"Rule file not found: {path}")
@@ -59,6 +54,27 @@ def _load_yaml(rule_file: str | Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Compliance score
+# ---------------------------------------------------------------------------
+
+_SEVERITY_PENALTY = {
+    "ERROR": 10,
+    "WARNING": 3,
+    "INFO": 0,
+}
+
+
+def compute_compliance_score(findings: list[Finding]) -> int:
+    """
+    Start at 100, subtract per finding based on severity.  Floor at 0.
+    """
+    score = 100
+    for f in findings:
+        score -= _SEVERITY_PENALTY.get(f.severity, 0)
+    return max(score, 0)
+
+
+# ---------------------------------------------------------------------------
 # Rule-type handlers
 # ---------------------------------------------------------------------------
 
@@ -67,19 +83,12 @@ def _check_required_section(
     sections: dict[str, str],
     section_map: dict[str, str | None],
 ) -> Finding | None:
-    """
-    Return a Finding if the required section is absent, else None.
-
-    Uses the pre-computed *section_map* produced by the fuzzy mapper
-    so that minor heading variations still match.
-    """
+    """Return a Finding if the required section is absent, else None."""
     required: str = rule.get("section", "")
     if not required:
         return None
 
-    matched = section_map.get(required)
-
-    if matched is not None:
+    if section_map.get(required) is not None:
         return None
 
     return Finding(
@@ -89,18 +98,71 @@ def _check_required_section(
     )
 
 
+def _check_required_field(
+    rule: dict[str, Any],
+    sections: dict[str, str],
+    section_map: dict[str, str | None],
+) -> Finding | None:
+    """
+    Return a Finding if a required field is missing from a section.
+
+    If the parent section itself is not matched in the document, emit a
+    single finding about the missing section rather than a field-level
+    finding, to avoid duplicate noise.
+    """
+    section_name: str = rule.get("section", "")
+    field_name: str = rule.get("field_name", "")
+    patterns: list[str] = rule.get("patterns", [])
+
+    if not section_name or not field_name:
+        return None
+
+    matched_heading = section_map.get(section_name)
+
+    if matched_heading is None:
+        return Finding(
+            rule_id=rule["id"],
+            severity=rule.get("severity", "ERROR"),
+            message=f"Missing required field: {field_name} (section '{section_name}' not found)",
+        )
+
+    section_text = sections.get(matched_heading, "")
+
+    if any_pattern_matches(section_text, patterns):
+        return None
+
+    return Finding(
+        rule_id=rule["id"],
+        severity=rule.get("severity", "ERROR"),
+        message=f"Missing required field: {field_name} in section: {section_name}",
+    )
+
+
 # ---------------------------------------------------------------------------
-# Handler dispatch table — extend here for new rule types
+# Handler dispatch table
 # ---------------------------------------------------------------------------
 
 _RULE_HANDLERS = {
     "required_section": _check_required_section,
+    "required_field": _check_required_field,
 }
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def _collect_expected_sections(rules: list[dict]) -> list[str]:
+    """Gather all unique section names referenced across rule types."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for r in rules:
+        sec = r.get("section", "")
+        if sec and sec not in seen:
+            seen.add(sec)
+            ordered.append(sec)
+    return ordered
+
 
 def run_rules(
     rule_file: str | Path,
@@ -110,23 +172,12 @@ def run_rules(
     """
     Load a YAML rule file and evaluate every rule against *sections*.
 
-    Parameters
-    ----------
-    rule_file:
-        Absolute path to the YAML rule file.
-    sections:
-        Mapping of heading -> body text as returned by ``parse_docx``.
-    threshold:
-        Fuzzy-match similarity threshold (0-100) forwarded to the mapper.
-
     Returns
     -------
     findings:
-        List of :class:`~carbongpt.core.models.Finding` objects.  Empty
-        when the document is fully compliant.
+        List of Finding objects.  Empty when fully compliant.
     metadata:
-        Dict with ``standard`` and ``doc_type`` extracted from the YAML
-        header (defaults to empty strings when absent).
+        Dict with ``standard``, ``doc_type``, and ``compliance_score``.
     """
     data = _load_yaml(rule_file)
 
@@ -137,10 +188,7 @@ def run_rules(
 
     rules: list[dict] = data.get("rules", [])
 
-    expected_sections = [
-        r["section"] for r in rules
-        if r.get("type") == "required_section" and r.get("section")
-    ]
+    expected_sections = _collect_expected_sections(rules)
     found_headings = list(sections.keys())
     section_map = map_sections(expected_sections, found_headings, threshold)
 
@@ -164,6 +212,7 @@ def run_rules(
         if finding is not None:
             findings.append(finding)
 
+    metadata["compliance_score"] = compute_compliance_score(findings)
     return findings, metadata
 
 
@@ -175,25 +224,12 @@ def run_template_rules(
     """
     Check *sections* against a list of expected headings (from a template).
 
-    Unlike ``run_rules`` this does not load a YAML file — the expected
-    sections come directly from a parsed template document.
-
-    Parameters
-    ----------
-    expected_sections:
-        Heading names the document must contain.
-    sections:
-        Heading -> body text mapping from the user document.
-    threshold:
-        Fuzzy-match similarity threshold (0-100).
-
     Returns
     -------
     findings:
         One finding per missing section.
     section_map:
-        The full mapping from ``map_sections`` so callers can see which
-        headings matched which.
+        The full mapping so callers can see which headings matched.
     """
     found_headings = list(sections.keys())
     section_map = map_sections(expected_sections, found_headings, threshold)
