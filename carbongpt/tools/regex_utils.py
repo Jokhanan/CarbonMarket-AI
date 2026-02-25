@@ -1,9 +1,8 @@
 """
 regex_utils.py — Regex-based field detection utilities for CarbonGPT.
 
-Provides a single function that checks whether any pattern from a list
-matches anywhere in the given text.  Patterns are compiled once and
-cached for performance.
+Provides helpers for pattern matching and date-format validation used
+by the rule engine.
 """
 
 import re
@@ -11,25 +10,14 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=256)
-def _compile(pattern: str) -> re.Pattern:
-    """Compile and cache a regex pattern (case-insensitive)."""
-    return re.compile(pattern, re.IGNORECASE | re.DOTALL)
+def _compile(pattern: str, flags: int = re.IGNORECASE | re.DOTALL) -> re.Pattern:
+    """Compile and cache a regex pattern."""
+    return re.compile(pattern, flags)
 
 
 def any_pattern_matches(text: str, patterns: list[str]) -> bool:
     """
     Return True if at least one *pattern* matches anywhere in *text*.
-
-    Parameters
-    ----------
-    text:
-        Body text of a document section.
-    patterns:
-        List of regex strings.  Each is compiled with IGNORECASE.
-
-    Returns
-    -------
-    bool
     """
     for pat_str in patterns:
         try:
@@ -38,3 +26,24 @@ def any_pattern_matches(text: str, patterns: list[str]) -> bool:
         except re.error:
             continue
     return False
+
+
+def find_all_matches(text: str, patterns: list[str]) -> list[str]:
+    """
+    Return every substring in *text* matched by any pattern in *patterns*.
+    """
+    results: list[str] = []
+    for pat_str in patterns:
+        try:
+            results.extend(_compile(pat_str).findall(text))
+        except re.error:
+            continue
+    return results
+
+
+_DD_MM_YYYY = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+
+
+def is_ddmmyyyy(date_str: str) -> bool:
+    """Return True if *date_str* exactly matches DD/MM/YYYY."""
+    return bool(_DD_MM_YYYY.match(date_str.strip()))

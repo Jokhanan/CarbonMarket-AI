@@ -15,27 +15,20 @@ carbongpt/
 ├── tools/
 │   ├── parse_docx.py      Heading-based section extractor for .docx files
 │   ├── section_mapper.py  Fuzzy heading normaliser & matcher (rapidfuzz)
-│   ├── rule_engine.py     YAML rule loader; supports required_section + required_field
-│   └── regex_utils.py     Compiled regex pattern matcher for field detection
+│   ├── rule_engine.py     YAML rule loader; 4 rule types supported
+│   └── regex_utils.py     Compiled regex utils: pattern matching, date validation
 ├── rules/
-│   └── goldstandard_mr_v1.yaml  GoldStandard MR rules (7 sections + 5 fields)
+│   └── goldstandard_mr_v1.yaml  GoldStandard MR rules (8 sections, 8 fields, 2 date, 2 N/A)
 └── tests/
     ├── test_section_mapper.py   17 tests (exact/fuzzy/missing sections)
-    └── test_required_field.py   19 tests (field found/missing, section missing, score)
+    └── test_required_field.py   31 tests (all rule types, score, end-to-end)
 ```
 
-## Running the API
+## Running
 
 ```bash
-uvicorn carbongpt.app.main:app --host 0.0.0.0 --port 3000
-```
-
-Interactive docs at `http://localhost:3000/docs`.
-
-## Running Tests
-
-```bash
-python -m pytest carbongpt/tests/ -v
+uvicorn carbongpt.app.main:app --host 0.0.0.0 --port 3000   # API
+python -m pytest carbongpt/tests/ -v                          # Tests (48 total)
 ```
 
 ## Endpoints
@@ -44,15 +37,20 @@ python -m pytest carbongpt/tests/ -v
 |--------|--------------------------|--------------------------------------------------------|
 | GET    | /health                  | Liveness probe                                         |
 | POST   | /upload-document         | Upload a .docx file, receive saved path                |
-| POST   | /analyze                 | Analyse file against YAML rules (sections + fields)    |
+| POST   | /analyze                 | Analyse file against YAML rules (all rule types)       |
 | POST   | /analyze-with-template   | Compare file against a template doc's headings         |
 
 ## Rule Types
 
-| Type              | What it checks                                               |
-|-------------------|--------------------------------------------------------------|
-| required_section  | Heading exists in document (fuzzy match)                     |
-| required_field    | Regex patterns match inside a section's body text            |
+| Type                                | What it checks                                                      |
+|-------------------------------------|---------------------------------------------------------------------|
+| required_section                    | Heading exists in document (fuzzy match)                            |
+| required_field                      | Regex patterns match inside a section's body text                   |
+| date_format_ddmmyyyy                | Dates in a section use DD/MM/YYYY (not YYYY-MM-DD or DD-MM-YYYY)   |
+| not_applicable_required_when_blank  | Short sections (<N chars) must contain "N/A" or "Not Applicable"   |
+
+Key behaviour: `required_field`, `date_format_ddmmyyyy`, and `not_applicable_required_when_blank`
+all silently skip if the parent section is missing — no duplicate noise.
 
 ## Compliance Score
 

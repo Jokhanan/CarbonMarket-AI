@@ -7,7 +7,7 @@ rules:
   # -----------------------------------------------------------------------
   - id: GS_MR_001
     type: required_section
-    section: "Monitoring Period"
+    section: "KEY PROJECT INFORMATION"
     severity: ERROR
 
   - id: GS_MR_002
@@ -17,81 +17,151 @@ rules:
 
   - id: GS_MR_003
     type: required_section
-    section: "Baseline Emissions"
+    section: "Monitoring Period"
     severity: ERROR
 
   - id: GS_MR_004
     type: required_section
-    section: "Project Emissions"
+    section: "Baseline Emissions"
     severity: ERROR
 
   - id: GS_MR_005
     type: required_section
-    section: "Emission Reductions"
+    section: "Project Emissions"
     severity: ERROR
 
   - id: GS_MR_006
     type: required_section
+    section: "Emission Reductions"
+    severity: ERROR
+
+  - id: GS_MR_007
+    type: required_section
     section: "Data Quality"
     severity: WARNING
 
-  - id: GS_MR_007
+  - id: GS_MR_008
     type: required_section
     section: "Safeguards"
     severity: WARNING
 
   # -----------------------------------------------------------------------
-  # Required fields within sections
+  # Required fields inside KEY PROJECT INFORMATION
   # -----------------------------------------------------------------------
   - id: GS_MR_F001
     type: required_field
-    section: "Project Description"
-    field_name: "project_start_date"
+    section: "KEY PROJECT INFORMATION"
+    field_name: "gs_id"
     severity: ERROR
     patterns:
-      - "\\d{4}-\\d{2}-\\d{2}"
-      - "\\d{2}/\\d{2}/\\d{4}"
-      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
-      - "(?i)(?:project\\s+)?start\\s+date"
-      - "(?i)commenced|started\\s+(?:on|in)"
+      - "(?i)GS\\s*[-:]?\\s*\\d{3,}"
+      - "(?i)gold\\s*standard\\s+id"
+      - "(?i)GS\\s+ID"
 
   - id: GS_MR_F002
     type: required_field
-    section: "Monitoring Period"
-    field_name: "monitoring_period_start"
+    section: "KEY PROJECT INFORMATION"
+    field_name: "title_of_project"
     severity: ERROR
     patterns:
-      - "\\d{4}-\\d{2}-\\d{2}"
-      - "\\d{2}/\\d{2}/\\d{4}"
-      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
-      - "(?i)(?:start|from|beginning)\\s+(?:of\\s+)?(?:the\\s+)?(?:monitoring|period)"
+      - "(?i)title\\s+of\\s+(?:the\\s+)?project"
+      - "(?i)project\\s+title"
+      - "(?i)project\\s+name"
 
   - id: GS_MR_F003
     type: required_field
-    section: "Monitoring Period"
-    field_name: "monitoring_period_end"
+    section: "KEY PROJECT INFORMATION"
+    field_name: "version_number_monitoring_report"
     severity: ERROR
     patterns:
-      - "\\d{4}-\\d{2}-\\d{2}"
-      - "\\d{2}/\\d{2}/\\d{4}"
-      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
-      - "(?i)(?:end|to|until|through)\\s+(?:of\\s+)?(?:the\\s+)?(?:monitoring|period)"
+      - "(?i)version\\s*(?:number|no\\.?|#)?\\s*[:.]?\\s*\\d+"
+      - "(?i)v\\d+\\.\\d+"
+      - "(?i)monitoring\\s+report\\s+version"
 
   - id: GS_MR_F004
     type: required_field
-    section: "Project Description"
-    field_name: "crediting_period"
+    section: "KEY PROJECT INFORMATION"
+    field_name: "completion_date_monitoring_report"
     severity: ERROR
     patterns:
-      - "(?i)crediting\\s+period"
-      - "(?i)\\d{4}\\s*[-–]\\s*\\d{4}"
-      - "(?i)(?:renewable|fixed)\\s+crediting"
+      - "(?i)completion\\s+date"
+      - "(?i)date\\s+(?:of\\s+)?completion"
+      - "\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}"
 
   - id: GS_MR_F005
     type: required_field
-    section: "Project Description"
-    field_name: "location_country"
+    section: "KEY PROJECT INFORMATION"
+    field_name: "monitoring_period_number"
     severity: ERROR
     patterns:
-      - "(?i)(?:located|location|country|region|site)\\s*[:.]?\\s*\\w+"
-      - "(?i)\\b(?:Kenya|India|China|Brazil|Indonesia|Uganda|Rwanda|Ethiopia|Nepal|Vietnam|Bangladesh|Colombia|Peru|Mexico|Ghana|Tanzania|Mozambique|Cambodia|Myanmar|Philippines)\\b"
+      - "(?i)monitoring\\s+period\\s*(?:number|no\\.?|#)?\\s*[:.]?\\s*\\d+"
+      - "(?i)(?:period|MP)\\s*#?\\s*\\d+"
+
+  - id: GS_MR_F006
+    type: required_field
+    section: "KEY PROJECT INFORMATION"
+    field_name: "duration_monitoring_period"
+    severity: ERROR
+    patterns:
+      - "(?i)duration\\s+(?:of\\s+)?(?:this\\s+)?(?:monitoring\\s+)?period"
+      - "\\d{2}/\\d{2}/\\d{4}\\s*[-–to]+\\s*\\d{2}/\\d{2}/\\d{4}"
+      - "\\d{4}-\\d{2}-\\d{2}\\s*[-–to]+\\s*\\d{4}-\\d{2}-\\d{2}"
+      - "(?i)from\\s+.*\\s+to\\s+"
+
+  - id: GS_MR_F007
+    type: required_field
+    section: "KEY PROJECT INFORMATION"
+    field_name: "host_country"
+    severity: ERROR
+    patterns:
+      - "(?i)host\\s+country"
+      - "(?i)country\\s*[:.]?\\s*\\w+"
+      - "(?i)\\b(?:Kenya|India|China|Brazil|Indonesia|Uganda|Rwanda|Ethiopia|Nepal|Vietnam|Bangladesh|Colombia|Peru|Mexico|Ghana|Tanzania|Mozambique|Cambodia|Myanmar|Philippines|Thailand|South Africa|Nigeria)\\b"
+
+  - id: GS_MR_F008
+    type: required_field
+    section: "KEY PROJECT INFORMATION"
+    field_name: "methodology_and_version"
+    severity: ERROR
+    patterns:
+      - "(?i)methodology\\s+(?:applied|used|version)"
+      - "(?i)(?:AMS|ACM|AM)[-\\s]?[IVX]*[-\\.]?\\d+"
+      - "(?i)methodology\\s*[:.]?\\s*\\w+"
+      - "(?i)version\\s*(?:number|no\\.?)?\\s*[:.]?\\s*\\d+"
+
+  # -----------------------------------------------------------------------
+  # Date format checks (DD/MM/YYYY required)
+  # -----------------------------------------------------------------------
+  - id: GS_MR_D001
+    type: date_format_ddmmyyyy
+    section: "KEY PROJECT INFORMATION"
+    severity: WARNING
+    date_patterns:
+      - "\\d{4}-\\d{2}-\\d{2}"
+      - "\\d{2}-\\d{2}-\\d{4}"
+      - "\\d{2}/\\d{2}/\\d{4}"
+
+  - id: GS_MR_D002
+    type: date_format_ddmmyyyy
+    section: "Monitoring Period"
+    severity: WARNING
+    date_patterns:
+      - "\\d{4}-\\d{2}-\\d{2}"
+      - "\\d{2}-\\d{2}-\\d{4}"
+      - "\\d{2}/\\d{2}/\\d{4}"
+
+  # -----------------------------------------------------------------------
+  # Not-applicable when blank
+  # -----------------------------------------------------------------------
+  - id: GS_MR_NA001
+    type: not_applicable_required_when_blank
+    section: "Data Quality"
+    severity: WARNING
+    min_chars: 40
+
+  - id: GS_MR_NA002
+    type: not_applicable_required_when_blank
+    section: "Safeguards"
+    severity: WARNING
+    min_chars: 40

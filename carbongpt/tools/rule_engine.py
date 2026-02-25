@@ -5,21 +5,20 @@ parsed document sections.
 Supported rule types
 --------------------
 required_section
-    Uses fuzzy matching (via section_mapper) to check whether a heading
-    sufficiently close to the rule's ``section`` value exists in the
-    document.  Returns an ERROR/WARNING/INFO finding when it is missing.
+    Fuzzy-matches a heading against the document.
 
 required_field
-    Checks that specific content (detected via regex patterns) exists
-    inside a matched section.  If the parent section itself is missing,
-    a single "section missing" finding is emitted instead (no duplicate
-    field-level noise).
+    Checks that regex patterns match inside a section's body text.
+    Silently skipped when the parent section is missing (the
+    required_section rule already covers that).
 
-Extending the engine
---------------------
-Add new rule types by:
-1. Adding a handler function  ``_check_<type>(rule, sections, section_map) -> Finding | None``
-2. Registering it in ``_RULE_HANDLERS``.
+date_format_ddmmyyyy
+    Finds date-like strings in a section and verifies they use
+    DD/MM/YYYY format.  Raises a finding for wrong formats.
+
+not_applicable_required_when_blank
+    If a section exists but contains fewer than N characters, requires
+    the text to contain "Not Applicable" or "N/A".
 """
 
 from pathlib import Path
@@ -28,7 +27,7 @@ import yaml
 
 from carbongpt.core.models import Finding
 from carbongpt.tools.section_mapper import map_sections
-from carbongpt.tools.regex_utils import any_pattern_matches
+from carbongpt.tools.regex_utils import any_pattern_matches, find_all_matches, is_ddmmyyyy
 
 
 # ---------------------------------------------------------------------------
@@ -65,9 +64,7 @@ _SEVERITY_PENALTY = {
 
 
 def compute_compliance_score(findings: list[Finding]) -> int:
-    """
-    Start at 100, subtract per finding based on severity.  Floor at 0.
-    """
+    """Start at 100, subtract per finding based on severity.  Floor at 0."""
     score = 100
     for f in findings:
         score -= _SEVERITY_PENALTY.get(f.severity, 0)
@@ -83,7 +80,6 @@ def _check_required_section(
     sections: dict[str, str],
     section_map: dict[str, str | None],
 ) -> Finding | None:
-    """Return a Finding if the required section is absent, else None."""
     required: str = rule.get("section", "")
     if not required:
         return None
@@ -104,11 +100,8 @@ def _check_required_field(
     section_map: dict[str, str | None],
 ) -> Finding | None:
     """
-    Return a Finding if a required field is missing from a section.
-
-    If the parent section itself is not matched in the document, emit a
-    single finding about the missing section rather than a field-level
-    finding, to avoid duplicate noise.
+    If the parent section is missing, return None (no duplicate noise).
+    Only emit a finding when the section exists but the field is absent.
     """
     section_name: str = rule.get("section", "")
     field_name: str = rule.get("field_name", "")
@@ -118,13 +111,8 @@ def _check_required_field(
         return None
 
     matched_heading = section_map.get(section_name)
-
     if matched_heading is None:
-        return Finding(
-            rule_id=rule["id"],
-            severity=rule.get("severity", "ERROR"),
-            message=f"Missing required field: {field_name} (section '{section_name}' not found)",
-        )
+        return None
 
     section_text = sections.get(matched_heading, "")
 
@@ -138,6 +126,90 @@ def _check_required_field(
     )
 
 
+def _check_date_format_ddmmyyyy(
+    rule: dict[str, Any],
+    sections: dict[str, str],
+    section_map: dict[str, str | None],
+) -> Finding | None:
+    """
+    Find date-like strings in a section using *date_patterns*, then
+    verify each one is DD/MM/YYYY.  If any date is found in a wrong
+    format, emit a finding.  Silently skip if the section is missing.
+    """
+    section_name: str = rule.get("section", "")
+    date_patterns: list[str] = rule.get("date_patterns", [])
+
+    if not section_name or not date_patterns:
+        return None
+
+    matched_heading = section_map.get(section_name)
+    if matched_heading is None:
+        return None
+
+    section_text = sections.get(matched_heading, "")
+    found_dates = find_all_matches(section_text, date_patterns)
+
+    if not found_dates:
+        return None
+
+    bad_dates = [d for d in found_dates if not is_ddmmyyyy(d)]
+
+    if not bad_dates:
+        return None
+
+    examples = ", ".join(bad_dates[:3])
+    return Finding(
+        rule_id=rule["id"],
+        severity=rule.get("severity", "WARNING"),
+        message=(
+            f"Date format violation in section: {section_name}. "
+            f"Expected DD/MM/YYYY but found: {examples}"
+        ),
+    )
+
+
+_NA_KEYWORDS = ("not applicable", "n/a")
+_DEFAULT_MIN_CHARS = 40
+
+
+def _check_not_applicable_required_when_blank(
+    rule: dict[str, Any],
+    sections: dict[str, str],
+    section_map: dict[str, str | None],
+) -> Finding | None:
+    """
+    If a section exists but has fewer than *min_chars* characters,
+    require the presence of "Not Applicable" or "N/A".
+    """
+    section_name: str = rule.get("section", "")
+    min_chars: int = rule.get("min_chars", _DEFAULT_MIN_CHARS)
+
+    if not section_name:
+        return None
+
+    matched_heading = section_map.get(section_name)
+    if matched_heading is None:
+        return None
+
+    section_text = sections.get(matched_heading, "")
+
+    if len(section_text.strip()) >= min_chars:
+        return None
+
+    lower_text = section_text.lower()
+    if any(kw in lower_text for kw in _NA_KEYWORDS):
+        return None
+
+    return Finding(
+        rule_id=rule["id"],
+        severity=rule.get("severity", "WARNING"),
+        message=(
+            f"Section '{section_name}' has fewer than {min_chars} characters "
+            f"and does not contain 'Not Applicable' or 'N/A'"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Handler dispatch table
 # ---------------------------------------------------------------------------
@@ -145,6 +217,8 @@ def _check_required_field(
 _RULE_HANDLERS = {
     "required_section": _check_required_section,
     "required_field": _check_required_field,
+    "date_format_ddmmyyyy": _check_date_format_ddmmyyyy,
+    "not_applicable_required_when_blank": _check_not_applicable_required_when_blank,
 }
 
 
@@ -171,13 +245,6 @@ def run_rules(
 ) -> tuple[list[Finding], dict]:
     """
     Load a YAML rule file and evaluate every rule against *sections*.
-
-    Returns
-    -------
-    findings:
-        List of Finding objects.  Empty when fully compliant.
-    metadata:
-        Dict with ``standard``, ``doc_type``, and ``compliance_score``.
     """
     data = _load_yaml(rule_file)
 
@@ -222,14 +289,7 @@ def run_template_rules(
     threshold: int = 85,
 ) -> tuple[list[Finding], dict[str, str | None]]:
     """
-    Check *sections* against a list of expected headings (from a template).
-
-    Returns
-    -------
-    findings:
-        One finding per missing section.
-    section_map:
-        The full mapping so callers can see which headings matched.
+    Check *sections* against expected headings from a template.
     """
     found_headings = list(sections.keys())
     section_map = map_sections(expected_sections, found_headings, threshold)
