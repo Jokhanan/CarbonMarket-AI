@@ -5,14 +5,14 @@ parsed document sections.
 Supported rule types
 --------------------
 required_section
-    Checks that a section whose heading *contains* the rule's ``section``
-    value (case-insensitive) is present in the document.  Returns an
-    ERROR/WARNING/INFO finding when it is missing.
+    Uses fuzzy matching (via section_mapper) to check whether a heading
+    sufficiently close to the rule's ``section`` value exists in the
+    document.  Returns an ERROR/WARNING/INFO finding when it is missing.
 
 Extending the engine
 --------------------
 Add new rule types by:
-1. Adding a handler function  ``_check_<type>(rule, sections) -> Finding | None``
+1. Adding a handler function  ``_check_<type>(rule, sections, section_map) -> Finding | None``
 2. Registering it in ``_RULE_HANDLERS``.
 """
 
@@ -21,6 +21,7 @@ from typing import Any
 import yaml
 
 from carbongpt.core.models import Finding
+from carbongpt.tools.section_mapper import map_sections
 
 
 # ---------------------------------------------------------------------------
@@ -57,11 +58,6 @@ def _load_yaml(rule_file: str | Path) -> dict:
     return data
 
 
-def _normalise(text: str) -> str:
-    """Lowercase and strip whitespace for case-insensitive comparisons."""
-    return text.strip().lower()
-
-
 # ---------------------------------------------------------------------------
 # Rule-type handlers
 # ---------------------------------------------------------------------------
@@ -69,26 +65,22 @@ def _normalise(text: str) -> str:
 def _check_required_section(
     rule: dict[str, Any],
     sections: dict[str, str],
+    section_map: dict[str, str | None],
 ) -> Finding | None:
     """
     Return a Finding if the required section is absent, else None.
 
-    Matching is performed case-insensitively on substring containment so
-    that minor heading variations ("Monitoring Period Summary" still
-    matches the rule for "Monitoring Period").
+    Uses the pre-computed *section_map* produced by the fuzzy mapper
+    so that minor heading variations still match.
     """
     required: str = rule.get("section", "")
     if not required:
-        return None  # Misconfigured rule — skip silently
+        return None
 
-    normalised_required = _normalise(required)
-    found = any(
-        normalised_required in _normalise(heading)
-        for heading in sections
-    )
+    matched = section_map.get(required)
 
-    if found:
-        return None  # Compliant — no finding
+    if matched is not None:
+        return None
 
     return Finding(
         rule_id=rule["id"],
@@ -113,6 +105,7 @@ _RULE_HANDLERS = {
 def run_rules(
     rule_file: str | Path,
     sections: dict[str, str],
+    threshold: int = 85,
 ) -> tuple[list[Finding], dict]:
     """
     Load a YAML rule file and evaluate every rule against *sections*.
@@ -122,7 +115,9 @@ def run_rules(
     rule_file:
         Absolute path to the YAML rule file.
     sections:
-        Mapping of heading → body text as returned by ``parse_docx``.
+        Mapping of heading -> body text as returned by ``parse_docx``.
+    threshold:
+        Fuzzy-match similarity threshold (0-100) forwarded to the mapper.
 
     Returns
     -------
@@ -141,6 +136,14 @@ def run_rules(
     }
 
     rules: list[dict] = data.get("rules", [])
+
+    expected_sections = [
+        r["section"] for r in rules
+        if r.get("type") == "required_section" and r.get("section")
+    ]
+    found_headings = list(sections.keys())
+    section_map = map_sections(expected_sections, found_headings, threshold)
+
     findings: list[Finding] = []
 
     for rule in rules:
@@ -148,9 +151,6 @@ def run_rules(
         handler = _RULE_HANDLERS.get(rule_type)
 
         if handler is None:
-            # Unknown rule type — emit an informational finding so the
-            # caller knows something was skipped rather than silently
-            # ignoring misconfiguration.
             findings.append(
                 Finding(
                     rule_id=rule.get("id", "UNKNOWN"),
@@ -160,8 +160,53 @@ def run_rules(
             )
             continue
 
-        finding = handler(rule, sections)
+        finding = handler(rule, sections, section_map)
         if finding is not None:
             findings.append(finding)
 
     return findings, metadata
+
+
+def run_template_rules(
+    expected_sections: list[str],
+    sections: dict[str, str],
+    threshold: int = 85,
+) -> tuple[list[Finding], dict[str, str | None]]:
+    """
+    Check *sections* against a list of expected headings (from a template).
+
+    Unlike ``run_rules`` this does not load a YAML file — the expected
+    sections come directly from a parsed template document.
+
+    Parameters
+    ----------
+    expected_sections:
+        Heading names the document must contain.
+    sections:
+        Heading -> body text mapping from the user document.
+    threshold:
+        Fuzzy-match similarity threshold (0-100).
+
+    Returns
+    -------
+    findings:
+        One finding per missing section.
+    section_map:
+        The full mapping from ``map_sections`` so callers can see which
+        headings matched which.
+    """
+    found_headings = list(sections.keys())
+    section_map = map_sections(expected_sections, found_headings, threshold)
+
+    findings: list[Finding] = []
+    for idx, expected in enumerate(expected_sections, start=1):
+        if section_map.get(expected) is None:
+            findings.append(
+                Finding(
+                    rule_id=f"TPL_{idx:03d}",
+                    severity="ERROR",
+                    message=f"Missing required section: {expected}",
+                )
+            )
+
+    return findings, section_map

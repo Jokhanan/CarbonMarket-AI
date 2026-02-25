@@ -9,6 +9,10 @@ POST /upload-document
 POST /analyze
     Accept a file path + optional rule-file name, run the compliance
     pipeline, return structured JSON findings.
+
+POST /analyze-with-template
+    Accept two docx paths (user doc + template doc), fuzzy-match
+    headings, return findings for missing sections.
 """
 
 import shutil
@@ -27,8 +31,14 @@ from carbongpt.app.config import (
     PORT,
     UPLOAD_DIR,
 )
-from carbongpt.core.models import AnalyzeRequest, AnalyzeResponse, UploadResponse
-from carbongpt.core.orchestrator import run_analysis
+from carbongpt.core.models import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    AnalyzeWithTemplateRequest,
+    AnalyzeWithTemplateResponse,
+    UploadResponse,
+)
+from carbongpt.core.orchestrator import run_analysis, run_template_analysis
 
 # ---------------------------------------------------------------------------
 # Application factory
@@ -42,7 +52,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Allow all origins for development; tighten in production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -78,14 +87,12 @@ def health_check() -> dict:
     ),
 )
 async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
-    # Validate MIME type / extension
     if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(
             status_code=400,
             detail="Only .docx files are accepted.",
         )
 
-    # Build a unique destination path to avoid collisions
     unique_stem = f"{uuid.uuid4().hex}_{Path(file.filename).stem}"
     dest_path: Path = UPLOAD_DIR / f"{unique_stem}.docx"
 
@@ -107,7 +114,7 @@ async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
 
 
 # ---------------------------------------------------------------------------
-# POST /analyze
+# POST /analyze  (unchanged — YAML-based rules)
 # ---------------------------------------------------------------------------
 
 @app.post(
@@ -122,7 +129,6 @@ async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
     ),
 )
 def analyze_document(request: AnalyzeRequest) -> AnalyzeResponse:
-    # Confirm the file exists before handing off to the orchestrator
     if not Path(request.file_path).exists():
         raise HTTPException(
             status_code=404,
@@ -142,6 +148,54 @@ def analyze_document(request: AnalyzeRequest) -> AnalyzeResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {exc}",
+        ) from exc
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# POST /analyze-with-template  (template-based section checking)
+# ---------------------------------------------------------------------------
+
+@app.post(
+    "/analyze-with-template",
+    response_model=AnalyzeWithTemplateResponse,
+    tags=["analysis"],
+    summary="Compare a document against a template",
+    description=(
+        "Accepts paths to a user document and a template document.  "
+        "Headings in the template define the expected sections.  The user "
+        "document is fuzzy-matched against those sections and findings are "
+        "reported for any that are missing."
+    ),
+)
+def analyze_with_template(
+    request: AnalyzeWithTemplateRequest,
+) -> AnalyzeWithTemplateResponse:
+    for label, path in [
+        ("User document", request.user_doc_path),
+        ("Template document", request.template_doc_path),
+    ]:
+        if not Path(path).exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"{label} not found: {path}",
+            )
+
+    try:
+        result = run_template_analysis(
+            user_doc_path=request.user_doc_path,
+            template_doc_path=request.template_doc_path,
+            threshold=request.threshold,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Template analysis failed: {exc}",
         ) from exc
 
     return result
