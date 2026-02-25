@@ -15,7 +15,7 @@ import tempfile
 import pytest
 from docx import Document
 
-from carbongpt.core.models import Finding
+from carbongpt.core.models import Finding, compute_status
 from carbongpt.tools.rule_engine import (
     compute_compliance_score,
     _check_required_field,
@@ -411,25 +411,77 @@ class TestComplianceScore:
         assert compute_compliance_score([]) == 100
 
     def test_one_error(self):
-        assert compute_compliance_score([Finding(rule_id="X", severity="ERROR", message="m")]) == 90
+        assert compute_compliance_score([Finding(rule_id="X", severity="ERROR", category="STRUCTURE", message="m")]) == 90
 
     def test_one_warning(self):
-        assert compute_compliance_score([Finding(rule_id="X", severity="WARNING", message="m")]) == 97
+        assert compute_compliance_score([Finding(rule_id="X", severity="WARNING", category="FORMAT", message="m")]) == 97
 
     def test_mixed(self):
         findings = [
-            Finding(rule_id="A", severity="ERROR", message="m"),
-            Finding(rule_id="B", severity="ERROR", message="m"),
-            Finding(rule_id="C", severity="WARNING", message="m"),
+            Finding(rule_id="A", severity="ERROR", category="STRUCTURE", message="m"),
+            Finding(rule_id="B", severity="ERROR", category="KEY_FIELDS", message="m"),
+            Finding(rule_id="C", severity="WARNING", category="FORMAT", message="m"),
         ]
         assert compute_compliance_score(findings) == 77
 
     def test_floor_at_zero(self):
-        findings = [Finding(rule_id=f"E{i}", severity="ERROR", message="m") for i in range(15)]
+        findings = [Finding(rule_id=f"E{i}", severity="ERROR", category="STRUCTURE", message="m") for i in range(15)]
         assert compute_compliance_score(findings) == 0
 
     def test_info_no_penalty(self):
-        assert compute_compliance_score([Finding(rule_id="I", severity="INFO", message="m")]) == 100
+        assert compute_compliance_score([Finding(rule_id="I", severity="INFO", category="FORMAT", message="m")]) == 100
+
+
+# ---------------------------------------------------------------------------
+# compute_status
+# ---------------------------------------------------------------------------
+
+class TestComputeStatus:
+    def test_pass_no_findings(self):
+        assert compute_status([]) == "PASS"
+
+    def test_fail_structure_error(self):
+        findings = [Finding(rule_id="S1", severity="ERROR", category="STRUCTURE", message="m")]
+        assert compute_status(findings) == "FAIL"
+
+    def test_fail_key_fields_error(self):
+        findings = [Finding(rule_id="KF1", severity="ERROR", category="KEY_FIELDS", message="m")]
+        assert compute_status(findings) == "FAIL"
+
+    def test_review_structure_warning_only(self):
+        findings = [Finding(rule_id="S1", severity="WARNING", category="STRUCTURE", message="m")]
+        assert compute_status(findings) == "REVIEW"
+
+    def test_review_format_error(self):
+        findings = [Finding(rule_id="F1", severity="ERROR", category="FORMAT", message="m")]
+        assert compute_status(findings) == "REVIEW"
+
+    def test_review_content_hint_error(self):
+        findings = [Finding(rule_id="C1", severity="ERROR", category="CONTENT_HINT", message="m")]
+        assert compute_status(findings) == "REVIEW"
+
+    def test_review_info_only(self):
+        findings = [Finding(rule_id="I1", severity="INFO", category="FORMAT", message="m")]
+        assert compute_status(findings) == "REVIEW"
+
+    def test_fail_mixed_with_structure_error(self):
+        findings = [
+            Finding(rule_id="S1", severity="ERROR", category="STRUCTURE", message="m"),
+            Finding(rule_id="F1", severity="WARNING", category="FORMAT", message="m"),
+            Finding(rule_id="C1", severity="ERROR", category="CONTENT_HINT", message="m"),
+        ]
+        assert compute_status(findings) == "FAIL"
+
+    def test_review_mixed_without_critical_error(self):
+        findings = [
+            Finding(rule_id="F1", severity="ERROR", category="FORMAT", message="m"),
+            Finding(rule_id="C1", severity="WARNING", category="CONTENT_HINT", message="m"),
+        ]
+        assert compute_status(findings) == "REVIEW"
+
+    def test_review_key_fields_warning(self):
+        findings = [Finding(rule_id="KF1", severity="WARNING", category="KEY_FIELDS", message="m")]
+        assert compute_status(findings) == "REVIEW"
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +533,8 @@ class TestEndToEnd:
         assert result.compliant is True
         assert result.compliance_score == 100
         assert len(result.findings) == 0
+        assert result.status == "PASS"
+        assert result.status_label == "BASIC CHECKS PASSED"
 
     def test_missing_fields_and_bad_dates(self):
         path = self._make_docx({
@@ -499,9 +553,15 @@ class TestEndToEnd:
         result = run_analysis(path)
         assert result.compliant is False
         assert result.compliance_score < 100
+        assert result.status == "FAIL"
+        assert result.status_label == "NOT READY FOR SUBMISSION"
 
         messages = [f.message for f in result.findings]
         assert any("gs_id" in m for m in messages)
         assert any("title_of_project" in m for m in messages)
         assert any("Date format violation" in m for m in messages)
         assert any("fewer than 40 characters" in m for m in messages)
+
+        categories = [f.category for f in result.findings]
+        assert "KEY_FIELDS" in categories
+        assert "FORMAT" in categories

@@ -76,6 +76,9 @@ if analyze_btn and uploaded_file is not None:
     score = result["compliance_score"]
     compliant = result["compliant"]
 
+    status = result.get("status", "REVIEW")
+    status_label = result.get("status_label", "")
+
     score_col, status_col = st.columns(2)
     with score_col:
         if score >= 80:
@@ -87,10 +90,12 @@ if analyze_btn and uploaded_file is not None:
         st.markdown(f"### Compliance Score: :{color}[**{score}/100**]")
 
     with status_col:
-        if compliant:
-            st.success("COMPLIANT — No errors found")
+        if status == "PASS":
+            st.success(status_label)
+        elif status == "REVIEW":
+            st.warning(status_label)
         else:
-            st.error("NON-COMPLIANT — Errors detected")
+            st.error(status_label)
 
     findings = result.get("findings", [])
 

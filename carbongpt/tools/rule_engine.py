@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 
-from carbongpt.core.models import Finding
+from carbongpt.core.models import Finding, RULE_TYPE_TO_CATEGORY
 from carbongpt.tools.section_mapper import map_sections
 from carbongpt.tools.regex_utils import any_pattern_matches, find_all_matches, is_ddmmyyyy
 
@@ -124,6 +124,7 @@ def _check_required_section(
     return Finding(
         rule_id=rule["id"],
         severity=rule.get("severity", "ERROR"),
+        category=RULE_TYPE_TO_CATEGORY["required_section"],
         message=f"Missing required section: {required}",
     )
 
@@ -156,6 +157,7 @@ def _check_required_field(
     return Finding(
         rule_id=rule["id"],
         severity=rule.get("severity", "ERROR"),
+        category=RULE_TYPE_TO_CATEGORY["required_field"],
         message=f"Missing required field: {field_name} in section: {section_name}",
     )
 
@@ -195,6 +197,7 @@ def _check_date_format_ddmmyyyy(
     return Finding(
         rule_id=rule["id"],
         severity=rule.get("severity", "WARNING"),
+        category=RULE_TYPE_TO_CATEGORY["date_format_ddmmyyyy"],
         message=(
             f"Date format violation in section: {section_name}. "
             f"Expected DD/MM/YYYY but found: {examples}"
@@ -237,6 +240,7 @@ def _check_not_applicable_required_when_blank(
     return Finding(
         rule_id=rule["id"],
         severity=rule.get("severity", "WARNING"),
+        category=RULE_TYPE_TO_CATEGORY["not_applicable_required_when_blank"],
         message=(
             f"Section '{section_name}' has fewer than {min_chars} characters "
             f"and does not contain 'Not Applicable' or 'N/A'"
@@ -290,6 +294,7 @@ def _check_must_mention_keywords(
     return Finding(
         rule_id=rule["id"],
         severity=rule.get("severity", "ERROR"),
+        category=RULE_TYPE_TO_CATEGORY["must_mention_keywords"],
         message=detail,
     )
 
@@ -355,6 +360,7 @@ def run_rules(
                 Finding(
                     rule_id=rule.get("id", "UNKNOWN"),
                     severity="INFO",
+                    category="FORMAT",
                     message=f"Unsupported rule type '{rule_type}' — skipped.",
                 )
             )
@@ -386,6 +392,7 @@ def run_template_rules(
                 Finding(
                     rule_id=f"TPL_{idx:03d}",
                     severity="ERROR",
+                    category="STRUCTURE",
                     message=f"Missing required section: {expected}",
                 )
             )

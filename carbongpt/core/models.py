@@ -5,6 +5,36 @@ models.py — Pydantic request / response models for CarbonGPT.
 from typing import Literal
 from pydantic import BaseModel, Field
 
+ComplianceStatus = Literal["FAIL", "REVIEW", "PASS"]
+FindingCategory = Literal["STRUCTURE", "KEY_FIELDS", "FORMAT", "CONTENT_HINT"]
+
+RULE_TYPE_TO_CATEGORY: dict[str, FindingCategory] = {
+    "required_section": "STRUCTURE",
+    "required_field": "KEY_FIELDS",
+    "date_format_ddmmyyyy": "FORMAT",
+    "not_applicable_required_when_blank": "FORMAT",
+    "must_mention_keywords": "CONTENT_HINT",
+}
+
+STATUS_LABELS: dict[ComplianceStatus, str] = {
+    "FAIL": "NOT READY FOR SUBMISSION",
+    "REVIEW": "NEEDS REVIEW",
+    "PASS": "BASIC CHECKS PASSED",
+}
+
+
+def compute_status(findings: list["Finding"]) -> ComplianceStatus:
+    fail_categories = {"STRUCTURE", "KEY_FIELDS"}
+    has_fail = any(
+        f.category in fail_categories and f.severity == "ERROR"
+        for f in findings
+    )
+    if has_fail:
+        return "FAIL"
+    if findings:
+        return "REVIEW"
+    return "PASS"
+
 
 class UploadResponse(BaseModel):
     file_path: str = Field(
@@ -68,6 +98,9 @@ class Finding(BaseModel):
     severity: Literal["ERROR", "WARNING", "INFO"] = Field(
         ..., description="Impact level of the finding."
     )
+    category: FindingCategory = Field(
+        ..., description="Category of the finding (STRUCTURE, KEY_FIELDS, FORMAT, CONTENT_HINT)."
+    )
     message: str = Field(..., description="Human-readable description of the finding.")
 
 
@@ -90,6 +123,12 @@ class AnalyzeResponse(BaseModel):
         ge=0,
         le=100,
         description="Score starting at 100, reduced by -10 per ERROR and -3 per WARNING.  Floor 0.",
+    )
+    status: ComplianceStatus = Field(
+        ..., description="Overall compliance status: FAIL, REVIEW, or PASS.",
+    )
+    status_label: str = Field(
+        ..., description="Human-readable status label.",
     )
 
 
@@ -124,6 +163,12 @@ class AnalyzeWithTemplateResponse(BaseModel):
         le=100,
         description="Score starting at 100, reduced by -10 per ERROR and -3 per WARNING.  Floor 0.",
     )
+    status: ComplianceStatus = Field(
+        ..., description="Overall compliance status: FAIL, REVIEW, or PASS.",
+    )
+    status_label: str = Field(
+        ..., description="Human-readable status label.",
+    )
 
 
 class AnalyzeSelectedResponse(BaseModel):
@@ -157,4 +202,10 @@ class AnalyzeSelectedResponse(BaseModel):
         ge=0,
         le=100,
         description="Combined compliance score.  Floor 0.",
+    )
+    status: ComplianceStatus = Field(
+        ..., description="Overall compliance status: FAIL, REVIEW, or PASS.",
+    )
+    status_label: str = Field(
+        ..., description="Human-readable status label.",
     )

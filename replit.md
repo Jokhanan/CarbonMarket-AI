@@ -37,7 +37,7 @@ carbongpt/
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (93 total)
+python -m pytest carbongpt/tests/ -v  # Tests (103 total)
 ```
 
 ## Endpoints
@@ -69,6 +69,23 @@ Registry defined in `carbongpt/templates/registry.yaml`.  Users do NOT upload te
 ## Compliance Score
 
 Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Floor at 0.
+
+## Compliance Status (3-tier)
+
+| Status | Label                    | Condition                                                         |
+|--------|--------------------------|-------------------------------------------------------------------|
+| FAIL   | NOT READY FOR SUBMISSION | Any STRUCTURE or KEY_FIELDS finding with severity ERROR           |
+| REVIEW | NEEDS REVIEW             | Any findings exist, but none are critical STRUCTURE/KEY_FIELDS    |
+| PASS   | BASIC CHECKS PASSED      | No findings at all                                                |
+
+## Finding Categories
+
+| Category     | Rule types mapped                                  |
+|--------------|----------------------------------------------------|
+| STRUCTURE    | required_section                                   |
+| KEY_FIELDS   | required_field                                     |
+| FORMAT       | date_format_ddmmyyyy, not_applicable_required_when_blank |
+| CONTENT_HINT | must_mention_keywords                              |
 
 ## Tech Stack
 

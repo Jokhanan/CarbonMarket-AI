@@ -11,6 +11,8 @@ from carbongpt.core.models import (
     AnalyzeWithTemplateResponse,
     Finding,
     SectionMatch,
+    compute_status,
+    STATUS_LABELS,
 )
 from carbongpt.tools.parse_docx import parse_docx
 from carbongpt.tools.rule_engine import run_rules, run_template_rules, compute_compliance_score
@@ -35,6 +37,7 @@ def run_analysis(
     findings, metadata = run_rules(rule_file_path, sections)
 
     has_errors = any(f.severity == "ERROR" for f in findings)
+    status = compute_status(findings)
 
     return AnalyzeResponse(
         file_path=file_path,
@@ -44,6 +47,8 @@ def run_analysis(
         findings=findings,
         compliant=not has_errors,
         compliance_score=metadata.get("compliance_score", 100),
+        status=status,
+        status_label=STATUS_LABELS[status],
     )
 
 
@@ -72,6 +77,7 @@ def run_template_analysis(
     ]
 
     has_errors = any(f.severity == "ERROR" for f in findings)
+    status = compute_status(findings)
 
     return AnalyzeWithTemplateResponse(
         user_doc_path=user_doc_path,
@@ -82,6 +88,8 @@ def run_template_analysis(
         findings=findings,
         compliant=not has_errors,
         compliance_score=compute_compliance_score(findings),
+        status=status,
+        status_label=STATUS_LABELS[status],
     )
 
 
@@ -142,6 +150,7 @@ def run_selected_analysis(
     ]
 
     has_errors = any(f.severity == "ERROR" for f in all_findings)
+    status = compute_status(all_findings)
 
     return AnalyzeSelectedResponse(
         user_doc_path=user_doc_path,
@@ -156,4 +165,6 @@ def run_selected_analysis(
         findings=all_findings,
         compliant=not has_errors,
         compliance_score=compute_compliance_score(all_findings),
+        status=status,
+        status_label=STATUS_LABELS[status],
     )
