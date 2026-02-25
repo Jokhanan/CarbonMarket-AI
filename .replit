@@ -43,9 +43,9 @@ name = "Start application"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash /home/runner/workspace/start_carbongpt.sh"
-waitForPort = 3000
+waitForPort = 5000

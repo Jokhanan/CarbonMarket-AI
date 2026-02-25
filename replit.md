@@ -1,13 +1,13 @@
 # CarbonGPT — MVP
 
-Modular carbon compliance analysis tool built with **Python 3.11 + FastAPI**.
+Modular carbon compliance analysis tool built with **Python 3.11 + FastAPI + Streamlit**.
 
 ## Architecture
 
 ```
 carbongpt/
 ├── app/
-│   ├── main.py            FastAPI: /upload-document, /analyze, /analyze-with-template, /health
+│   ├── main.py            FastAPI: /upload-document, /analyze, /analyze-with-template, /analyze-selected, /health
 │   └── config.py          Centralised paths & env settings
 ├── core/
 │   ├── models.py          Pydantic request/response types (incl. compliance_score)
@@ -17,18 +17,26 @@ carbongpt/
 │   ├── section_mapper.py  Fuzzy heading normaliser & matcher (rapidfuzz)
 │   ├── rule_engine.py     YAML rule loader; 4 rule types supported
 │   └── regex_utils.py     Compiled regex utils: pattern matching, date validation
+├── templates/
+│   ├── registry.yaml      Maps (standard, doc_type, version) → template + rules paths
+│   ├── registry.py        Python loader for registry.yaml
+│   └── goldstandard/
+│       └── MR_v1_1.docx   Gold Standard MR template v1.1
 ├── rules/
 │   └── goldstandard_mr_v1.yaml  GoldStandard MR rules (8 sections, 8 fields, 2 date, 2 N/A)
+├── ui/
+│   └── streamlit_app.py   Streamlit web UI for document analysis
 └── tests/
     ├── test_section_mapper.py   17 tests (exact/fuzzy/missing sections)
-    └── test_required_field.py   31 tests (all rule types, score, end-to-end)
+    ├── test_required_field.py   31 tests (all rule types, score, end-to-end)
+    └── test_registry.py         10 tests (registry lookup, /analyze-selected)
 ```
 
 ## Running
 
 ```bash
-uvicorn carbongpt.app.main:app --host 0.0.0.0 --port 3000   # API
-python -m pytest carbongpt/tests/ -v                          # Tests (48 total)
+bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
+python -m pytest carbongpt/tests/ -v  # Tests (58 total)
 ```
 
 ## Endpoints
@@ -38,7 +46,13 @@ python -m pytest carbongpt/tests/ -v                          # Tests (48 total)
 | GET    | /health                  | Liveness probe                                         |
 | POST   | /upload-document         | Upload a .docx file, receive saved path                |
 | POST   | /analyze                 | Analyse file against YAML rules (all rule types)       |
-| POST   | /analyze-with-template   | Compare file against a template doc's headings         |
+| POST   | /analyze-with-template   | Compare file against a user-supplied template           |
+| POST   | /analyze-selected        | Analyse using internally registered template + rules   |
+
+## Template Registry
+
+Templates are stored internally and selected by Standard + Document Type + Version.
+Registry defined in `carbongpt/templates/registry.yaml`.  Users do NOT upload templates.
 
 ## Rule Types
 
@@ -49,17 +63,14 @@ python -m pytest carbongpt/tests/ -v                          # Tests (48 total)
 | date_format_ddmmyyyy                | Dates in a section use DD/MM/YYYY (not YYYY-MM-DD or DD-MM-YYYY)   |
 | not_applicable_required_when_blank  | Short sections (<N chars) must contain "N/A" or "Not Applicable"   |
 
-Key behaviour: `required_field`, `date_format_ddmmyyyy`, and `not_applicable_required_when_blank`
-all silently skip if the parent section is missing — no duplicate noise.
-
 ## Compliance Score
 
 Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Floor at 0.
-Returned in both `/analyze` and `/analyze-with-template` responses.
 
 ## Tech Stack
 
 - Python 3.11, FastAPI 0.133, Uvicorn 0.41
+- Streamlit (web UI)
 - python-docx 1.2, PyYAML 6.0, rapidfuzz, python-multipart
 - pytest
 

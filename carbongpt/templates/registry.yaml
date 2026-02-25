@@ -1,0 +1,12 @@
+templates:
+  - standard: GoldStandard
+    doc_type: MR
+    version: MR_v1_1
+    template_path: carbongpt/templates/goldstandard/MR_v1_1.docx
+    rules_path: carbongpt/rules/goldstandard_mr_v1.yaml
+
+  - standard: GoldStandard
+    doc_type: PDD
+    version: PDD_v1_0
+    template_path: null
+    rules_path: null
