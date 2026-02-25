@@ -35,6 +35,8 @@ with col2:
 with col3:
     version = st.selectbox("Version", VERSIONS.get((standard, doc_type), []), key="version")
 
+ai_review_enabled = st.toggle("AI Review (beta)", value=False, key="ai_review_toggle")
+
 uploaded_file = st.file_uploader("Upload your document (.docx)", type=["docx"])
 
 analyze_btn = st.button("Analyze", type="primary", disabled=uploaded_file is None)
@@ -133,3 +135,80 @@ if analyze_btn and uploaded_file is not None:
                 st.markdown(f"- **{expected}** → {matched}")
             else:
                 st.markdown(f"- **{expected}** → _not found_")
+
+    if ai_review_enabled:
+        st.divider()
+        st.subheader("AI Review (beta)")
+
+        with st.spinner("Running AI review — this may take a minute..."):
+            ai_resp = requests.post(
+                f"{API_BASE}/ai-review",
+                json={
+                    "standard": standard,
+                    "doc_type": doc_type,
+                    "version": "PerfCert_v1_2",
+                    "doc_path": user_doc_path,
+                },
+                timeout=180,
+            )
+
+        if ai_resp.status_code != 200:
+            st.error(f"AI Review failed: {ai_resp.text}")
+        else:
+            ai_result = ai_resp.json()
+
+            global_summary = ai_result.get("global_summary", {})
+            risk = global_summary.get("overall_risk", "UNKNOWN")
+            risk_colors = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red"}
+            risk_color = risk_colors.get(risk, "red")
+
+            st.markdown(f"### Overall Risk: :{risk_color}[**{risk}**]")
+
+            if global_summary.get("top_issues"):
+                st.markdown("**Top Issues:**")
+                for issue in global_summary["top_issues"]:
+                    st.markdown(f"- {issue}")
+
+            if global_summary.get("top_actions"):
+                st.markdown("**Priority Actions:**")
+                for action in global_summary["top_actions"]:
+                    st.markdown(f"- {action}")
+
+            if global_summary.get("coherence_flags"):
+                st.markdown("**Coherence Flags:**")
+                for flag in global_summary["coherence_flags"]:
+                    st.markdown(f"- {flag}")
+
+            st.divider()
+            st.markdown("### Section-by-Section Review")
+
+            for review in ai_result.get("per_section_reviews", []):
+                sec_id = review["section_id"]
+                sec_title = review["section_title"]
+                sec_score = review["completeness_score"]
+
+                if sec_score >= 80:
+                    sec_icon = "🟢"
+                elif sec_score >= 50:
+                    sec_icon = "🟡"
+                else:
+                    sec_icon = "🔴"
+
+                with st.expander(f"{sec_icon} {sec_id}: {sec_title} — Score: {sec_score}/100"):
+                    if review.get("issues"):
+                        st.markdown("**Issues:**")
+                        for issue in review["issues"]:
+                            st.markdown(f"- {issue}")
+
+                    if review.get("suggested_fixes"):
+                        st.markdown("**Suggested Fixes:**")
+                        for fix in review["suggested_fixes"]:
+                            st.markdown(f"- {fix}")
+
+                    if review.get("questions_for_user"):
+                        st.markdown("**Questions for You:**")
+                        for q in review["questions_for_user"]:
+                            st.markdown(f"- {q}")
+
+                    if not review.get("issues") and not review.get("suggested_fixes") and not review.get("questions_for_user"):
+                        st.info("No issues found for this subsection.")

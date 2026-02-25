@@ -37,7 +37,7 @@ carbongpt/
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (103 total)
+python -m pytest carbongpt/tests/ -v  # Tests (129 total)
 ```
 
 ## Endpoints
@@ -49,6 +49,7 @@ python -m pytest carbongpt/tests/ -v  # Tests (103 total)
 | POST   | /analyze                 | Analyse file against YAML rules (all rule types)       |
 | POST   | /analyze-with-template   | Compare file against a user-supplied template           |
 | POST   | /analyze-selected        | Analyse using internally registered template + rules   |
+| POST   | /ai-review               | AI-powered section-by-section review (beta, uses LLM)  |
 | GET    | /debug/sections?path=... | Diagnose section detection (raw paragraphs + markers)  |
 
 ## Template Registry
@@ -92,7 +93,19 @@ Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Flo
 - Python 3.11, FastAPI 0.133, Uvicorn 0.41
 - Streamlit (web UI)
 - python-docx 1.2, PyYAML 6.0, rapidfuzz, python-multipart
+- openai (for AI review)
 - pytest
+
+## AI Review (beta)
+
+- Endpoint: `POST /ai-review` with `{standard, doc_type, version, doc_path}`
+- Uses OpenAI Chat Completions (gpt-4o-mini by default, override with `CARBONGPT_AI_MODEL` env var)
+- Internal guide: `carbongpt/guides/gs_mr_perfcert_v1_2.py` — structured requirements per subsection
+- MVP covers Sections A (A.1–A.4) and B (B.1–B.3); extensible to C–G
+- Per-subsection review: completeness_score, issues, suggested_fixes, questions_for_user
+- Global summary: overall_risk (LOW/MEDIUM/HIGH), top_issues, top_actions, coherence_flags
+- Safety: model never invents numbers; marks drafts with [DRAFT]; asks questions for missing info
+- UI toggle: "AI Review (beta)" in Streamlit sidebar
 
 ## Extending the Rule Engine
 

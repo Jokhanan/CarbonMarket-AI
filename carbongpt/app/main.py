@@ -19,6 +19,8 @@ from carbongpt.app.config import (
     UPLOAD_DIR,
 )
 from carbongpt.core.models import (
+    AIReviewRequest,
+    AIReviewResponse,
     AnalyzeRequest,
     AnalyzeResponse,
     AnalyzeSelectedRequest,
@@ -32,6 +34,7 @@ from carbongpt.core.orchestrator import (
     run_selected_analysis,
     run_template_analysis,
 )
+from carbongpt.core.ai_review import run_ai_review
 from carbongpt.tools.parse_docx import debug_sections
 
 app = FastAPI(
@@ -166,6 +169,34 @@ def analyze_selected(request: AnalyzeSelectedRequest) -> AnalyzeSelectedResponse
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
 
     return result
+
+
+@app.post(
+    "/ai-review",
+    response_model=AIReviewResponse,
+    tags=["analysis"],
+    summary="AI-powered section-by-section review (beta)",
+    description=(
+        "Uses an LLM to review each subsection of the document against "
+        "the internal Gold Standard MR guide. Returns per-section scores, "
+        "issues, suggested fixes, and a global summary."
+    ),
+)
+def ai_review(request: AIReviewRequest) -> AIReviewResponse:
+    if not Path(request.doc_path).exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document not found: {request.doc_path}",
+        )
+
+    try:
+        result = run_ai_review(doc_path=request.doc_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI review failed: {exc}") from exc
+
+    return AIReviewResponse(**result)
 
 
 @app.get(

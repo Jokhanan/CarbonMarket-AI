@@ -209,3 +209,39 @@ class AnalyzeSelectedResponse(BaseModel):
     status_label: str = Field(
         ..., description="Human-readable status label.",
     )
+
+
+class AIReviewRequest(BaseModel):
+    standard: str = Field(..., description="Compliance standard (e.g. 'GoldStandard').")
+    doc_type: str = Field(..., description="Document type (e.g. 'MR').")
+    version: str = Field(..., description="Guide version (e.g. 'PerfCert_v1_2').")
+    doc_path: str = Field(..., description="Path to the uploaded .docx file.")
+
+
+class SectionReview(BaseModel):
+    section_id: str = Field(..., description="Subsection identifier (e.g. 'A.1').")
+    section_title: str = Field(..., description="Title of the subsection.")
+    completeness_score: int = Field(
+        ..., ge=0, le=100, description="Completeness score 0–100.",
+    )
+    issues: list[str] = Field(default_factory=list, description="Issues found.")
+    suggested_fixes: list[str] = Field(default_factory=list, description="Suggested fixes.")
+    questions_for_user: list[str] = Field(default_factory=list, description="Questions for the author.")
+
+
+class GlobalSummary(BaseModel):
+    overall_risk: Literal["LOW", "MEDIUM", "HIGH"] = Field(
+        ..., description="Overall risk level.",
+    )
+    top_issues: list[str] = Field(default_factory=list, description="Top issues across sections.")
+    top_actions: list[str] = Field(default_factory=list, description="Priority actions.")
+    coherence_flags: list[str] = Field(default_factory=list, description="Cross-section coherence issues.")
+
+
+class AIReviewResponse(BaseModel):
+    per_section_reviews: list[SectionReview] = Field(
+        ..., description="Per-subsection AI review results.",
+    )
+    global_summary: GlobalSummary = Field(
+        ..., description="Global document summary.",
+    )
