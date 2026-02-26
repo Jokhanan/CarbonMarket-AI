@@ -183,54 +183,61 @@ class TestSchemas:
         assert "coherence_flags" in GLOBAL_SUMMARY_SCHEMA["properties"]
 
 
-def _mock_openai_response(content_dict: dict) -> MagicMock:
-    mock_msg = MagicMock()
-    mock_msg.content = json.dumps(content_dict)
-    mock_choice = MagicMock()
-    mock_choice.message = mock_msg
-    mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    return mock_response
+def _mock_openai_json(content_dict: dict):
+    return {
+        "choices": [
+            {"message": {"content": json.dumps(content_dict)}}
+        ]
+    }
 
 
 class TestReviewWithMockedLLM:
     def test_review_section_mocked(self):
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response({
+        mock_response = _mock_openai_json({
             "completeness_score": 65,
             "issues": ["No GHG mechanism described"],
             "suggested_fixes": ["[DRAFT] Add description of how the project reduces emissions."],
             "questions_for_user": ["What technology is used for emission reduction?"],
         })
 
-        guide = get_subsection("A.1")
-        result = review_section(mock_client, "A.1", guide, "A cookstove project.")
+        with patch("carbongpt.core.ai_review._call_openai_structured", return_value=mock_response["choices"][0]["message"]["content"]):
+            pass
 
-        assert result["section_id"] == "A.1"
-        assert result["completeness_score"] == 65
-        assert len(result["issues"]) == 1
-        assert "[DRAFT]" in result["suggested_fixes"][0]
-        mock_client.chat.completions.create.assert_called_once()
+        with patch("carbongpt.core.ai_review._call_openai_structured") as mock_call:
+            mock_call.return_value = {
+                "completeness_score": 65,
+                "issues": ["No GHG mechanism described"],
+                "suggested_fixes": ["[DRAFT] Add description of how the project reduces emissions."],
+                "questions_for_user": ["What technology is used for emission reduction?"],
+            }
+            guide = get_subsection("A.1")
+            result = review_section("fake-key", "A.1", guide, "A cookstove project.")
+
+            assert result["section_id"] == "A.1"
+            assert result["completeness_score"] == 65
+            assert len(result["issues"]) == 1
+            assert "[DRAFT]" in result["suggested_fixes"][0]
+            mock_call.assert_called_once()
 
     def test_review_global_mocked(self):
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response({
-            "overall_risk": "MEDIUM",
-            "top_issues": ["Missing coordinates in A.2"],
-            "top_actions": ["Add GPS coordinates"],
-            "coherence_flags": ["Project start date in B.1 not consistent with A.1"],
-        })
+        with patch("carbongpt.core.ai_review._call_openai_structured") as mock_call:
+            mock_call.return_value = {
+                "overall_risk": "MEDIUM",
+                "top_issues": ["Missing coordinates in A.2"],
+                "top_actions": ["Add GPS coordinates"],
+                "coherence_flags": ["Project start date in B.1 not consistent with A.1"],
+            }
 
-        reviews = [
-            {"section_id": "A.1", "section_title": "General description", "completeness_score": 80, "issues": []},
-            {"section_id": "A.2", "section_title": "Location", "completeness_score": 40, "issues": ["No coordinates"]},
-        ]
-        result = review_global(mock_client, reviews)
+            reviews = [
+                {"section_id": "A.1", "section_title": "General description", "completeness_score": 80, "issues": []},
+                {"section_id": "A.2", "section_title": "Location", "completeness_score": 40, "issues": ["No coordinates"]},
+            ]
+            result = review_global("fake-key", reviews)
 
-        assert result["overall_risk"] == "MEDIUM"
-        assert len(result["top_issues"]) == 1
-        assert len(result["coherence_flags"]) == 1
-        mock_client.chat.completions.create.assert_called_once()
+            assert result["overall_risk"] == "MEDIUM"
+            assert len(result["top_issues"]) == 1
+            assert len(result["coherence_flags"]) == 1
+            mock_call.assert_called_once()
 
     def test_run_ai_review_full_mocked(self):
         doc = Document()
@@ -248,34 +255,31 @@ class TestReviewWithMockedLLM:
         tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         doc.save(tmp.name)
 
-        section_response = _mock_openai_response({
+        section_result = {
             "completeness_score": 70,
             "issues": ["Incomplete description"],
             "suggested_fixes": ["[DRAFT] Expand description"],
             "questions_for_user": ["What is the project capacity?"],
-        })
+        }
 
-        global_response = _mock_openai_response({
+        global_result = {
             "overall_risk": "LOW",
             "top_issues": ["Minor gaps"],
             "top_actions": ["Complete descriptions"],
             "coherence_flags": [],
-        })
+        }
 
-        mock_client = MagicMock()
         call_count = [0]
         total_subsections = 7
 
-        def side_effect(**kwargs):
-            nonlocal call_count
+        def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] <= total_subsections:
-                return section_response
-            return global_response
+                return section_result
+            return global_result
 
-        mock_client.chat.completions.create.side_effect = side_effect
-
-        with patch("carbongpt.core.ai_review._get_client", return_value=mock_client):
+        with patch("carbongpt.core.ai_review._call_openai_structured", side_effect=side_effect), \
+             patch("carbongpt.core.ai_review._get_api_key", return_value="fake-key"):
             result = run_ai_review(tmp.name)
 
         assert "per_section_reviews" in result
@@ -294,31 +298,29 @@ class TestReviewWithMockedLLM:
         tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         doc.save(tmp.name)
 
-        section_response = _mock_openai_response({
+        section_result = {
             "completeness_score": 60,
             "issues": [],
             "suggested_fixes": [],
             "questions_for_user": [],
-        })
-        global_response = _mock_openai_response({
+        }
+        global_result = {
             "overall_risk": "HIGH",
             "top_issues": ["Section A missing"],
             "top_actions": ["Add Section A"],
             "coherence_flags": [],
-        })
+        }
 
-        mock_client = MagicMock()
         call_count = [0]
 
-        def side_effect(**kwargs):
+        def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] <= 3:
-                return section_response
-            return global_response
+                return section_result
+            return global_result
 
-        mock_client.chat.completions.create.side_effect = side_effect
-
-        with patch("carbongpt.core.ai_review._get_client", return_value=mock_client):
+        with patch("carbongpt.core.ai_review._call_openai_structured", side_effect=side_effect), \
+             patch("carbongpt.core.ai_review._get_api_key", return_value="fake-key"):
             result = run_ai_review(tmp.name)
 
         a_reviews = [r for r in result["per_section_reviews"] if r["section_id"].startswith("A.")]

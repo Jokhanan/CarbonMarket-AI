@@ -2,7 +2,11 @@
 main.py — FastAPI application entry point for CarbonGPT.
 """
 
+import logging
+import os
 import shutil
+import subprocess
+import sys
 import uuid
 from pathlib import Path
 
@@ -34,8 +38,12 @@ from carbongpt.core.orchestrator import (
     run_selected_analysis,
     run_template_analysis,
 )
-from carbongpt.core.ai_review import run_ai_review
+from carbongpt.core.task_store import create_task, get_task, set_status
 from carbongpt.tools.parse_docx import debug_sections
+
+logger = logging.getLogger(__name__)
+
+WORKER_SCRIPT = str(Path(__file__).resolve().parent.parent / "core" / "ai_review_worker.py")
 
 app = FastAPI(
     title=APP_TITLE,
@@ -173,30 +181,54 @@ def analyze_selected(request: AnalyzeSelectedRequest) -> AnalyzeSelectedResponse
 
 @app.post(
     "/ai-review",
-    response_model=AIReviewResponse,
     tags=["analysis"],
-    summary="AI-powered section-by-section review (beta)",
+    summary="Start AI-powered section-by-section review (beta)",
     description=(
-        "Uses an LLM to review each subsection of the document against "
-        "the internal Gold Standard MR guide. Returns per-section scores, "
-        "issues, suggested fixes, and a global summary."
+        "Starts an async AI review task in a separate process. Returns a task_id. "
+        "Poll GET /ai-review/{task_id} for results."
     ),
 )
-def ai_review(request: AIReviewRequest) -> AIReviewResponse:
+def ai_review(request: AIReviewRequest) -> dict:
     if not Path(request.doc_path).exists():
         raise HTTPException(
             status_code=404,
             detail=f"Document not found: {request.doc_path}",
         )
 
-    try:
-        result = run_ai_review(doc_path=request.doc_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"AI review failed: {exc}") from exc
+    task_id = create_task()
 
-    return AIReviewResponse(**result)
+    try:
+        subprocess.Popen(
+            [sys.executable, WORKER_SCRIPT, task_id, request.doc_path],
+            env={**dict(os.environ)},
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        set_status(task_id, "failed", error=f"Failed to spawn worker: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to start AI review: {exc}") from exc
+
+    logger.info("AI review task %s spawned for %s", task_id, request.doc_path)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@app.get(
+    "/ai-review/{task_id}",
+    tags=["analysis"],
+    summary="Poll AI review task status and results",
+)
+def get_ai_review_result(task_id: str) -> dict:
+    task = get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    if task["status"] == "complete":
+        return {"status": "complete", "result": task["result"]}
+    elif task["status"] == "failed":
+        return {"status": "failed", "error": task["error"]}
+    else:
+        return {"status": task["status"]}
 
 
 @app.get(

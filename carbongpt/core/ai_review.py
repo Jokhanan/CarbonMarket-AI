@@ -4,13 +4,18 @@ ai_review.py — AI-powered section-by-section review using OpenAI.
 Uses the internal guide (subsection requirements) to prompt an LLM
 for structured compliance analysis of each subsection, then runs a
 global summary call.
+
+Uses raw requests library instead of the openai SDK to minimize
+memory/thread overhead.
 """
 
 import json
+import logging
 import os
-from typing import Any
 
-from openai import OpenAI
+import requests as http_client
+
+logger = logging.getLogger(__name__)
 
 from carbongpt.guides.gs_mr_perfcert_v1_2 import (
     get_subsections,
@@ -23,6 +28,7 @@ from carbongpt.tools.rule_engine import _normalize_text, _get_section_text
 
 
 MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
 SECTION_REVIEW_SYSTEM = (
@@ -104,11 +110,11 @@ GLOBAL_SUMMARY_SCHEMA = {
 }
 
 
-def _get_client() -> OpenAI:
+def _get_api_key() -> str:
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    return OpenAI(api_key=api_key)
+    return api_key
 
 
 def _build_section_prompt(
@@ -152,19 +158,23 @@ def _build_global_prompt(section_reviews: list[dict]) -> str:
 
 
 def _call_openai_structured(
-    client: OpenAI,
+    api_key: str,
     system_prompt: str,
     user_prompt: str,
     schema: dict,
     schema_name: str,
 ) -> dict:
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={
+        "response_format": {
             "type": "json_schema",
             "json_schema": {
                 "name": schema_name,
@@ -172,21 +182,30 @@ def _call_openai_structured(
                 "schema": schema,
             },
         },
-        temperature=0.2,
+        "temperature": 0.2,
+    }
+
+    resp = http_client.post(
+        OPENAI_API_URL,
+        headers=headers,
+        json=payload,
+        timeout=120,
     )
-    content = response.choices[0].message.content
+    resp.raise_for_status()
+    data = resp.json()
+    content = data["choices"][0]["message"]["content"]
     return json.loads(content)
 
 
 def review_section(
-    client: OpenAI,
+    api_key: str,
     subsection_id: str,
     subsection_guide: dict,
     section_text: str,
 ) -> dict:
     prompt = _build_section_prompt(subsection_id, subsection_guide, section_text)
     result = _call_openai_structured(
-        client=client,
+        api_key=api_key,
         system_prompt=SECTION_REVIEW_SYSTEM,
         user_prompt=prompt,
         schema=SECTION_REVIEW_SCHEMA,
@@ -202,10 +221,10 @@ def review_section(
     }
 
 
-def review_global(client: OpenAI, section_reviews: list[dict]) -> dict:
+def review_global(api_key: str, section_reviews: list[dict]) -> dict:
     prompt = _build_global_prompt(section_reviews)
     return _call_openai_structured(
-        client=client,
+        api_key=api_key,
         system_prompt=GLOBAL_SUMMARY_SYSTEM,
         user_prompt=prompt,
         schema=GLOBAL_SUMMARY_SCHEMA,
@@ -223,7 +242,7 @@ def run_ai_review(doc_path: str) -> dict:
 
     section_map = map_sections(parent_sections, found_headings, threshold=85)
 
-    client = _get_client()
+    api_key = _get_api_key()
     per_section_reviews: list[dict] = []
 
     for sub_id, sub_guide in subsections.items():
@@ -253,10 +272,32 @@ def run_ai_review(doc_path: str) -> dict:
             })
             continue
 
-        review = review_section(client, sub_id, sub_guide, text)
-        per_section_reviews.append(review)
+        try:
+            logger.info("Reviewing subsection %s ...", sub_id)
+            review = review_section(api_key, sub_id, sub_guide, text)
+            per_section_reviews.append(review)
+        except Exception as exc:
+            logger.error("Failed to review subsection %s: %s", sub_id, exc)
+            per_section_reviews.append({
+                "section_id": sub_id,
+                "section_title": sub_guide["title"],
+                "completeness_score": 0,
+                "issues": [f"AI review error: {exc}"],
+                "suggested_fixes": [],
+                "questions_for_user": [],
+            })
 
-    global_summary = review_global(client, per_section_reviews)
+    try:
+        logger.info("Running global summary ...")
+        global_summary = review_global(api_key, per_section_reviews)
+    except Exception as exc:
+        logger.error("Failed to generate global summary: %s", exc)
+        global_summary = {
+            "overall_risk": "HIGH",
+            "top_issues": [f"AI global review error: {exc}"],
+            "top_actions": [],
+            "coherence_flags": [],
+        }
 
     return {
         "per_section_reviews": per_section_reviews,

@@ -7,6 +7,7 @@ viewing compliance analysis results.
 """
 
 import os
+import time
 import requests
 import streamlit as st
 
@@ -140,22 +141,68 @@ if analyze_btn and uploaded_file is not None:
         st.divider()
         st.subheader("AI Review (beta)")
 
-        with st.spinner("Running AI review — this may take a minute..."):
-            ai_resp = requests.post(
-                f"{API_BASE}/ai-review",
-                json={
-                    "standard": standard,
-                    "doc_type": doc_type,
-                    "version": "PerfCert_v1_2",
-                    "doc_path": user_doc_path,
-                },
-                timeout=180,
-            )
+        ai_result = None
+        start_resp = requests.post(
+            f"{API_BASE}/ai-review",
+            json={
+                "standard": standard,
+                "doc_type": doc_type,
+                "version": "PerfCert_v1_2",
+                "doc_path": user_doc_path,
+            },
+            timeout=10,
+        )
 
-        if ai_resp.status_code != 200:
-            st.error(f"AI Review failed: {ai_resp.text}")
+        if start_resp.status_code != 200:
+            st.error(f"AI Review failed to start: {start_resp.text}")
         else:
-            ai_result = ai_resp.json()
+            task_id = start_resp.json().get("task_id")
+            if not task_id:
+                st.error("AI Review failed: no task ID returned.")
+            else:
+                progress_bar = st.progress(0, text="Starting AI review...")
+                poll_count = 0
+                max_polls = 90
+                not_found_count = 0
+
+                while poll_count < max_polls:
+                    time.sleep(2)
+                    poll_count += 1
+                    progress_bar.progress(
+                        min(poll_count / max_polls, 0.95),
+                        text=f"AI review in progress... ({poll_count * 2}s)",
+                    )
+                    try:
+                        poll_resp = requests.get(
+                            f"{API_BASE}/ai-review/{task_id}",
+                            timeout=5,
+                        )
+                        if poll_resp.status_code == 404:
+                            not_found_count += 1
+                            if not_found_count > 5:
+                                st.error("AI Review task lost. The server may have restarted. Please try again.")
+                                progress_bar.empty()
+                                break
+                            continue
+                        if poll_resp.status_code != 200:
+                            continue
+                        not_found_count = 0
+                        poll_data = poll_resp.json()
+                        if poll_data["status"] == "complete":
+                            ai_result = poll_data["result"]
+                            progress_bar.progress(1.0, text="AI review complete!")
+                            break
+                        elif poll_data["status"] == "failed":
+                            st.error(f"AI Review failed: {poll_data.get('error', 'Unknown error')}")
+                            progress_bar.empty()
+                            break
+                    except requests.exceptions.RequestException:
+                        continue
+                else:
+                    st.warning("AI Review timed out after 3 minutes. Please try again.")
+                    progress_bar.empty()
+
+        if ai_result is not None:
 
             global_summary = ai_result.get("global_summary", {})
             risk = global_summary.get("overall_risk", "UNKNOWN")
