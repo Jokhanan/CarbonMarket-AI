@@ -13,6 +13,65 @@ import streamlit as st
 
 API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
+
+def _render_ai_result(ai_result):
+    global_summary = ai_result.get("global_summary", {})
+    risk = global_summary.get("overall_risk", "UNKNOWN")
+    risk_colors = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red"}
+    risk_color = risk_colors.get(risk, "red")
+
+    st.markdown(f"### Overall Risk: :{risk_color}[**{risk}**]")
+
+    if global_summary.get("top_issues"):
+        st.markdown("**Top Issues:**")
+        for issue in global_summary["top_issues"]:
+            st.markdown(f"- {issue}")
+
+    if global_summary.get("top_actions"):
+        st.markdown("**Priority Actions:**")
+        for action in global_summary["top_actions"]:
+            st.markdown(f"- {action}")
+
+    if global_summary.get("coherence_flags"):
+        st.markdown("**Coherence Flags:**")
+        for flag in global_summary["coherence_flags"]:
+            st.markdown(f"- {flag}")
+
+    st.divider()
+    st.markdown("### Section-by-Section Review")
+
+    for review in ai_result.get("per_section_reviews", []):
+        sec_id = review["section_id"]
+        sec_title = review["section_title"]
+        sec_score = review["completeness_score"]
+
+        if sec_score >= 80:
+            sec_icon = "🟢"
+        elif sec_score >= 50:
+            sec_icon = "🟡"
+        else:
+            sec_icon = "🔴"
+
+        with st.expander(f"{sec_icon} {sec_id}: {sec_title} — Score: {sec_score}/100"):
+            if review.get("issues"):
+                st.markdown("**Issues:**")
+                for issue in review["issues"]:
+                    st.markdown(f"- {issue}")
+
+            if review.get("suggested_fixes"):
+                st.markdown("**Suggested Fixes:**")
+                for fix in review["suggested_fixes"]:
+                    st.markdown(f"- {fix}")
+
+            if review.get("questions_for_user"):
+                st.markdown("**Questions for You:**")
+                for q in review["questions_for_user"]:
+                    st.markdown(f"- {q}")
+
+            if not review.get("issues") and not review.get("suggested_fixes") and not review.get("questions_for_user"):
+                st.info("No issues found for this subsection.")
+
+
 st.set_page_config(page_title="CarbonGPT", page_icon="🌍", layout="wide")
 
 st.title("CarbonGPT — Compliance Analyzer")
@@ -200,61 +259,3 @@ if "analysis_result" in st.session_state:
                     st.rerun()
         else:
             st.info("AI Review was not started. Re-analyze with the AI Review toggle enabled.")
-
-
-def _render_ai_result(ai_result):
-    global_summary = ai_result.get("global_summary", {})
-    risk = global_summary.get("overall_risk", "UNKNOWN")
-    risk_colors = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red"}
-    risk_color = risk_colors.get(risk, "red")
-
-    st.markdown(f"### Overall Risk: :{risk_color}[**{risk}**]")
-
-    if global_summary.get("top_issues"):
-        st.markdown("**Top Issues:**")
-        for issue in global_summary["top_issues"]:
-            st.markdown(f"- {issue}")
-
-    if global_summary.get("top_actions"):
-        st.markdown("**Priority Actions:**")
-        for action in global_summary["top_actions"]:
-            st.markdown(f"- {action}")
-
-    if global_summary.get("coherence_flags"):
-        st.markdown("**Coherence Flags:**")
-        for flag in global_summary["coherence_flags"]:
-            st.markdown(f"- {flag}")
-
-    st.divider()
-    st.markdown("### Section-by-Section Review")
-
-    for review in ai_result.get("per_section_reviews", []):
-        sec_id = review["section_id"]
-        sec_title = review["section_title"]
-        sec_score = review["completeness_score"]
-
-        if sec_score >= 80:
-            sec_icon = "🟢"
-        elif sec_score >= 50:
-            sec_icon = "🟡"
-        else:
-            sec_icon = "🔴"
-
-        with st.expander(f"{sec_icon} {sec_id}: {sec_title} — Score: {sec_score}/100"):
-            if review.get("issues"):
-                st.markdown("**Issues:**")
-                for issue in review["issues"]:
-                    st.markdown(f"- {issue}")
-
-            if review.get("suggested_fixes"):
-                st.markdown("**Suggested Fixes:**")
-                for fix in review["suggested_fixes"]:
-                    st.markdown(f"- {fix}")
-
-            if review.get("questions_for_user"):
-                st.markdown("**Questions for You:**")
-                for q in review["questions_for_user"]:
-                    st.markdown(f"- {q}")
-
-            if not review.get("issues") and not review.get("suggested_fixes") and not review.get("questions_for_user"):
-                st.info("No issues found for this subsection.")
