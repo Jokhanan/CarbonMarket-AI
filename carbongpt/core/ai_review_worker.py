@@ -1,44 +1,70 @@
 #!/usr/bin/env python3
 """
-ai_review_worker.py — Subprocess worker for AI review.
+ai_review_worker.py — Background worker daemon for AI review.
 
-Runs independently of the FastAPI process so the workflow manager
-doesn't kill it. Reads task_id and doc_path from command line args,
-runs the AI review, and writes results to the file-backed task store.
+Runs as a standalone process alongside FastAPI/Streamlit. Watches
+/tmp/carbongpt_tasks/ for pending tasks and processes them.
 """
 
 import sys
 import os
+import time
+import json
+import logging
+from pathlib import Path
 
 sys.path.insert(0, os.environ.get("PYTHONPATH", "/home/runner/workspace"))
 
-import logging
-from carbongpt.core.task_store import set_status
+from carbongpt.core.task_store import TASK_DIR, get_task, set_status
 from carbongpt.core.ai_review import run_ai_review
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+POLL_INTERVAL = 2
 
-def main():
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <task_id> <doc_path>", file=sys.stderr)
-        sys.exit(1)
 
-    task_id = sys.argv[1]
-    doc_path = sys.argv[2]
+def find_actionable_tasks():
+    tasks = []
+    for f in TASK_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text())
+            if data.get("status") in ("pending", "running"):
+                task_id = f.stem
+                doc_path = data.get("doc_path", "")
+                if doc_path:
+                    tasks.append((task_id, doc_path))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return tasks
 
+
+def process_task(task_id: str, doc_path: str):
     set_status(task_id, "running")
-    logger.info("AI review worker started: task=%s doc=%s", task_id, doc_path)
+    logger.info("Processing task %s for %s", task_id, doc_path)
 
     try:
         result = run_ai_review(doc_path=doc_path)
         set_status(task_id, "complete", result=result)
-        logger.info("AI review worker completed: task=%s", task_id)
+        logger.info("Task %s completed", task_id)
     except Exception as exc:
-        logger.error("AI review worker failed: task=%s error=%s", task_id, exc)
+        logger.error("Task %s failed: %s", task_id, exc)
         set_status(task_id, "failed", error=str(exc))
-        sys.exit(1)
+
+
+def main():
+    logger.info("AI review worker started, watching %s", TASK_DIR)
+    TASK_DIR.mkdir(exist_ok=True)
+
+    while True:
+        try:
+            tasks = find_actionable_tasks()
+            for task_id, doc_path in tasks:
+                process_task(task_id, doc_path)
+        except Exception as exc:
+            logger.error("Worker loop error: %s", exc)
+
+        time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":

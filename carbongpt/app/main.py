@@ -3,10 +3,7 @@ main.py — FastAPI application entry point for CarbonGPT.
 """
 
 import logging
-import os
 import shutil
-import subprocess
-import sys
 import uuid
 from pathlib import Path
 
@@ -38,12 +35,10 @@ from carbongpt.core.orchestrator import (
     run_selected_analysis,
     run_template_analysis,
 )
-from carbongpt.core.task_store import create_task, get_task, set_status
+from carbongpt.core.task_store import create_task, get_task
 from carbongpt.tools.parse_docx import debug_sections
 
 logger = logging.getLogger(__name__)
-
-WORKER_SCRIPT = str(Path(__file__).resolve().parent.parent / "core" / "ai_review_worker.py")
 
 app = FastAPI(
     title=APP_TITLE,
@@ -195,21 +190,8 @@ def ai_review(request: AIReviewRequest) -> dict:
             detail=f"Document not found: {request.doc_path}",
         )
 
-    task_id = create_task()
-
-    try:
-        subprocess.Popen(
-            [sys.executable, WORKER_SCRIPT, task_id, request.doc_path],
-            env={**dict(os.environ)},
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        set_status(task_id, "failed", error=f"Failed to spawn worker: {exc}")
-        raise HTTPException(status_code=500, detail=f"Failed to start AI review: {exc}") from exc
-
-    logger.info("AI review task %s spawned for %s", task_id, request.doc_path)
+    task_id = create_task(doc_path=request.doc_path)
+    logger.info("AI review task %s created for %s", task_id, request.doc_path)
     return {"task_id": task_id, "status": "pending"}
 
 

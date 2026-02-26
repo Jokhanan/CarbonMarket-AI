@@ -20,14 +20,18 @@ def _task_path(task_id: str) -> Path:
     return TASK_DIR / f"{task_id}.json"
 
 
-def create_task() -> str:
+def create_task(doc_path: str = "") -> str:
     task_id = uuid.uuid4().hex[:12]
-    _atomic_write(task_id, {"status": "pending", "result": None, "error": None})
+    _atomic_write(task_id, {"status": "pending", "doc_path": doc_path, "result": None, "error": None})
     return task_id
 
 
 def set_status(task_id: str, status: str, result: Any = None, error: str | None = None):
-    _atomic_write(task_id, {"status": status, "result": result, "error": error})
+    existing = get_task(task_id) or {}
+    data = {"status": status, "result": result, "error": error}
+    if "doc_path" in existing:
+        data["doc_path"] = existing["doc_path"]
+    _atomic_write(task_id, data)
 
 
 def get_task(task_id: str) -> dict[str, Any] | None:

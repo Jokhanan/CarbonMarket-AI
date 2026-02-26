@@ -72,6 +72,36 @@ def _render_ai_result(ai_result):
                 st.info("No issues found for this subsection.")
 
 
+@st.fragment(run_every=5)
+def _poll_ai_review():
+    ai_task_id = st.session_state.get("ai_task_id")
+    if not ai_task_id:
+        return
+
+    elapsed = time.time() - st.session_state.get("ai_task_start", time.time())
+    if elapsed > 180:
+        st.warning("AI Review timed out after 3 minutes. Please re-analyze to try again.")
+        st.session_state.pop("ai_task_id", None)
+        return
+
+    progress = min(elapsed / 180, 0.95)
+    st.progress(progress, text=f"AI review in progress... ({int(elapsed)}s)")
+
+    try:
+        poll_resp = requests.get(f"{API_BASE}/ai-review/{ai_task_id}", timeout=5)
+        if poll_resp.status_code == 200:
+            poll_data = poll_resp.json()
+            if poll_data["status"] == "complete":
+                st.session_state["ai_result"] = poll_data["result"]
+                st.session_state.pop("ai_task_id", None)
+                st.rerun()
+            elif poll_data["status"] == "failed":
+                st.error(f"AI Review failed: {poll_data.get('error', 'Unknown error')}")
+                st.session_state.pop("ai_task_id", None)
+    except requests.exceptions.RequestException:
+        pass
+
+
 st.set_page_config(page_title="CarbonGPT", page_icon="🌍", layout="wide")
 
 st.title("CarbonGPT — Compliance Analyzer")
@@ -226,36 +256,11 @@ if "analysis_result" in st.session_state:
         st.divider()
         st.subheader("AI Review (beta)")
 
-        ai_task_id = st.session_state.get("ai_task_id")
         ai_result = st.session_state.get("ai_result")
 
         if ai_result is not None:
             _render_ai_result(ai_result)
-        elif ai_task_id:
-            elapsed = time.time() - st.session_state.get("ai_task_start", time.time())
-            if elapsed > 180:
-                st.warning("AI Review timed out after 3 minutes. Please re-analyze to try again.")
-                st.session_state.pop("ai_task_id", None)
-            else:
-                progress = min(elapsed / 180, 0.95)
-                st.progress(progress, text=f"AI review in progress... ({int(elapsed)}s)")
-
-                try:
-                    poll_resp = requests.get(f"{API_BASE}/ai-review/{ai_task_id}", timeout=5)
-                    if poll_resp.status_code == 200:
-                        poll_data = poll_resp.json()
-                        if poll_data["status"] == "complete":
-                            st.session_state["ai_result"] = poll_data["result"]
-                            st.session_state.pop("ai_task_id", None)
-                            st.rerun()
-                        elif poll_data["status"] == "failed":
-                            st.error(f"AI Review failed: {poll_data.get('error', 'Unknown error')}")
-                            st.session_state.pop("ai_task_id", None)
-                        else:
-                            time.sleep(3)
-                            st.rerun()
-                except requests.exceptions.RequestException:
-                    time.sleep(3)
-                    st.rerun()
+        elif st.session_state.get("ai_task_id"):
+            _poll_ai_review()
         else:
             st.info("AI Review was not started. Re-analyze with the AI Review toggle enabled.")
