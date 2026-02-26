@@ -39,7 +39,7 @@ class TestGuideStructure:
 
     def test_subsections_not_empty(self):
         subs = get_subsections()
-        assert len(subs) >= 7
+        assert len(subs) >= 19
 
     def test_all_subsections_have_required_keys(self):
         required_keys = {"title", "parent_section", "must_include", "examples", "failure_modes"}
@@ -73,12 +73,28 @@ class TestGuideStructure:
 
     def test_parent_sections(self):
         parents = get_parent_sections()
-        assert "SECTION A" in parents
-        assert "SECTION B" in parents
+        for s in ["SECTION A", "SECTION B", "SECTION C", "SECTION D", "SECTION E", "SECTION F", "SECTION G"]:
+            assert s in parents
 
-    def test_no_section_c_yet(self):
+    def test_section_c_subsections(self):
         c_subs = get_subsections_for_parent("SECTION C")
-        assert len(c_subs) == 0
+        assert set(c_subs.keys()) == {"C.1"}
+
+    def test_section_d_subsections(self):
+        d_subs = get_subsections_for_parent("SECTION D")
+        assert set(d_subs.keys()) == {"D.1", "D.2", "D.3", "D.4"}
+
+    def test_section_e_subsections(self):
+        e_subs = get_subsections_for_parent("SECTION E")
+        assert set(e_subs.keys()) == {"E.1", "E.2", "E.3", "E.4", "E.5", "E.6"}
+
+    def test_section_f_subsections(self):
+        f_subs = get_subsections_for_parent("SECTION F")
+        assert set(f_subs.keys()) == {"F.1"}
+
+    def test_section_g_subsections(self):
+        g_subs = get_subsections_for_parent("SECTION G")
+        assert set(g_subs.keys()) == {"G.1", "G.2", "G.3"}
 
 
 class TestResponseModels:
@@ -269,12 +285,13 @@ class TestReviewWithMockedLLM:
             "coherence_flags": [],
         }
 
+        total_subsections = len(get_subsections())
+        reviewed_count = len(get_subsections_for_parent("SECTION A")) + len(get_subsections_for_parent("SECTION B"))
         call_count = [0]
-        total_subsections = 7
 
         def side_effect(*args, **kwargs):
             call_count[0] += 1
-            if call_count[0] <= total_subsections:
+            if call_count[0] <= reviewed_count:
                 return section_result
             return global_result
 
@@ -284,7 +301,7 @@ class TestReviewWithMockedLLM:
 
         assert "per_section_reviews" in result
         assert "global_summary" in result
-        assert len(result["per_section_reviews"]) == 7
+        assert len(result["per_section_reviews"]) == total_subsections
         assert result["global_summary"]["overall_risk"] == "LOW"
 
         for review in result["per_section_reviews"]:
@@ -312,10 +329,11 @@ class TestReviewWithMockedLLM:
         }
 
         call_count = [0]
+        b_subsection_count = len(get_subsections_for_parent("SECTION B"))
 
         def side_effect(*args, **kwargs):
             call_count[0] += 1
-            if call_count[0] <= 3:
+            if call_count[0] <= b_subsection_count:
                 return section_result
             return global_result
 

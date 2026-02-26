@@ -40,7 +40,7 @@ carbongpt/
 
 ```bash
 bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests (129 total)
+python -m pytest carbongpt/tests/ -v  # Tests (133 total)
 ```
 
 ## Endpoints
@@ -108,7 +108,7 @@ Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Flo
 - Uses OpenAI Chat Completions (gpt-4o-mini by default, override with `CARBONGPT_AI_MODEL` env var)
 - Uses raw `requests` library (not openai SDK) for API calls to minimize memory overhead
 - Internal guide: `carbongpt/guides/gs_mr_perfcert_v1_2.py` — structured requirements per subsection
-- MVP covers Sections A (A.1–A.4) and B (B.1–B.3); extensible to C–G
+- Full coverage: Sections A–G (19 subsections: A.1–A.4, B.1–B.3, C.1, D.1–D.4, E.1–E.6, F.1, G.1–G.3)
 - Per-subsection review: completeness_score, issues, suggested_fixes, questions_for_user
 - Global summary: overall_risk (LOW/MEDIUM/HIGH), top_issues, top_actions, coherence_flags
 - Safety: model never invents numbers; marks drafts with [DRAFT]; asks questions for missing info
