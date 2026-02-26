@@ -113,6 +113,10 @@ Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Flo
   - **PDD** (Project Design Document v1.5): `gs_pdd_v1_5.py` — 26 subsections across 5 parent sections
   - **PoA-DD** (Programme of Activity DD v2.2): `gs_poa_dd_v2_2.py` — 16 subsections across 5 parent sections
   - **VPA-DD** (VPA Design Document v2.3): `gs_vpa_dd_v2_3.py` — 27 subsections across 6 parent sections
+- Supported document types (Verra VCS):
+  - **VCS-PD** (Project Description v4.4): `vcs_pd_v4_4.py` — 36 subsections across 5 parent sections
+  - **VCS-MR** (Monitoring Report v4.4): `vcs_mr_v4_4.py` — 28 subsections across 5 parent sections
+  - **VCS-ValVer** (Joint Validation & Verification Report v4.4): `vcs_valver_v4_4.py` — 21 subsections across 5 parent sections
 - Per-subsection review: completeness_score, issues, suggested_fixes, questions_for_user
 - Global summary: overall_risk (LOW/MEDIUM/HIGH), top_issues, top_actions, coherence_flags
 - Safety: model never invents numbers; marks drafts with [DRAFT]; asks questions for missing info

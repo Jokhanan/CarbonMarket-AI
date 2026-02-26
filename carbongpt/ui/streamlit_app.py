@@ -105,15 +105,21 @@ def _poll_ai_review():
 st.set_page_config(page_title="CarbonGPT", page_icon="🌍", layout="wide")
 
 st.title("CarbonGPT — Compliance Analyzer")
-st.markdown("Upload a document and check it against Gold Standard templates and rules. Supports Monitoring Reports (MR), Project Design Documents (PDD), Programme of Activity DDs (PoA-DD), and VPA Design Documents (VPA-DD).")
+st.markdown("Upload a document and check it against Gold Standard or Verra VCS templates and rules. Supports Gold Standard (MR, PDD, PoA-DD, VPA-DD) and Verra VCS (Project Description, Monitoring Report, Joint Validation & Verification Report).")
 
-STANDARDS = ["GoldStandard"]
-DOC_TYPES = {"GoldStandard": ["MR", "PDD", "PoA-DD", "VPA-DD"]}
+STANDARDS = ["GoldStandard", "Verra"]
+DOC_TYPES = {
+    "GoldStandard": ["MR", "PDD", "PoA-DD", "VPA-DD"],
+    "Verra": ["VCS-PD", "VCS-MR", "VCS-ValVer"],
+}
 VERSIONS = {
     ("GoldStandard", "MR"): ["MR_v1_1"],
     ("GoldStandard", "PDD"): ["PDD_v1_5"],
     ("GoldStandard", "PoA-DD"): ["PoA-DD_v2_2"],
     ("GoldStandard", "VPA-DD"): ["VPA-DD_v2_3"],
+    ("Verra", "VCS-PD"): ["VCS-PD_v4_4"],
+    ("Verra", "VCS-MR"): ["VCS-MR_v4_4"],
+    ("Verra", "VCS-ValVer"): ["VCS-ValVer_v4_4"],
 }
 
 col1, col2, col3 = st.columns(3)

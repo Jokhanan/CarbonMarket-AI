@@ -22,3 +22,21 @@ templates:
     version: VPA-DD_v2_3
     template_path: null
     rules_path: null
+
+  - standard: Verra
+    doc_type: VCS-PD
+    version: VCS-PD_v4_4
+    template_path: null
+    rules_path: null
+
+  - standard: Verra
+    doc_type: VCS-MR
+    version: VCS-MR_v4_4
+    template_path: null
+    rules_path: null
+
+  - standard: Verra
+    doc_type: VCS-ValVer
+    version: VCS-ValVer_v4_4
+    template_path: null
+    rules_path: null

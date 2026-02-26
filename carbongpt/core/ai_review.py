@@ -29,9 +29,16 @@ MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
-def _build_section_system_prompt(doc_type_label: str) -> str:
+STANDARD_LABELS: dict[str, str] = {
+    "GoldStandard": "Gold Standard",
+    "Verra": "Verra VCS",
+}
+
+
+def _build_section_system_prompt(doc_type_label: str, standard: str = "GoldStandard") -> str:
+    std_label = STANDARD_LABELS.get(standard, standard)
     return (
-        f"You are a compliance auditor for Gold Standard carbon credit {doc_type_label}s. "
+        f"You are a compliance auditor for {std_label} carbon credit {doc_type_label}s. "
         "You review document sections against specific guide requirements. "
         "RULES:\n"
         "- Never invent numbers, statistics, or facts.\n"
@@ -42,9 +49,10 @@ def _build_section_system_prompt(doc_type_label: str) -> str:
     )
 
 
-def _build_global_system_prompt(doc_type_label: str) -> str:
+def _build_global_system_prompt(doc_type_label: str, standard: str = "GoldStandard") -> str:
+    std_label = STANDARD_LABELS.get(standard, standard)
     return (
-        f"You are a senior compliance auditor summarizing a Gold Standard {doc_type_label} review. "
+        f"You are a senior compliance auditor summarizing a {std_label} {doc_type_label} review. "
         "Based on per-section review results, provide a global summary. "
         "RULES:\n"
         "- Never invent numbers or facts.\n"
@@ -150,7 +158,7 @@ def _build_global_prompt(section_reviews: list[dict], doc_type_label: str) -> st
 
     section_summary = "\n".join(summaries)
     return (
-        f"Below are per-section review results for a Gold Standard {doc_type_label}.\n\n"
+        f"Below are per-section review results for a {doc_type_label}.\n\n"
         f"{section_summary}\n\n"
         "Provide a global summary covering overall risk, top issues, "
         "top priority actions, and any cross-section coherence flags."
@@ -203,9 +211,10 @@ def review_section(
     subsection_guide: dict,
     section_text: str,
     doc_type_label: str = "Monitoring Report",
+    standard: str = "GoldStandard",
 ) -> dict:
     prompt = _build_section_prompt(subsection_id, subsection_guide, section_text)
-    system_prompt = _build_section_system_prompt(doc_type_label)
+    system_prompt = _build_section_system_prompt(doc_type_label, standard)
     result = _call_openai_structured(
         api_key=api_key,
         system_prompt=system_prompt,
@@ -227,9 +236,10 @@ def review_global(
     api_key: str,
     section_reviews: list[dict],
     doc_type_label: str = "Monitoring Report",
+    standard: str = "GoldStandard",
 ) -> dict:
     prompt = _build_global_prompt(section_reviews, doc_type_label)
-    system_prompt = _build_global_system_prompt(doc_type_label)
+    system_prompt = _build_global_system_prompt(doc_type_label, standard)
     return _call_openai_structured(
         api_key=api_key,
         system_prompt=system_prompt,
@@ -288,7 +298,7 @@ def run_ai_review(
 
         try:
             logger.info("Reviewing subsection %s ...", sub_id)
-            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label)
+            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label, standard)
             per_section_reviews.append(review)
         except Exception as exc:
             logger.error("Failed to review subsection %s: %s", sub_id, exc)
@@ -303,7 +313,7 @@ def run_ai_review(
 
     try:
         logger.info("Running global summary ...")
-        global_summary = review_global(api_key, per_section_reviews, doc_type_label)
+        global_summary = review_global(api_key, per_section_reviews, doc_type_label, standard)
     except Exception as exc:
         logger.error("Failed to generate global summary: %s", exc)
         global_summary = {

@@ -13,6 +13,9 @@ GUIDE_REGISTRY: dict[tuple[str, str], str] = {
     ("GoldStandard", "PDD"): "carbongpt.guides.gs_pdd_v1_5",
     ("GoldStandard", "PoA-DD"): "carbongpt.guides.gs_poa_dd_v2_2",
     ("GoldStandard", "VPA-DD"): "carbongpt.guides.gs_vpa_dd_v2_3",
+    ("Verra", "VCS-PD"): "carbongpt.guides.vcs_pd_v4_4",
+    ("Verra", "VCS-MR"): "carbongpt.guides.vcs_mr_v4_4",
+    ("Verra", "VCS-ValVer"): "carbongpt.guides.vcs_valver_v4_4",
 }
 
 DOC_TYPE_LABELS: dict[str, str] = {
@@ -20,6 +23,9 @@ DOC_TYPE_LABELS: dict[str, str] = {
     "PDD": "Project Design Document",
     "PoA-DD": "Programme of Activity Design Document",
     "VPA-DD": "VPA Design Document",
+    "VCS-PD": "VCS Project Description",
+    "VCS-MR": "VCS Monitoring Report",
+    "VCS-ValVer": "VCS Joint Validation & Verification Report",
 }
 
 
