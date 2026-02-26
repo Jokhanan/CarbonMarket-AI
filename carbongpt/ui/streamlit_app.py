@@ -105,13 +105,15 @@ def _poll_ai_review():
 st.set_page_config(page_title="CarbonGPT", page_icon="🌍", layout="wide")
 
 st.title("CarbonGPT — Compliance Analyzer")
-st.markdown("Upload a monitoring report and check it against Gold Standard templates and rules.")
+st.markdown("Upload a document and check it against Gold Standard templates and rules. Supports Monitoring Reports (MR), Project Design Documents (PDD), Programme of Activity DDs (PoA-DD), and VPA Design Documents (VPA-DD).")
 
 STANDARDS = ["GoldStandard"]
-DOC_TYPES = {"GoldStandard": ["MR", "PDD"]}
+DOC_TYPES = {"GoldStandard": ["MR", "PDD", "PoA-DD", "VPA-DD"]}
 VERSIONS = {
     ("GoldStandard", "MR"): ["MR_v1_1"],
-    ("GoldStandard", "PDD"): ["PDD_v1_0"],
+    ("GoldStandard", "PDD"): ["PDD_v1_5"],
+    ("GoldStandard", "PoA-DD"): ["PoA-DD_v2_2"],
+    ("GoldStandard", "VPA-DD"): ["VPA-DD_v2_3"],
 }
 
 col1, col2, col3 = st.columns(3)
@@ -175,7 +177,7 @@ if analyze_btn and uploaded_file is not None:
                 json={
                     "standard": standard,
                     "doc_type": doc_type,
-                    "version": "PerfCert_v1_2",
+                    "version": version,
                     "doc_path": user_doc_path,
                 },
                 timeout=10,

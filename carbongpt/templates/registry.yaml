@@ -7,6 +7,18 @@ templates:
 
   - standard: GoldStandard
     doc_type: PDD
-    version: PDD_v1_0
+    version: PDD_v1_5
+    template_path: null
+    rules_path: null
+
+  - standard: GoldStandard
+    doc_type: PoA-DD
+    version: PoA-DD_v2_2
+    template_path: null
+    rules_path: null
+
+  - standard: GoldStandard
+    doc_type: VPA-DD
+    version: VPA-DD_v2_3
     template_path: null
     rules_path: null

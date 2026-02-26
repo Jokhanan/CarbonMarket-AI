@@ -107,12 +107,17 @@ Starts at 100, decremented per finding: ERROR = -10, WARNING = -3, INFO = 0. Flo
 - Task state persisted to `/tmp/carbongpt_tasks/{task_id}.json` (file-backed, not in-memory)
 - Uses OpenAI Chat Completions (gpt-4o-mini by default, override with `CARBONGPT_AI_MODEL` env var)
 - Uses raw `requests` library (not openai SDK) for API calls to minimize memory overhead
-- Internal guide: `carbongpt/guides/gs_mr_perfcert_v1_2.py` — structured requirements per subsection
-- Full coverage: Sections A–G (19 subsections: A.1–A.4, B.1–B.3, C.1, D.1–D.4, E.1–E.6, F.1, G.1–G.3)
+- Guide registry: `carbongpt/guides/__init__.py` — dynamically loads guide modules by (standard, doc_type)
+- Supported document types (Gold Standard):
+  - **MR** (Monitoring Report): `gs_mr_perfcert_v1_2.py` — 22 subsections across 7 parent sections
+  - **PDD** (Project Design Document v1.5): `gs_pdd_v1_5.py` — 26 subsections across 5 parent sections
+  - **PoA-DD** (Programme of Activity DD v2.2): `gs_poa_dd_v2_2.py` — 16 subsections across 5 parent sections
+  - **VPA-DD** (VPA Design Document v2.3): `gs_vpa_dd_v2_3.py` — 27 subsections across 6 parent sections
 - Per-subsection review: completeness_score, issues, suggested_fixes, questions_for_user
 - Global summary: overall_risk (LOW/MEDIUM/HIGH), top_issues, top_actions, coherence_flags
 - Safety: model never invents numbers; marks drafts with [DRAFT]; asks questions for missing info
 - UI: Streamlit toggle "AI Review (beta)" with progress bar + polling; handles server restarts gracefully
+- Task store persists standard + doc_type per task for correct guide selection
 
 ## Extending the Rule Engine
 

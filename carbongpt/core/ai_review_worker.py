@@ -32,19 +32,21 @@ def find_actionable_tasks():
             if data.get("status") in ("pending", "running"):
                 task_id = f.stem
                 doc_path = data.get("doc_path", "")
+                standard = data.get("standard", "GoldStandard")
+                doc_type = data.get("doc_type", "MR")
                 if doc_path:
-                    tasks.append((task_id, doc_path))
+                    tasks.append((task_id, doc_path, standard, doc_type))
         except (json.JSONDecodeError, OSError):
             continue
     return tasks
 
 
-def process_task(task_id: str, doc_path: str):
+def process_task(task_id: str, doc_path: str, standard: str, doc_type: str):
     set_status(task_id, "running")
-    logger.info("Processing task %s for %s", task_id, doc_path)
+    logger.info("Processing task %s for %s (standard=%s, doc_type=%s)", task_id, doc_path, standard, doc_type)
 
     try:
-        result = run_ai_review(doc_path=doc_path)
+        result = run_ai_review(doc_path=doc_path, standard=standard, doc_type=doc_type)
         set_status(task_id, "complete", result=result)
         logger.info("Task %s completed", task_id)
     except Exception as exc:
@@ -59,8 +61,8 @@ def main():
     while True:
         try:
             tasks = find_actionable_tasks()
-            for task_id, doc_path in tasks:
-                process_task(task_id, doc_path)
+            for task_id, doc_path, standard, doc_type in tasks:
+                process_task(task_id, doc_path, standard, doc_type)
         except Exception as exc:
             logger.error("Worker loop error: %s", exc)
 

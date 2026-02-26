@@ -5,6 +5,8 @@ Uses the internal guide (subsection requirements) to prompt an LLM
 for structured compliance analysis of each subsection, then runs a
 global summary call.
 
+Supports multiple document types via the guide registry.
+
 Uses raw requests library instead of the openai SDK to minimize
 memory/thread overhead.
 """
@@ -17,11 +19,7 @@ import requests as http_client
 
 logger = logging.getLogger(__name__)
 
-from carbongpt.guides.gs_mr_perfcert_v1_2 import (
-    get_subsections,
-    get_parent_sections,
-    get_subsections_for_parent,
-)
+from carbongpt.guides import load_guide, DOC_TYPE_LABELS
 from carbongpt.tools.parse_docx import parse_docx
 from carbongpt.tools.section_mapper import map_sections
 from carbongpt.tools.rule_engine import _normalize_text, _get_section_text
@@ -31,26 +29,28 @@ MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
-SECTION_REVIEW_SYSTEM = (
-    "You are a compliance auditor for Gold Standard carbon credit monitoring reports. "
-    "You review document sections against specific guide requirements. "
-    "RULES:\n"
-    "- Never invent numbers, statistics, or facts.\n"
-    "- If information is missing, say 'missing' and ask a question.\n"
-    "- Any suggested text must be clearly marked as '[DRAFT]' and must not fabricate data.\n"
-    "- Be specific about what is present and what is absent.\n"
-    "- Score from 0 to 100 based on how completely the subsection meets requirements."
-)
+def _build_section_system_prompt(doc_type_label: str) -> str:
+    return (
+        f"You are a compliance auditor for Gold Standard carbon credit {doc_type_label}s. "
+        "You review document sections against specific guide requirements. "
+        "RULES:\n"
+        "- Never invent numbers, statistics, or facts.\n"
+        "- If information is missing, say 'missing' and ask a question.\n"
+        "- Any suggested text must be clearly marked as '[DRAFT]' and must not fabricate data.\n"
+        "- Be specific about what is present and what is absent.\n"
+        "- Score from 0 to 100 based on how completely the subsection meets requirements."
+    )
 
 
-GLOBAL_SUMMARY_SYSTEM = (
-    "You are a senior compliance auditor summarizing a Gold Standard monitoring report review. "
-    "Based on per-section review results, provide a global summary. "
-    "RULES:\n"
-    "- Never invent numbers or facts.\n"
-    "- Focus on cross-section coherence and overall document quality.\n"
-    "- Rate overall risk as LOW, MEDIUM, or HIGH."
-)
+def _build_global_system_prompt(doc_type_label: str) -> str:
+    return (
+        f"You are a senior compliance auditor summarizing a Gold Standard {doc_type_label} review. "
+        "Based on per-section review results, provide a global summary. "
+        "RULES:\n"
+        "- Never invent numbers or facts.\n"
+        "- Focus on cross-section coherence and overall document quality.\n"
+        "- Rate overall risk as LOW, MEDIUM, or HIGH."
+    )
 
 
 SECTION_REVIEW_SCHEMA = {
@@ -138,7 +138,7 @@ def _build_section_prompt(
     )
 
 
-def _build_global_prompt(section_reviews: list[dict]) -> str:
+def _build_global_prompt(section_reviews: list[dict], doc_type_label: str) -> str:
     summaries = []
     for review in section_reviews:
         sid = review["section_id"]
@@ -150,7 +150,7 @@ def _build_global_prompt(section_reviews: list[dict]) -> str:
 
     section_summary = "\n".join(summaries)
     return (
-        "Below are per-section review results for a Gold Standard Monitoring Report.\n\n"
+        f"Below are per-section review results for a Gold Standard {doc_type_label}.\n\n"
         f"{section_summary}\n\n"
         "Provide a global summary covering overall risk, top issues, "
         "top priority actions, and any cross-section coherence flags."
@@ -202,11 +202,13 @@ def review_section(
     subsection_id: str,
     subsection_guide: dict,
     section_text: str,
+    doc_type_label: str = "Monitoring Report",
 ) -> dict:
     prompt = _build_section_prompt(subsection_id, subsection_guide, section_text)
+    system_prompt = _build_section_system_prompt(doc_type_label)
     result = _call_openai_structured(
         api_key=api_key,
-        system_prompt=SECTION_REVIEW_SYSTEM,
+        system_prompt=system_prompt,
         user_prompt=prompt,
         schema=SECTION_REVIEW_SCHEMA,
         schema_name="section_review",
@@ -221,24 +223,36 @@ def review_section(
     }
 
 
-def review_global(api_key: str, section_reviews: list[dict]) -> dict:
-    prompt = _build_global_prompt(section_reviews)
+def review_global(
+    api_key: str,
+    section_reviews: list[dict],
+    doc_type_label: str = "Monitoring Report",
+) -> dict:
+    prompt = _build_global_prompt(section_reviews, doc_type_label)
+    system_prompt = _build_global_system_prompt(doc_type_label)
     return _call_openai_structured(
         api_key=api_key,
-        system_prompt=GLOBAL_SUMMARY_SYSTEM,
+        system_prompt=system_prompt,
         user_prompt=prompt,
         schema=GLOBAL_SUMMARY_SCHEMA,
         schema_name="global_summary",
     )
 
 
-def run_ai_review(doc_path: str) -> dict:
+def run_ai_review(
+    doc_path: str,
+    standard: str = "GoldStandard",
+    doc_type: str = "MR",
+) -> dict:
+    guide = load_guide(standard, doc_type)
+    doc_type_label = DOC_TYPE_LABELS.get(doc_type, doc_type)
+
     parsed = parse_docx(doc_path)
     sections: dict[str, str] = parsed["sections"]
     found_headings = list(sections.keys())
 
-    subsections = get_subsections()
-    parent_sections = get_parent_sections()
+    subsections = guide.get_subsections()
+    parent_sections = guide.get_parent_sections()
 
     section_map = map_sections(parent_sections, found_headings, threshold=85)
 
@@ -274,7 +288,7 @@ def run_ai_review(doc_path: str) -> dict:
 
         try:
             logger.info("Reviewing subsection %s ...", sub_id)
-            review = review_section(api_key, sub_id, sub_guide, text)
+            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label)
             per_section_reviews.append(review)
         except Exception as exc:
             logger.error("Failed to review subsection %s: %s", sub_id, exc)
@@ -289,7 +303,7 @@ def run_ai_review(doc_path: str) -> dict:
 
     try:
         logger.info("Running global summary ...")
-        global_summary = review_global(api_key, per_section_reviews)
+        global_summary = review_global(api_key, per_section_reviews, doc_type_label)
     except Exception as exc:
         logger.error("Failed to generate global summary: %s", exc)
         global_summary = {

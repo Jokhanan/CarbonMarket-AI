@@ -184,14 +184,27 @@ def analyze_selected(request: AnalyzeSelectedRequest) -> AnalyzeSelectedResponse
     ),
 )
 def ai_review(request: AIReviewRequest) -> dict:
+    from carbongpt.guides import is_ai_review_supported
+    if not is_ai_review_supported(request.standard, request.doc_type):
+        raise HTTPException(
+            status_code=422,
+            detail=f"AI review is not supported for standard='{request.standard}', doc_type='{request.doc_type}'. "
+                   f"Supported combinations: GoldStandard with MR, PDD, PoA-DD, or VPA-DD.",
+        )
+
     if not Path(request.doc_path).exists():
         raise HTTPException(
             status_code=404,
             detail=f"Document not found: {request.doc_path}",
         )
 
-    task_id = create_task(doc_path=request.doc_path)
-    logger.info("AI review task %s created for %s", task_id, request.doc_path)
+    task_id = create_task(
+        doc_path=request.doc_path,
+        standard=request.standard,
+        doc_type=request.doc_type,
+    )
+    logger.info("AI review task %s created for %s (standard=%s, doc_type=%s)",
+                task_id, request.doc_path, request.standard, request.doc_type)
     return {"task_id": task_id, "status": "pending"}
 
 
