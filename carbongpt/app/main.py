@@ -37,6 +37,7 @@ from carbongpt.core.orchestrator import (
 )
 from carbongpt.core.task_store import create_task, get_task
 from carbongpt.tools.parse_docx import debug_sections
+from carbongpt.app.admin_routes import router as admin_router
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
+
+
+@app.on_event("startup")
+def startup_init_db():
+    try:
+        from carbongpt.repository.schema import ensure_schema
+        ensure_schema()
+    except Exception as exc:
+        logger.warning("Database schema init skipped: %s", exc)
 
 
 @app.get("/health", tags=["system"])
