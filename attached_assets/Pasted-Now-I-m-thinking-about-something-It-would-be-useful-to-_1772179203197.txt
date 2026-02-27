@@ -1,0 +1,29 @@
+Now I’m thinking about something.
+
+It would be useful to have a proper back-end structure — essentially a centralized repository — where I can store the documents for each standard. For example, for Standard V1. So far, we’ve mostly focused on templates, but beyond templates, we also need to structure and store the actual standard documents, methodologies, guidance documents, calculation tools, and related materials.
+
+The idea is to create a foundational document base that the AI can query and retrieve information from. For instance, when preparing monitoring reports or project descriptions, we are currently making sure that all sections are filled in correctly. However, within those sections, there are also elements linked to specific methodologies, calculation rules, eligibility criteria, emission reduction formulas, and monitoring requirements.
+
+So the question becomes: how do we organize all of this in a structured and scalable way?
+
+I’d like you to propose a solution for how we could architect this system.
+
+The overall objective is to build a truly end-to-end carbon tool. It should support project developers and auditors alike. In practical terms, it should help:
+	•	Draft project documents (PDDs, MRs, renewal documents, etc.)
+	•	Verify documentation consistency and methodological compliance
+	•	Respond to auditor comments
+	•	Cross-check calculations against methodology requirements
+
+That would be the first core module of the tool.
+
+Later, we can add additional features, but for now the key question is: how do we organize the document architecture properly?
+
+Another challenge is that standards evolve. There are multiple versions of standards, methodologies get updated, tools are revised, and requirements change over time. Therefore, we need to think about a global, scalable, and version-controlled architecture that can adapt to evolving standards.
+
+So the real task is to design a robust, modular, and future-proof architecture that allows the AI to:
+	•	Store and index multiple standards and their versions
+	•	Link methodologies to relevant document sections
+	•	Connect calculation logic to monitoring parameters
+	•	Retrieve authoritative references when drafting or reviewing content
+
+That’s the conceptual direction. Let’s think through how to structure this properly from a systems perspective.
