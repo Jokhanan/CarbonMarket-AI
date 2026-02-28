@@ -292,3 +292,134 @@ def get_chunk_count():
     with get_cursor() as cur:
         cur.execute("SELECT COUNT(*) as count FROM document_chunks WHERE embedding IS NOT NULL")
         return cur.fetchone()["count"]
+
+
+def create_compliance_rule(
+    rule_type, severity, title, description, conditions=None,
+    standard_id=None, effective_date=None, expiry_date=None,
+    source_url=None, source_description=None, status="active",
+    discovered_by="manual", review_notes=None
+):
+    import json
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO compliance_rules (standard_id, rule_type, severity, title, "
+            "description, conditions, effective_date, expiry_date, source_url, "
+            "source_description, status, discovered_by, review_notes) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (standard_id, rule_type, severity, title, description,
+             json.dumps(conditions or {}), effective_date, expiry_date,
+             source_url, source_description, status, discovered_by, review_notes)
+        )
+        return cur.fetchone()["id"]
+
+
+def list_compliance_rules(standard_id=None, rule_type=None, status=None, include_expired=False):
+    with get_cursor() as cur:
+        conditions = []
+        params = []
+        if standard_id:
+            conditions.append("cr.standard_id = %s")
+            params.append(standard_id)
+        if rule_type:
+            conditions.append("cr.rule_type = %s")
+            params.append(rule_type)
+        if status:
+            conditions.append("cr.status = %s")
+            params.append(status)
+        if not include_expired:
+            conditions.append("(cr.expiry_date IS NULL OR cr.expiry_date >= CURRENT_DATE)")
+        where = ""
+        if conditions:
+            where = "WHERE " + " AND ".join(conditions)
+        cur.execute(
+            f"SELECT cr.*, s.name as standard_name FROM compliance_rules cr "
+            f"LEFT JOIN standards s ON cr.standard_id = s.id "
+            f"{where} ORDER BY cr.created_at DESC",
+            params
+        )
+        return cur.fetchall()
+
+
+def get_compliance_rule(rule_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT cr.*, s.name as standard_name FROM compliance_rules cr "
+            "LEFT JOIN standards s ON cr.standard_id = s.id "
+            "WHERE cr.id = %s", (rule_id,)
+        )
+        return cur.fetchone()
+
+
+def update_compliance_rule(rule_id, **kwargs):
+    import json
+    allowed = {
+        "rule_type", "severity", "title", "description", "conditions",
+        "standard_id", "effective_date", "expiry_date", "source_url",
+        "source_description", "status", "review_notes"
+    }
+    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if not updates:
+        return
+    if "conditions" in updates:
+        updates["conditions"] = json.dumps(updates["conditions"])
+    updates["updated_at"] = "NOW()"
+    set_parts = []
+    params = []
+    for k, v in updates.items():
+        if v == "NOW()":
+            set_parts.append(f"{k} = NOW()")
+        else:
+            set_parts.append(f"{k} = %s")
+            params.append(v)
+    params.append(rule_id)
+    with get_cursor() as cur:
+        cur.execute(
+            f"UPDATE compliance_rules SET {', '.join(set_parts)} WHERE id = %s",
+            params
+        )
+
+
+def delete_compliance_rule(rule_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM compliance_rules WHERE id = %s", (rule_id,))
+
+
+def get_active_rules_for_standard(standard_slug):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT cr.* FROM compliance_rules cr "
+            "JOIN standards s ON cr.standard_id = s.id "
+            "WHERE s.slug = %s AND cr.status = 'active' "
+            "AND (cr.expiry_date IS NULL OR cr.expiry_date >= CURRENT_DATE) "
+            "ORDER BY cr.severity DESC, cr.rule_type",
+            (standard_slug,)
+        )
+        return cur.fetchall()
+
+
+def check_methodology_rules(methodology_name, standard_slug):
+    import json
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT cr.* FROM compliance_rules cr "
+            "JOIN standards s ON cr.standard_id = s.id "
+            "WHERE s.slug = %s AND cr.status = 'active' "
+            "AND cr.rule_type IN ('methodology_status', 'methodology_transition') "
+            "AND (cr.expiry_date IS NULL OR cr.expiry_date >= CURRENT_DATE) "
+            "ORDER BY cr.severity DESC",
+            (standard_slug,)
+        )
+        rules = cur.fetchall()
+
+    matches = []
+    meth_lower = methodology_name.lower().strip()
+    for rule in rules:
+        cond = rule["conditions"] if isinstance(rule["conditions"], dict) else json.loads(rule["conditions"])
+        affected = [m.lower().strip() for m in cond.get("affected_methodologies", [])]
+        keywords = [k.lower().strip() for k in cond.get("keywords", [])]
+        if any(a in meth_lower or meth_lower in a for a in affected):
+            matches.append(rule)
+        elif any(k in meth_lower for k in keywords):
+            matches.append(rule)
+    return matches

@@ -22,6 +22,23 @@ def _render_ai_result(ai_result):
 
     st.markdown(f"### Overall Risk: :{risk_color}[**{risk}**]")
 
+    compliance_alerts = ai_result.get("compliance_alerts", [])
+    if compliance_alerts:
+        st.markdown("### Compliance Alerts")
+        for alert in compliance_alerts:
+            sev = alert.get("severity", "info")
+            icon = {"error": "🔴", "warning": "🟡", "info": "🔵"}.get(sev, "⚪")
+            meth = f" (methodology: {alert['methodology']})" if alert.get("methodology") else ""
+            if sev == "error":
+                st.error(f"{icon} **{alert['title']}**{meth}: {alert['description']}")
+            elif sev == "warning":
+                st.warning(f"{icon} **{alert['title']}**{meth}: {alert['description']}")
+            else:
+                st.info(f"{icon} {alert['title']}{meth}: {alert['description']}")
+            if alert.get("source_url"):
+                st.markdown(f"  Source: [{alert.get('source_description', 'Link')}]({alert['source_url']})")
+        st.divider()
+
     if global_summary.get("top_issues"):
         st.markdown("**Top Issues:**")
         for issue in global_summary["top_issues"]:
@@ -333,10 +350,11 @@ def render_repository():
 
     st.divider()
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Upload Documents",
         "Document Library",
         "Semantic Search",
+        "Compliance Rules",
         "Manage Standards",
     ])
 
@@ -347,6 +365,8 @@ def render_repository():
     with tab3:
         _render_search()
     with tab4:
+        _render_compliance_rules()
+    with tab5:
         _render_manage_standards()
 
 
@@ -555,6 +575,180 @@ def _render_search():
                 f"{standard} {version} — Relevance: {similarity:.0%}"
             ):
                 st.markdown(r.get("content", ""))
+
+
+RULE_TYPE_LABELS = {
+    "methodology_status": "Methodology Status",
+    "methodology_transition": "Methodology Transition",
+    "crediting_period": "Crediting Period",
+    "eligibility": "Eligibility Requirement",
+    "regulatory": "Regulatory Change",
+    "default_value": "Default Value Update",
+    "fee_structure": "Fee Structure",
+    "general": "General Rule",
+}
+
+SEVERITY_LABELS = {
+    "error": "Critical",
+    "warning": "Warning",
+    "info": "Info",
+}
+
+
+def _render_compliance_rules():
+    st.subheader("Compliance Rules")
+    st.markdown(
+        "Manage compliance intelligence rules. These rules are automatically checked "
+        "during AI review to catch issues like deprecated methodologies, regulatory changes, "
+        "and eligibility requirements. Rules can be added manually or proposed by the AI."
+    )
+
+    rules = _fetch("/admin/compliance-rules") or []
+    standards = _fetch("/admin/standards") or []
+
+    active_rules = [r for r in rules if r["status"] == "active"]
+    proposed_rules = [r for r in rules if r["status"] == "proposed"]
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Active Rules", len(active_rules))
+    with col2:
+        st.metric("Pending Review", len(proposed_rules))
+    with col3:
+        st.metric("Total Rules", len(rules))
+
+    if proposed_rules:
+        st.divider()
+        st.markdown("#### Proposed Rules (Pending Admin Review)")
+        st.markdown("These rules were discovered by AI during reviews. Approve or reject them.")
+        for rule in proposed_rules:
+            severity_icon = {"error": "🔴", "warning": "🟡", "info": "🔵"}.get(rule["severity"], "⚪")
+            with st.expander(f"{severity_icon} {rule['title']} — {RULE_TYPE_LABELS.get(rule['rule_type'], rule['rule_type'])}"):
+                st.markdown(f"**Description:** {rule['description']}")
+                if rule.get("source_url"):
+                    st.markdown(f"**Source:** [{rule['source_description'] or rule['source_url']}]({rule['source_url']})")
+                if rule.get("conditions"):
+                    st.json(rule["conditions"])
+                st.markdown(f"**Discovered by:** {rule['discovered_by']}")
+
+                acol1, acol2 = st.columns(2)
+                with acol1:
+                    if st.button("Approve", key=f"approve_{rule['id']}", type="primary"):
+                        _fetch(f"/admin/compliance-rules/{rule['id']}", method="PATCH",
+                               json={"status": "active"})
+                        st.success("Rule approved!")
+                        time.sleep(0.5)
+                        st.rerun()
+                with acol2:
+                    if st.button("Reject", key=f"reject_{rule['id']}"):
+                        _fetch(f"/admin/compliance-rules/{rule['id']}", method="PATCH",
+                               json={"status": "rejected"})
+                        st.info("Rule rejected.")
+                        time.sleep(0.5)
+                        st.rerun()
+
+    st.divider()
+    st.markdown("#### Active Rules")
+    if not active_rules:
+        st.info("No active compliance rules yet. Add rules below or let the AI discover them during reviews.")
+    else:
+        for rule in active_rules:
+            severity_icon = {"error": "🔴", "warning": "🟡", "info": "🔵"}.get(rule["severity"], "⚪")
+            std_name = rule.get("standard_name") or "All Standards"
+            with st.expander(f"{severity_icon} {rule['title']} — {std_name} — {RULE_TYPE_LABELS.get(rule['rule_type'], rule['rule_type'])}"):
+                st.markdown(f"**Description:** {rule['description']}")
+                st.markdown(f"**Severity:** {SEVERITY_LABELS.get(rule['severity'], rule['severity'])}")
+                if rule.get("effective_date"):
+                    st.markdown(f"**Effective:** {rule['effective_date']}")
+                if rule.get("expiry_date"):
+                    st.markdown(f"**Expires:** {rule['expiry_date']}")
+                if rule.get("source_url"):
+                    st.markdown(f"**Source:** [{rule.get('source_description') or 'Link'}]({rule['source_url']})")
+                if rule.get("conditions"):
+                    st.json(rule["conditions"])
+                if st.button("Delete", key=f"del_rule_{rule['id']}"):
+                    _fetch(f"/admin/compliance-rules/{rule['id']}", method="DELETE")
+                    st.rerun()
+
+    st.divider()
+    with st.expander("Add New Compliance Rule"):
+        std_options = {"All Standards": None}
+        for s in standards:
+            std_options[s["name"]] = s["id"]
+
+        r_col1, r_col2 = st.columns(2)
+        with r_col1:
+            new_rule_type = st.selectbox(
+                "Rule Type",
+                list(RULE_TYPE_LABELS.keys()),
+                format_func=lambda x: RULE_TYPE_LABELS[x],
+                key="new_rule_type"
+            )
+        with r_col2:
+            new_severity = st.selectbox(
+                "Severity",
+                list(SEVERITY_LABELS.keys()),
+                format_func=lambda x: SEVERITY_LABELS[x],
+                key="new_rule_severity"
+            )
+
+        new_rule_std = st.selectbox("Standard", list(std_options.keys()), key="new_rule_std")
+        new_rule_title = st.text_input("Title", key="new_rule_title",
+                                       placeholder="e.g., AMS-II.G deprecated for VCS projects")
+        new_rule_desc = st.text_area("Description", key="new_rule_desc",
+                                     placeholder="e.g., AMS-II.G is no longer accepted as a standalone methodology under VCS. Projects must use VMR0006 v1.2 instead.")
+        new_rule_source = st.text_input("Source URL (optional)", key="new_rule_source",
+                                        placeholder="e.g., https://verra.org/...")
+        new_rule_source_desc = st.text_input("Source Description (optional)", key="new_rule_source_desc",
+                                             placeholder="e.g., Verra announcement, July 2023")
+
+        st.markdown("**Conditions (JSON)** — Define matching criteria:")
+        st.markdown("- `affected_methodologies`: list of methodology IDs to match (e.g., `[\"AMS-II.G\", \"AMS-IIG\"]`)")
+        st.markdown("- `keywords`: list of keywords to search in document text")
+        st.markdown("- `check_in_document`: list of keywords that trigger this rule when found")
+        new_rule_conditions = st.text_area(
+            "Conditions JSON",
+            value='{"affected_methodologies": [], "keywords": []}',
+            key="new_rule_conditions"
+        )
+
+        r_col3, r_col4 = st.columns(2)
+        with r_col3:
+            new_rule_eff = st.text_input("Effective Date (YYYY-MM-DD, optional)", key="new_rule_eff")
+        with r_col4:
+            new_rule_exp = st.text_input("Expiry Date (YYYY-MM-DD, optional)", key="new_rule_exp")
+
+        if st.button("Create Rule", key="create_rule_btn", type="primary"):
+            if new_rule_title and new_rule_desc:
+                import json as _json
+                try:
+                    conditions = _json.loads(new_rule_conditions)
+                except Exception:
+                    st.error("Invalid JSON in conditions field.")
+                    conditions = None
+
+                if conditions is not None:
+                    result = _fetch("/admin/compliance-rules", method="POST",
+                                    json={
+                                        "standard_id": std_options[new_rule_std],
+                                        "rule_type": new_rule_type,
+                                        "severity": new_severity,
+                                        "title": new_rule_title,
+                                        "description": new_rule_desc,
+                                        "conditions": conditions,
+                                        "source_url": new_rule_source or None,
+                                        "source_description": new_rule_source_desc or None,
+                                        "effective_date": new_rule_eff or None,
+                                        "expiry_date": new_rule_exp or None,
+                                        "status": "active",
+                                        "discovered_by": "admin",
+                                    })
+                    if result:
+                        st.success("Compliance rule created!")
+                        time.sleep(0.5)
+                        st.rerun()
+            else:
+                st.warning("Title and description are required.")
 
 
 def _render_manage_standards():

@@ -16,6 +16,7 @@ carbongpt/
 │   ├── ai_review.py       AI review logic (prompt building, OpenAI calls)
 │   ├── ai_review_worker.py  Subprocess worker for async AI review
 │   ├── knowledge_retrieval.py  RAG: retrieves methodology/standard context from repo for AI review
+│   ├── compliance_checker.py   Compliance rules engine: methodology checks, regulatory alerts
 │   └── task_store.py      File-backed task store (/tmp/carbongpt_tasks/)
 ├── repository/
 │   ├── db.py              PostgreSQL connection manager (psycopg2)
@@ -91,6 +92,12 @@ python -m pytest carbongpt/tests/ -v  # Tests
 | POST   | /admin/documents/{id}/reingest      | Re-run ingestion for a document                   |
 | GET    | /admin/stats                        | Repository statistics                             |
 | GET    | /admin/search?q=...&limit=N        | Semantic search across all embedded content       |
+| GET    | /admin/compliance-rules             | List compliance rules (filter by standard, type)  |
+| GET    | /admin/compliance-rules/{id}        | Get compliance rule details                       |
+| POST   | /admin/compliance-rules             | Create a compliance rule                          |
+| PATCH  | /admin/compliance-rules/{id}        | Update a compliance rule                          |
+| DELETE | /admin/compliance-rules/{id}        | Delete a compliance rule                          |
+| POST   | /admin/compliance-rules/check       | Check methodology against compliance rules        |
 
 ## Document Repository
 
@@ -103,6 +110,7 @@ PostgreSQL-backed document knowledge base with pgvector for semantic search.
 - **document_sections**: Extracted sections from parsed documents
 - **document_chunks**: Text chunks with 1536-dim vector embeddings (text-embedding-3-small)
 - **document_references**: Cross-document links
+- **compliance_rules**: Database-driven compliance intelligence rules (methodology status, transitions, regulatory changes, etc.)
 
 ### Document Categories
 standard_text, methodology, guidance, tool, template, example_pdd, example_mr, example_fvr, example_valver, example_other, rule_update, other
@@ -139,6 +147,20 @@ requirements (eligibility criteria, calculation methods, monitoring parameters, 
 approach). The retrieval uses semantic search (cosine similarity) with a relevance threshold
 of 0.55 cosine distance, pulling up to 8 candidates per section, filtered by standard,
 capped at ~2000 tokens of context per section.
+
+### Compliance Rules Engine
+
+Database-driven compliance intelligence that checks documents against verified rules:
+- **Rule types**: methodology_status, methodology_transition, crediting_period, eligibility,
+  regulatory, default_value, fee_structure, general
+- **Methodology matching**: Extracts methodology references from document text (AMS, ACM, VM,
+  VMR, M series) and checks against rules database using fuzzy matching
+- **Integration**: Compliance alerts are injected into methodology-related AI review sections
+  and displayed prominently in the review results
+- **Evolutive**: Rules are stored in PostgreSQL, managed via admin UI — no code changes needed
+- **AI-discoverable**: Rules can be marked as "proposed" (by AI) and approved by admin
+- Seeded with 4 initial rules (AMS-II.G deprecation, VMR0006→M0174 transition, CDM methodology
+  VCS approval requirement, VCS crediting period limits)
 
 ## Tech Stack
 

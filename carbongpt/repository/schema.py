@@ -85,12 +85,38 @@ CREATE TABLE IF NOT EXISTS document_references (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS compliance_rules (
+    id SERIAL PRIMARY KEY,
+    standard_id INTEGER REFERENCES standards(id) ON DELETE SET NULL,
+    rule_type VARCHAR(50) NOT NULL CHECK (rule_type IN (
+        'methodology_status', 'methodology_transition',
+        'crediting_period', 'eligibility', 'regulatory',
+        'default_value', 'fee_structure', 'general'
+    )),
+    severity VARCHAR(20) NOT NULL DEFAULT 'error' CHECK (severity IN ('error', 'warning', 'info')),
+    title VARCHAR(500) NOT NULL,
+    description TEXT NOT NULL,
+    conditions JSONB NOT NULL DEFAULT '{}',
+    effective_date DATE,
+    expiry_date DATE,
+    source_url TEXT,
+    source_description VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'proposed', 'expired', 'rejected')),
+    discovered_by VARCHAR(50) DEFAULT 'manual' CHECK (discovered_by IN ('manual', 'ai_review', 'web_search', 'admin')),
+    review_notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_documents_standard_version ON documents(standard_version_id);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 CREATE INDEX IF NOT EXISTS idx_documents_ingestion_status ON documents(ingestion_status);
 CREATE INDEX IF NOT EXISTS idx_document_sections_document ON document_sections(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_section ON document_chunks(section_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_rules_standard ON compliance_rules(standard_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_rules_type ON compliance_rules(rule_type);
+CREATE INDEX IF NOT EXISTS idx_compliance_rules_status ON compliance_rules(status);
 
 INSERT INTO standards (name, slug, description) VALUES
     ('Gold Standard', 'goldstandard', 'Gold Standard for the Global Goals - carbon credit certification'),

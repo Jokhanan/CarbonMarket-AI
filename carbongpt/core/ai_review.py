@@ -24,6 +24,7 @@ from carbongpt.tools.parse_docx import parse_docx
 from carbongpt.tools.section_mapper import map_sections
 from carbongpt.tools.rule_engine import _normalize_text, _get_section_text
 from carbongpt.core.knowledge_retrieval import retrieve_section_context, format_context_for_prompt
+from carbongpt.core.compliance_checker import check_document_compliance, format_compliance_findings_for_prompt
 
 
 MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
@@ -279,6 +280,18 @@ def review_global(
     )
 
 
+METHODOLOGY_SECTION_KEYWORDS = {
+    "methodology", "applicability", "baseline", "additionality",
+    "reference", "title and reference", "deviations", "quantification",
+    "emission", "calculation", "leakage", "eligibility",
+}
+
+
+def _is_methodology_section(sub_id: str, sub_guide: dict) -> bool:
+    title_lower = sub_guide.get("title", "").lower()
+    return any(kw in title_lower for kw in METHODOLOGY_SECTION_KEYWORDS)
+
+
 def run_ai_review(
     doc_path: str,
     standard: str = "GoldStandard",
@@ -295,6 +308,12 @@ def run_ai_review(
     parent_sections = guide.get_parent_sections()
 
     section_map = map_sections(parent_sections, found_headings, threshold=85)
+
+    full_text = "\n".join(sections.values())
+    compliance_findings = check_document_compliance(full_text, standard)
+    compliance_context = format_compliance_findings_for_prompt(compliance_findings)
+    if compliance_findings:
+        logger.info("Found %d compliance rule matches for this document", len(compliance_findings))
 
     api_key = _get_api_key()
     per_section_reviews: list[dict] = []
@@ -334,7 +353,14 @@ def run_ai_review(
             reference_context = format_context_for_prompt(context_chunks)
             if reference_context:
                 logger.info("  Retrieved %d reference chunks for %s", len(context_chunks), sub_id)
-            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label, standard, reference_context)
+
+            section_compliance = ""
+            if compliance_context and _is_methodology_section(sub_id, sub_guide):
+                section_compliance = compliance_context
+                logger.info("  Injecting %d compliance alerts into %s", len(compliance_findings), sub_id)
+
+            combined_context = reference_context + section_compliance
+            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label, standard, combined_context)
             per_section_reviews.append(review)
         except Exception as exc:
             logger.error("Failed to review subsection %s: %s", sub_id, exc)
@@ -359,7 +385,12 @@ def run_ai_review(
             "coherence_flags": [],
         }
 
-    return {
+    result = {
         "per_section_reviews": per_section_reviews,
         "global_summary": global_summary,
     }
+
+    if compliance_findings:
+        result["compliance_alerts"] = compliance_findings
+
+    return result

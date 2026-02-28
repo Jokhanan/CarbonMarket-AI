@@ -61,6 +61,37 @@ class DocumentUpdate(BaseModel):
     status: str = None
 
 
+class ComplianceRuleCreate(BaseModel):
+    standard_id: int = None
+    rule_type: str = Field(..., min_length=1)
+    severity: str = "error"
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    conditions: dict = {}
+    effective_date: str = None
+    expiry_date: str = None
+    source_url: str = None
+    source_description: str = None
+    status: str = "active"
+    discovered_by: str = "manual"
+    review_notes: str = None
+
+
+class ComplianceRuleUpdate(BaseModel):
+    standard_id: int = None
+    rule_type: str = None
+    severity: str = None
+    title: str = None
+    description: str = None
+    conditions: dict = None
+    effective_date: str = None
+    expiry_date: str = None
+    source_url: str = None
+    source_description: str = None
+    status: str = None
+    review_notes: str = None
+
+
 @router.get("/standards")
 def get_standards():
     from carbongpt.repository.store import list_standards
@@ -267,3 +298,69 @@ def search_documents(q: str, limit: int = 10, standard_version_id: int = None):
     query_embedding = create_embeddings([q], api_key)[0]
     results = search_chunks(query_embedding, limit=limit, standard_version_id=standard_version_id)
     return results
+
+
+@router.get("/compliance-rules")
+def get_compliance_rules(standard_id: int = None, rule_type: str = None, status: str = None):
+    from carbongpt.repository.store import list_compliance_rules
+    return list_compliance_rules(standard_id=standard_id, rule_type=rule_type, status=status)
+
+
+@router.get("/compliance-rules/{rule_id}")
+def get_compliance_rule_detail(rule_id: int):
+    from carbongpt.repository.store import get_compliance_rule
+    rule = get_compliance_rule(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Compliance rule not found.")
+    return rule
+
+
+@router.post("/compliance-rules")
+def add_compliance_rule(data: ComplianceRuleCreate):
+    from carbongpt.repository.store import create_compliance_rule
+    try:
+        rule_id = create_compliance_rule(
+            rule_type=data.rule_type,
+            severity=data.severity,
+            title=data.title,
+            description=data.description,
+            conditions=data.conditions,
+            standard_id=data.standard_id,
+            effective_date=data.effective_date,
+            expiry_date=data.expiry_date,
+            source_url=data.source_url,
+            source_description=data.source_description,
+            status=data.status,
+            discovered_by=data.discovered_by,
+            review_notes=data.review_notes,
+        )
+        return {"id": rule_id, "message": "Compliance rule created."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/compliance-rules/{rule_id}")
+def update_compliance_rule_endpoint(rule_id: int, data: ComplianceRuleUpdate):
+    from carbongpt.repository.store import get_compliance_rule, update_compliance_rule
+    rule = get_compliance_rule(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Compliance rule not found.")
+    update_compliance_rule(rule_id, **data.model_dump(exclude_none=True))
+    return {"message": "Compliance rule updated."}
+
+
+@router.delete("/compliance-rules/{rule_id}")
+def remove_compliance_rule(rule_id: int):
+    from carbongpt.repository.store import get_compliance_rule, delete_compliance_rule
+    rule = get_compliance_rule(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Compliance rule not found.")
+    delete_compliance_rule(rule_id)
+    return {"message": "Compliance rule deleted."}
+
+
+@router.post("/compliance-rules/check")
+def check_methodology(methodology: str = Form(...), standard_slug: str = Form("verra")):
+    from carbongpt.repository.store import check_methodology_rules
+    matches = check_methodology_rules(methodology, standard_slug)
+    return {"methodology": methodology, "standard": standard_slug, "matching_rules": matches}
