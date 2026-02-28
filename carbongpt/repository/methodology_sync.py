@@ -124,76 +124,138 @@ def fetch_verra_methodology_pdf(detail_url: str) -> dict | None:
     }
 
 
+CDM_METHODOLOGY_PDFS = {
+    "booklet": (
+        "CDM Methodology Booklet (all approved methodologies)",
+        "https://cdm.unfccc.int/methodologies/documentation/meth_booklet.pdf",
+    ),
+}
+
+CDM_TOOL_PDFS = [
+    ("TOOL01", "Tool for demonstration and assessment of additionality",
+     "https://cdm.unfccc.int/methodologies/PAmethodologies/tools/am-tool-01-v7.0.0.pdf"),
+    ("TOOL02", "Combined tool to identify baseline scenario and demonstrate additionality",
+     "https://cdm.unfccc.int/methodologies/PAmethodologies/tools/am-tool-02-v7.0.pdf"),
+    ("TOOL03", "Tool to calculate CO2 emissions from fossil fuel combustion",
+     "https://cdm.unfccc.int/methodologies/PAmethodologies/tools/am-tool-03-v3.pdf"),
+    ("TOOL05", "Baseline/project/leakage emissions from electricity consumption",
+     "https://cdm.unfccc.int/methodologies/PAmethodologies/tools/am-tool-05-v3.0.pdf"),
+    ("TOOL07", "Tool to calculate emission factor for electricity system",
+     "https://cdm.unfccc.int/methodologies/PAmethodologies/tools/am-tool-07-v7.0.pdf"),
+]
+
+
 def fetch_cdm_methodology_list() -> list[dict]:
     methodologies = []
 
-    for meth_type, base_url in [
-        ("large-scale", "https://cdm.unfccc.int/methodologies/PAmethodologies/approved"),
-        ("small-scale", "https://cdm.unfccc.int/methodologies/SSCmethodologies/approved"),
-    ]:
-        try:
-            resp = requests.get(base_url, headers={"User-Agent": USER_AGENT}, timeout=30)
-            resp.raise_for_status()
-            html = resp.text
+    booklet_title, booklet_url = CDM_METHODOLOGY_PDFS["booklet"]
+    methodologies.append({
+        "code": "CDM_BOOKLET",
+        "title": booklet_title,
+        "detail_url": booklet_url,
+        "pdf_url": booklet_url,
+        "source": "cdm",
+    })
 
-            if meth_type == "large-scale":
-                pattern = re.compile(
-                    r'href="(/methodologies/PAmethodologies/approved/[^"]*)"[^>]*>.*?(AM\d{4}|ACM\d{4})',
-                    re.DOTALL | re.IGNORECASE,
-                )
-            else:
-                pattern = re.compile(
-                    r'href="(/methodologies/SSCmethodologies/approved/[^"]*)"[^>]*>.*?(AMS[^<\s]{2,10})',
-                    re.DOTALL | re.IGNORECASE,
-                )
+    for code, title, pdf_url in CDM_TOOL_PDFS:
+        methodologies.append({
+            "code": f"CDM_{code}",
+            "title": f"CDM {title}",
+            "detail_url": pdf_url,
+            "pdf_url": pdf_url,
+            "source": "cdm",
+        })
 
-            for match in pattern.finditer(html):
-                detail_path = match.group(1)
-                code = match.group(2).upper().strip()
-                detail_url = f"https://cdm.unfccc.int{detail_path}"
-                if code not in [m["code"] for m in methodologies]:
-                    methodologies.append({
-                        "code": code,
-                        "detail_url": detail_url,
-                        "source": "cdm",
-                        "type": meth_type,
-                    })
-        except Exception as e:
-            logger.warning("Failed to fetch CDM %s methodology list: %s", meth_type, e)
+    try:
+        tools_url = "https://cdm.unfccc.int/methodologies/PAmethodologies/approved"
+        resp = requests.get(tools_url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp.raise_for_status()
+        html = resp.text
 
-    logger.info("Found %d CDM methodologies", len(methodologies))
+        tool_pattern = re.compile(
+            r'href="(https://cdm\.unfccc\.int/methodologies/PAmethodologies/tools/[^"]*\.pdf)',
+            re.IGNORECASE,
+        )
+        for match in tool_pattern.finditer(html):
+            pdf_url = match.group(1).split("/history_view")[0]
+            filename = pdf_url.rsplit("/", 1)[-1]
+            tool_code = filename.replace(".pdf", "").replace("-", "_").upper()[:30]
+            ref_code = f"CDM_{tool_code}"
+            if ref_code not in [m["code"] for m in methodologies]:
+                title = filename.replace(".pdf", "").replace("-", " ").replace("_", " ").title()
+                methodologies.append({
+                    "code": ref_code,
+                    "title": f"CDM {title}",
+                    "detail_url": pdf_url,
+                    "pdf_url": pdf_url,
+                    "source": "cdm",
+                })
+    except Exception as e:
+        logger.warning("Failed to fetch CDM tools: %s", e)
+
+    logger.info("Found %d CDM methodology documents", len(methodologies))
     return methodologies
 
 
+GS_KNOWN_METHODOLOGY_PDFS = [
+    ("GS_EE_ICS_Metered_Cooking", "Methodology for Metered and Measured Energy Cooking Devices v1.1",
+     "https://globalgoals.goldstandard.org/standards/431_V1.1_EE_ICS_Methodology-for-Metered-and-Measured-Energy-Cooking-Devices.pdf"),
+    ("GS_LUF_AR_GHG", "Afforestation/Reforestation Methodology v2.0",
+     "https://globalgoals.goldstandard.org/standards/403_V2.0_LUF_AR-Methodology-GHGs-emission-reduction-and-Sequestration-Methodology.pdf"),
+    ("GS_BCFW_Mangroves", "Sustainable Management of Mangroves v1.0",
+     "https://globalgoals.goldstandard.org/standards/443_V1.0_BCFW_Sustainable-Management-of-Mangroves.pdf"),
+    ("GS_LUF_SOC", "Soil Organic Carbon Framework Methodology v1.0",
+     "https://globalgoals.goldstandard.org/standards/402_V1.0_LUF_AGR_FM_Soil-Organic-Carbon-Framework-Methodolgy.pdf"),
+    ("GS_WASH_Water", "Water Access and WASH Methodology v1.0",
+     "https://globalgoals.goldstandard.org/standards/425_V1.0_WBCs_Wash_Water-Access-and-Water-Sanitation-and-Hygiene-WASH-Projects.pdf"),
+    ("GS_Meth_Approval", "Methodology Approval Procedure v2.0",
+     "https://globalgoals.goldstandard.org/standards/401_V2.0_SDGIQ_Methodology-approval-procedure.pdf"),
+    ("GS_Meth_Requirements", "Requirements for Methodology Development v1.0",
+     "https://globalgoals.goldstandard.org/standards/446_V1.0_Requirements-for-methodology-development.pdf"),
+    ("GS_Meth_Status_Update", "Methodology Status Update v1.1 (2024)",
+     "https://globalgoals.goldstandard.org/standards/RU_2024_v1.1_Methodology-status-update.pdf"),
+    ("GS_Additionality_Policy", "Determining Additionality of a Policy v1.0",
+     "https://globalgoals.goldstandard.org/standards/442_V1.0_Determining-Additionality-of-a-Policy.pdf"),
+]
+
+
 def fetch_gs_methodology_list() -> list[dict]:
-    url = "https://www.goldstandard.org/project-developers/standard-documents"
+    methodologies = []
+
+    for code, title, pdf_url in GS_KNOWN_METHODOLOGY_PDFS:
+        methodologies.append({
+            "code": code,
+            "title": title,
+            "detail_url": pdf_url,
+            "pdf_url": pdf_url,
+            "source": "goldstandard",
+        })
+
+    gs_standards_url = "https://globalgoals.goldstandard.org/methodology-standards-paris-agreement-alignment-and-other-updates/"
     try:
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp = requests.get(gs_standards_url, headers={"User-Agent": USER_AGENT}, timeout=30)
         resp.raise_for_status()
         html = resp.text
+
+        pdf_pattern = re.compile(
+            r'href="(https://globalgoals\.goldstandard\.org/standards/[^"]*\.pdf)"',
+            re.IGNORECASE,
+        )
+        for match in pdf_pattern.finditer(html):
+            pdf_url = match.group(1)
+            filename = pdf_url.rsplit("/", 1)[-1]
+            code = filename.replace(".pdf", "").replace("-", "_")[:40]
+            if code not in [m["code"] for m in methodologies]:
+                title = filename.replace(".pdf", "").replace("-", " ").replace("_", " ")
+                methodologies.append({
+                    "code": code,
+                    "title": title,
+                    "detail_url": pdf_url,
+                    "pdf_url": pdf_url,
+                    "source": "goldstandard",
+                })
     except Exception as e:
-        logger.error("Failed to fetch Gold Standard methodology list: %s", e)
-        return []
-
-    methodologies = []
-    pdf_pattern = re.compile(
-        r'href="([^"]*(?:methodology|standard)[^"]*\.pdf)"',
-        re.IGNORECASE,
-    )
-
-    for match in pdf_pattern.finditer(html):
-        pdf_url = match.group(1)
-        if not pdf_url.startswith("http"):
-            pdf_url = f"https://www.goldstandard.org{pdf_url}"
-        filename = pdf_url.rsplit("/", 1)[-1]
-        code = filename.replace(".pdf", "").replace("-", "_")[:30]
-        if code not in [m["code"] for m in methodologies]:
-            methodologies.append({
-                "code": code,
-                "detail_url": pdf_url,
-                "pdf_url": pdf_url,
-                "source": "goldstandard",
-            })
+        logger.warning("Failed to fetch additional GS methodologies: %s", e)
 
     logger.info("Found %d Gold Standard methodology documents", len(methodologies))
     return methodologies
