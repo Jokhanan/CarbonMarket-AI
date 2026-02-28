@@ -204,36 +204,50 @@ def discover_verra_project_ids(max_projects: int = 200, id_range: tuple = (1, 45
 
 def discover_gs_project_ids(max_projects: int = 200, id_range: tuple = (1, 6000)) -> list[tuple[int, str, str]]:
     projects = []
-    start_id, end_id = id_range
-    step = max(1, (end_id - start_id) // (max_projects * 3))
-    for pid in range(start_id, end_id, step):
-        if len(projects) >= max_projects:
-            break
-        try:
-            url = f"https://registry.goldstandard.org/projects/details/{pid}"
-            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
+    api_url = "https://public-api.goldstandard.org/projects"
+    page = 0
+    page_size = min(max_projects, 100)
+    try:
+        while len(projects) < max_projects:
+            resp = requests.get(
+                api_url,
+                params={"page": page, "size": page_size},
+                headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+                timeout=30,
+            )
             if resp.status_code != 200:
-                continue
-            html = resp.text
-            gs_id_match = re.search(r'GS\s*ID\s*[\n\r\s]*(\d+)', html)
-            if not gs_id_match:
-                continue
-            gs_id = gs_id_match.group(1)
-            name_match = re.search(r'<h[12][^>]*>([^<]+)</h[12]>', html)
-            if not name_match:
-                name_match = re.search(r'<title>([^<]+)</title>', html)
-            name = name_match.group(1).strip()[:100] if name_match else f"GS Project {gs_id}"
-            name = re.sub(r'\s*\(\d+\)\s*$', '', name).strip()
-            assurance_match = re.search(r'assurance-platform\.goldstandard\.org/project-documents/(GS\d+)', html)
-            assurance_id = assurance_match.group(1) if assurance_match else f"GS{gs_id}"
-            projects.append((pid, name, assurance_id))
-            if len(projects) % 10 == 0:
-                logger.info("Discovered %d Gold Standard projects so far (probed up to ID %d)", len(projects), pid)
-        except Exception:
-            pass
-        time.sleep(0.5)
+                logger.warning("GS public API returned %d", resp.status_code)
+                break
+            items = resp.json()
+            if not isinstance(items, list) or not items:
+                break
 
-    logger.info("Discovered %d Gold Standard projects in ID range %d-%d", len(projects), start_id, end_id)
+            for item in items:
+                if len(projects) >= max_projects:
+                    break
+                try:
+                    registry_id = int(item.get("id", 0))
+                except (ValueError, TypeError):
+                    continue
+                name = item.get("name", f"GS Project {registry_id}")[:100]
+                sustaincert_id = item.get("sustaincert_id")
+                if sustaincert_id:
+                    assurance_id = f"GS{sustaincert_id}"
+                else:
+                    assurance_id = f"GS{registry_id}"
+                projects.append((registry_id, name, assurance_id))
+
+            if len(items) < page_size:
+                break
+            page += 1
+            time.sleep(RATE_LIMIT_DELAY)
+
+            if len(projects) % 50 == 0:
+                logger.info("Discovered %d Gold Standard projects so far", len(projects))
+    except Exception as e:
+        logger.warning("GS project discovery error: %s", e)
+
+    logger.info("Discovered %d Gold Standard projects via public API", len(projects))
     return projects
 
 
@@ -254,42 +268,52 @@ def _classify_gs_doc(doc_name: str) -> str:
 
 def _fetch_gs_project_docs(registry_id: int, project_name: str, assurance_id: str) -> list[dict]:
     docs = []
-    seen_names: set[str] = set()
     assurance_url = f"https://assurance-platform.goldstandard.org/project-documents/{assurance_id}"
+
+    api_url = f"https://public-api.goldstandard.org/projects/{registry_id}"
     try:
-        resp = requests.get(assurance_url, headers={"User-Agent": USER_AGENT}, timeout=20)
-        if resp.status_code != 200:
-            return docs
-        html = resp.text
-
-        doc_pattern = re.compile(
-            r'(?:Required|Other|Confidential)\s*\(([^)]+\.(?:pdf|xlsx|docx))\)',
-            re.IGNORECASE,
+        resp = requests.get(
+            api_url,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+            timeout=20,
         )
-        for m in doc_pattern.finditer(html):
-            doc_name = m.group(1).strip()
-            if doc_name in seen_names:
-                continue
-            seen_names.add(doc_name)
+        if resp.status_code != 200:
+            logger.warning("GS public API returned %d for project %d", resp.status_code, registry_id)
+            return docs
+        project_data = resp.json()
 
-            cat = _classify_gs_doc(doc_name)
-            safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', doc_name[:40]).upper()
-            doc_code = f"GS_REG_{assurance_id}_{safe_name}"
-            title = f"GS {assurance_id} {project_name} - {doc_name.replace('.pdf', '').replace('.xlsx', '')}"
+        actual_name = project_data.get("name", project_name)[:100]
+        status = project_data.get("status", "Unknown")
+        project_type = project_data.get("type", "")
+        methodology = project_data.get("methodology") or ""
+        standards_version = project_data.get("gsf_standards_version", "")
+        description = project_data.get("description", "")
 
-            download_url = f"{assurance_url}#download:{doc_name}"
-
-            docs.append({
-                "code": doc_code[:80],
-                "title": title[:120],
-                "pdf_url": download_url,
-                "source": "goldstandard",
-                "category": cat,
-                "project_id": registry_id,
-                "assurance_id": assurance_id,
-                "doc_name": doc_name,
-                "download_available": False,
-            })
+        doc_code = f"GS_REG_{assurance_id}_PROJECT"
+        title = f"GS {assurance_id} {actual_name}"
+        docs.append({
+            "code": doc_code[:80],
+            "title": title[:120],
+            "pdf_url": assurance_url,
+            "source": "goldstandard",
+            "category": "example_pdd",
+            "project_id": registry_id,
+            "assurance_id": assurance_id,
+            "doc_name": f"{actual_name} - Project Metadata",
+            "download_available": False,
+            "metadata": {
+                "status": status,
+                "type": project_type,
+                "methodology": methodology,
+                "standards_version": standards_version,
+                "country": project_data.get("country", ""),
+                "developer": project_data.get("project_developer", ""),
+                "annual_credits": project_data.get("estimated_annual_credits"),
+                "description": description[:500],
+                "sdgs": [sdg.get("name", "") for sdg in project_data.get("sustainable_development_goals", [])],
+                "sustaincert_url": assurance_url,
+            },
+        })
     except Exception as e:
         logger.warning("Failed to fetch GS project docs for %s: %s", assurance_id, e)
 
@@ -802,16 +826,6 @@ def sync_methodologies(
             })
             continue
 
-        if dry_run:
-            results["details"].append({
-                "code": code,
-                "source": source,
-                "category": category,
-                "status": "would_download",
-                "title": doc.get("title", code),
-            })
-            continue
-
         if doc.get("download_available") is False:
             results["skipped_no_download"] += 1
             results["details"].append({
@@ -819,6 +833,16 @@ def sync_methodologies(
                 "source": source,
                 "category": category,
                 "status": "metadata_only",
+                "title": doc.get("title", code),
+            })
+            continue
+
+        if dry_run:
+            results["details"].append({
+                "code": code,
+                "source": source,
+                "category": category,
+                "status": "would_download",
                 "title": doc.get("title", code),
             })
             continue

@@ -850,9 +850,9 @@ def _render_methodology_sync():
                 key="sync_discover",
             )
             st.caption(
-                "Verra: direct PDF download via registry API (PDs, MRs, validation/verification reports). "
-                "Gold Standard: document metadata only (downloads require auth). "
-                f"Each project yields ~30-80 documents."
+                "Verra: direct PDF download via registry API (PDs, MRs, validation/verification reports, ~30-80 docs/project). "
+                "Gold Standard: project metadata via public API (document downloads require auth). "
+                "CDM/UNFCCC: project documents not available (bot protection)."
             )
         else:
             max_projects = 5

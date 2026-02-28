@@ -202,18 +202,22 @@ documents from public standard body catalogs and registries:
 **CDM/UNFCCC** (~12+ documents):
 - CDM Methodology Booklet (all approved methodologies)
 - CDM Methodological Tools (additionality, baseline, emission factors, etc.)
+- Project documents: NOT available (Incapsula bot protection blocks all automated access)
 
-**Gold Standard** (~23+ documents):
+**Gold Standard** (~23+ documents + project metadata):
 - Sector methodologies (cooking, A/R, mangroves, SOC, WASH, etc.)
 - Principles & Requirements v2.0 (standard_text)
 - Safeguarding, Stakeholder Consultation, GHG Outcomes, SDG Impact, VVB, PoA, Activity
   Requirements, Crediting Period (guidance)
 - MR Guide, PDD Guide, Validation/Verification Report Guides (template)
+- Project metadata via public API (`https://public-api.goldstandard.org/projects`) — name, status,
+  methodology, SDGs, developer, country, description. Document files on assurance platform require auth.
 
 **Features:**
 - WordPress API integration for Verra methodologies (bypasses JavaScript pagination)
 - Verra registry JSON API for project documents (replaces broken HTML scraping of SPA)
-- Project discovery via `POST /uiapi/resource/resource/search` (instant, returns all 4800+ VCS projects)
+- Verra project discovery via `POST /uiapi/resource/resource/search` (instant, returns all 4800+ VCS projects)
+- Gold Standard project discovery via `GET https://public-api.goldstandard.org/projects` (paginated REST API)
 - Deduplication via reference_id (e.g., `verra_VM0001`, `goldstandard_GS_PRINCIPLES_REQUIREMENTS`)
 - Auto-ingestion: downloaded PDFs are parsed, chunked, and embedded if OpenAI key is set
 - Rate limiting: 2-second delay between requests
