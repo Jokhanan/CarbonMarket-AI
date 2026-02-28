@@ -190,12 +190,14 @@ Real-time web search integration for discovering compliance-relevant information
 Automated download of methodologies, program standards, guides, templates, and project
 documents from public standard body catalogs and registries:
 
-**Verra VCS** (~30+ documents):
+**Verra VCS** (~30+ documents + registry projects):
 - Methodology PDFs via WordPress REST API (VM/VMR series, all active + in-revision)
 - VCS Standard v4.7 (standard_text)
 - VCS Program Guide, Registration & Issuance Process, Methodology Requirements (guidance)
 - AFOLU Non-Permanence Risk Tool (tool)
-- Optional: real project docs from Verra Registry (PDs, MRs, validation/verification reports)
+- Registry project docs via Verra JSON API (`/uiapi/resource/resourceSummary/{id}` for documents,
+  `POST /uiapi/resource/resource/search` for project discovery) — PDs, MRs, validation/verification
+  reports with direct download URLs (~30-80 docs per project)
 
 **CDM/UNFCCC** (~12+ documents):
 - CDM Methodology Booklet (all approved methodologies)
@@ -209,12 +211,13 @@ documents from public standard body catalogs and registries:
 - MR Guide, PDD Guide, Validation/Verification Report Guides (template)
 
 **Features:**
-- WordPress API integration for Verra (bypasses JavaScript pagination, discovers all methodologies)
+- WordPress API integration for Verra methodologies (bypasses JavaScript pagination)
+- Verra registry JSON API for project documents (replaces broken HTML scraping of SPA)
+- Project discovery via `POST /uiapi/resource/resource/search` (instant, returns all 4800+ VCS projects)
 - Deduplication via reference_id (e.g., `verra_VM0001`, `goldstandard_GS_PRINCIPLES_REQUIREMENTS`)
 - Auto-ingestion: downloaded PDFs are parsed, chunked, and embedded if OpenAI key is set
 - Rate limiting: 2-second delay between requests
 - Weekly scheduler: `CARBONGPT_AUTO_SYNC=true` (interval: `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168)
-- Optional registry project scanning: real PDs, MRs, validation/verification reports from Verra
 - UI: "Document Sync" tab with dry-run preview, source selection, program/registry toggles
 
 ## Tech Stack

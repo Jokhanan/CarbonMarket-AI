@@ -84,23 +84,24 @@ VERRA_SEED_PROJECTS = [
 DOC_TYPES_TO_DOWNLOAD = {"example_pdd", "example_mr", "example_fvr", "example_valver"}
 
 
-def _classify_verra_doc(filename: str, doc_name: str) -> str:
+def _classify_verra_doc(filename: str, doc_name: str, document_type: str = "") -> str:
     fn = filename.lower()
     dn = doc_name.lower()
-    combined = fn + " " + dn
-    if any(k in combined for k in ["monit_rep", "monitoring_rep", "monitoring report", "mon_rep", "_mr_", "monit rep"]):
+    dt = document_type.lower()
+    combined = fn + " " + dn + " " + dt
+    if any(k in combined for k in ["monit_rep", "monitoring_rep", "monitoring report", "mon_rep", "_mr_", "monit rep", "ccb monitoring report"]):
         return "example_mr"
     if any(k in combined for k in ["verif_rep", "verification_rep", "verification report", "verif rep", "ver_rep", "vcr_", "vcs_ccb_verif"]):
         return "example_fvr"
-    if any(k in combined for k in ["valid_rep", "validation_rep", "validation report", "valid rep", "val_rep", "fvr"]):
+    if any(k in combined for k in ["valid_rep", "validation_rep", "validation report", "valid rep", "val_rep"]):
         return "example_valver"
     if any(k in combined for k in ["proj_desc", "project_desc", "project description", "pdd", "project design"]):
         return "example_pdd"
     if any(k in combined for k in ["verif_sta", "verification_sta", "valid_sta", "validation_sta"]):
         return "example_valver"
-    if any(k in combined for k in ["iss_rep", "issuance_rep", "pp_iss", "pp_reg"]):
+    if any(k in combined for k in ["iss_rep", "issuance_rep", "pp_iss", "pp_reg", "issuance representation", "registration representation"]):
         return "example_other"
-    if any(k in combined for k in [".xlsx", ".xls", "calculation", "er_calc", "emission"]):
+    if any(k in combined for k in [".xlsx", ".xls", "calculation", "er_calc", "emission", "spreadsheet"]):
         return "example_other"
     return "example_other"
 
@@ -108,57 +109,54 @@ def _classify_verra_doc(filename: str, doc_name: str) -> str:
 def _fetch_verra_registry_project_docs(project_id: int, project_name: str) -> list[dict]:
     docs = []
     seen_urls: set[str] = set()
-    detail_url = f"https://registry.verra.org/app/projectDetail/VCS/{project_id}"
+    api_url = f"https://registry.verra.org/uiapi/resource/resourceSummary/{project_id}"
     try:
-        resp = requests.get(detail_url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp = requests.get(
+            api_url,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+            timeout=30,
+        )
+        if resp.status_code == 404:
+            return docs
         resp.raise_for_status()
-        html = resp.text
+        data = resp.json()
 
-        doc_pattern = re.compile(
-            r'\[([^\]]*\.(?:pdf|docx|xlsx)[^\]]*)\]\((https://registry\.verra\.org/mymodule/ProjectDoc/Project_ViewFile\.asp\?[^)]+)\)',
-            re.IGNORECASE,
-        )
-        link_pattern = re.compile(
-            r'href="(https://registry\.verra\.org/mymodule/ProjectDoc/Project_ViewFile\.asp\?[^"]+)"[^>]*>([^<]*)',
-            re.IGNORECASE,
-        )
-        bare_pattern = re.compile(
-            r'href="([^"]*(?:\.pdf|\.docx|\.xlsx)[^"]*)"',
-            re.IGNORECASE,
-        )
+        actual_name = data.get("resourceName", project_name) or project_name
 
-        matches = []
-        for m in doc_pattern.finditer(html):
-            matches.append((m.group(2), m.group(1)))
-        for m in link_pattern.finditer(html):
-            matches.append((m.group(1), m.group(2)))
-        for m in bare_pattern.finditer(html):
-            url = m.group(1)
-            if not url.startswith("http"):
-                url = f"https://registry.verra.org{url}"
-            fname = url.rsplit("/", 1)[-1].split("?")[0]
-            matches.append((url, fname))
+        for doc_group in data.get("documentGroups", []):
+            for doc in doc_group.get("documents", []):
+                url = doc.get("uri", "")
+                if not url or url in seen_urls:
+                    continue
+                if not url.startswith("http"):
+                    url = f"https://registry.verra.org{url}"
 
-        for url, doc_name in matches:
-            if url in seen_urls:
-                continue
-            seen_urls.add(url)
+                doc_name = doc.get("documentName", "")
+                doc_type = doc.get("documentType", "")
 
-            doc_name_clean = doc_name.strip().replace("\\", "")
-            cat = _classify_verra_doc(doc_name_clean, doc_name_clean)
+                has_downloadable_ext = any(
+                    doc_name.lower().endswith(ext)
+                    for ext in (".pdf", ".docx", ".xlsx", ".xls", ".doc")
+                )
+                if not has_downloadable_ext and "Project_ViewFile" not in url:
+                    continue
 
-            safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', doc_name_clean[:40]).upper()
-            doc_code = f"VERRA_REG_{project_id}_{safe_name}"
-            title = f"VCS {project_id} {project_name} - {doc_name_clean.replace('.pdf', '').replace('.xlsx', '').replace('_', ' ').title()}"
+                seen_urls.add(url)
+                cat = _classify_verra_doc(doc_name, doc_name, doc_type)
 
-            docs.append({
-                "code": doc_code[:80],
-                "title": title[:120],
-                "pdf_url": url,
-                "source": "verra",
-                "category": cat,
-                "project_id": project_id,
-            })
+                safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', doc_name[:40]).upper()
+                doc_code = f"VERRA_REG_{project_id}_{safe_name}"
+                label = doc_type or doc_name.replace('.pdf', '').replace('.xlsx', '').replace('_', ' ').title()
+                title = f"VCS {project_id} {actual_name} - {label}"
+
+                docs.append({
+                    "code": doc_code[:80],
+                    "title": title[:120],
+                    "pdf_url": url,
+                    "source": "verra",
+                    "category": cat,
+                    "project_id": project_id,
+                })
     except Exception as e:
         logger.warning("Failed to fetch Verra registry project %d: %s", project_id, e)
 
@@ -167,33 +165,40 @@ def _fetch_verra_registry_project_docs(project_id: int, project_name: str) -> li
 
 def discover_verra_project_ids(max_projects: int = 200, id_range: tuple = (1, 4500)) -> list[tuple[int, str]]:
     projects = []
-    start_id, end_id = id_range
-    step = max(1, (end_id - start_id) // (max_projects * 3))
-    probed = 0
-    for pid in range(start_id, end_id, step):
-        if len(projects) >= max_projects:
-            break
-        try:
-            url = f"https://registry.verra.org/app/projectDetail/VCS/{pid}"
-            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
-            if resp.status_code != 200:
-                continue
-            html = resp.text
-            if "Project_ViewFile" not in html:
-                continue
-            name_match = re.search(r'<h[12][^>]*>([^<]+)</h[12]>', html)
-            if not name_match:
-                name_match = re.search(r'<title>([^<]+)</title>', html)
-            name = name_match.group(1).strip()[:100] if name_match else f"VCS Project {pid}"
-            projects.append((pid, name))
-            probed += 1
-            if probed % 10 == 0:
-                logger.info("Discovered %d Verra projects so far (probed up to ID %d)", len(projects), pid)
-        except Exception:
-            pass
-        time.sleep(0.5)
+    search_url = "https://registry.verra.org/uiapi/resource/resource/search"
+    try:
+        resp = requests.post(
+            search_url,
+            json={"program": "VCS"},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("value", [])
+        logger.info("Verra search API returned %d VCS projects", len(items))
 
-    logger.info("Discovered %d Verra projects with documents in ID range %d-%d", len(projects), start_id, end_id)
+        for item in items:
+            if len(projects) >= max_projects:
+                break
+            pid_str = item.get("resourceIdentifier", "")
+            name = item.get("resourceName", f"VCS Project {pid_str}")
+            try:
+                pid = int(pid_str)
+            except (ValueError, TypeError):
+                continue
+            low, high = id_range
+            if pid < low or pid > high:
+                continue
+            projects.append((pid, name[:100]))
+    except Exception as e:
+        logger.warning("Verra project discovery error: %s", e)
+
+    logger.info("Discovered %d Verra VCS projects via search API", len(projects))
     return projects
 
 

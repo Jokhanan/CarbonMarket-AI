@@ -845,14 +845,14 @@ def _render_methodology_sync():
                 key="sync_max_projects",
             )
             discover_projects = st.checkbox(
-                "Auto-discover projects (scan registries for new project IDs instead of using seed list)",
+                "Auto-discover projects (search Verra registry API for all VCS projects instead of using seed list)",
                 value=max_projects > 10,
                 key="sync_discover",
             )
             st.caption(
-                "Verra: direct PDF download from registry. "
-                "Gold Standard: document metadata scraped (downloads require auth -- metadata indexed for reference). "
-                f"Scanning {max_projects} projects takes ~{max_projects * 3 // 60 + 1} minutes."
+                "Verra: direct PDF download via registry API (PDs, MRs, validation/verification reports). "
+                "Gold Standard: document metadata only (downloads require auth). "
+                f"Each project yields ~30-80 documents."
             )
         else:
             max_projects = 5
