@@ -1,7 +1,61 @@
 import logging
+import re
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
+
+STANDARD_NAME_ALIASES = {
+    "gold standard": "goldstandard",
+    "gs4gg": "goldstandard",
+    "gs": "goldstandard",
+    "verra vcs": "verra",
+    "verra": "verra",
+    "vcs": "verra",
+    "verified carbon standard": "verra",
+    "cdm": "cdm",
+    "clean development mechanism": "cdm",
+    "plan vivo": "planvivo",
+}
+
+
+def match_standard_version(detected_standard: str, detected_version: str = None) -> int | None:
+    if not detected_standard:
+        return None
+
+    slug = None
+    normalized = detected_standard.strip().lower()
+    for alias, s in STANDARD_NAME_ALIASES.items():
+        if alias in normalized:
+            slug = s
+            break
+
+    if not slug:
+        return None
+
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT sv.id, sv.version FROM standard_versions sv "
+            "JOIN standards s ON sv.standard_id = s.id "
+            "WHERE s.slug = %s ORDER BY sv.version DESC",
+            (slug,)
+        )
+        versions = cur.fetchall()
+
+    if not versions:
+        return None
+
+    if detected_version:
+        clean_ver = re.sub(r'^v', '', str(detected_version).strip(), flags=re.IGNORECASE)
+        for v in versions:
+            db_ver = re.sub(r'^v', '', v["version"].strip(), flags=re.IGNORECASE)
+            if db_ver == clean_ver:
+                return v["id"]
+        for v in versions:
+            db_ver = re.sub(r'^v', '', v["version"].strip(), flags=re.IGNORECASE)
+            if clean_ver.startswith(db_ver) or db_ver.startswith(clean_ver):
+                return v["id"]
+
+    return versions[0]["id"]
 
 
 def list_standards():

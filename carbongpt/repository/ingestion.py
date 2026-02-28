@@ -231,6 +231,7 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
                     auto_category=detection.get("category"),
                     auto_applicability=detection.get("applicability"),
                 )
+                _auto_apply_detection(doc_id, detection)
             except Exception as e:
                 logger.warning("Auto-detection failed for doc %s: %s", doc_id, e)
 
@@ -257,3 +258,45 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
         logger.error("Ingestion failed for document %s: %s", doc_id, e)
         store.update_document_ingestion(doc_id, "failed", error=str(e))
         raise
+
+
+VALID_CATEGORIES = {
+    "standard_text", "methodology", "guidance", "tool", "template",
+    "example_pdd", "example_mr", "example_fvr", "example_valver",
+    "example_other", "rule_update", "other",
+}
+
+
+def _auto_apply_detection(doc_id: int, detection: dict):
+    from carbongpt.repository import store
+
+    doc = store.get_document(doc_id)
+    if not doc:
+        return
+
+    updates = {}
+
+    detected_cat = detection.get("category")
+    if detected_cat and detected_cat in VALID_CATEGORIES:
+        user_cat = doc.get("category")
+        if user_cat in ("other", None) or user_cat == "standard_text":
+            updates["category"] = detected_cat
+            logger.info("Auto-applied category '%s' for doc %s", detected_cat, doc_id)
+
+    if not doc.get("standard_version_id"):
+        detected_std = detection.get("standard")
+        detected_ver = detection.get("version")
+        if not detected_ver:
+            filename = doc.get("file_path", "")
+            ver_match = re.search(r'v(\d+\.\d+)', filename, re.IGNORECASE)
+            if ver_match:
+                detected_ver = ver_match.group(1)
+                logger.info("Extracted version '%s' from filename for doc %s", detected_ver, doc_id)
+        if detected_std:
+            matched_sv_id = store.match_standard_version(detected_std, detected_ver)
+            if matched_sv_id:
+                updates["standard_version_id"] = matched_sv_id
+                logger.info("Auto-linked doc %s to standard_version %s", doc_id, matched_sv_id)
+
+    if updates:
+        store.update_document_metadata(doc_id, **updates)
