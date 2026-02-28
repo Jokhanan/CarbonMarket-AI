@@ -23,6 +23,7 @@ from carbongpt.guides import load_guide, DOC_TYPE_LABELS
 from carbongpt.tools.parse_docx import parse_docx
 from carbongpt.tools.section_mapper import map_sections
 from carbongpt.tools.rule_engine import _normalize_text, _get_section_text
+from carbongpt.core.knowledge_retrieval import retrieve_section_context, format_context_for_prompt
 
 
 MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
@@ -39,13 +40,19 @@ def _build_section_system_prompt(doc_type_label: str, standard: str = "GoldStand
     std_label = STANDARD_LABELS.get(standard, standard)
     return (
         f"You are a compliance auditor for {std_label} carbon credit {doc_type_label}s. "
-        "You review document sections against specific guide requirements. "
+        "You review document sections against BOTH the template guide requirements AND "
+        "any relevant standard/methodology requirements provided as reference material. "
         "RULES:\n"
         "- Never invent numbers, statistics, or facts.\n"
         "- If information is missing, say 'missing' and ask a question.\n"
         "- Any suggested text must be clearly marked as '[DRAFT]' and must not fabricate data.\n"
         "- Be specific about what is present and what is absent.\n"
-        "- Score from 0 to 100 based on how completely the subsection meets requirements."
+        "- When reference material from standards or methodologies is provided, check whether "
+        "the section content meets those specific requirements (eligibility criteria, calculation "
+        "methods, monitoring parameters, baseline requirements, etc.).\n"
+        "- Flag any inconsistency between the document and the methodology/standard requirements.\n"
+        "- Score from 0 to 100 based on how completely the subsection meets ALL requirements "
+        "(both template structure and methodology/standard compliance)."
     )
 
 
@@ -129,21 +136,43 @@ def _build_section_prompt(
     subsection_id: str,
     subsection_guide: dict,
     section_text: str,
+    reference_context: str = "",
 ) -> str:
     must_include = "\n".join(f"  - {item}" for item in subsection_guide.get("must_include", []))
     failure_modes = "\n".join(f"  - {item}" for item in subsection_guide.get("failure_modes", []))
     examples = "\n".join(f"  - {item}" for item in subsection_guide.get("examples", []))
 
-    return (
+    prompt = (
         f"## Subsection {subsection_id}: {subsection_guide['title']}\n\n"
         f"### Guide Requirements (must include):\n{must_include}\n\n"
         f"### Common Failure Modes:\n{failure_modes}\n\n"
         f"### Good Examples:\n{examples}\n\n"
+    )
+
+    if reference_context:
+        prompt += reference_context + "\n\n"
+
+    prompt += (
         f"### Document Text:\n\"\"\"\n{section_text}\n\"\"\"\n\n"
-        "Evaluate this subsection against the guide requirements. "
-        "Identify issues, suggest fixes, and ask questions about missing information. "
+        "Evaluate this subsection against the guide requirements"
+    )
+
+    if reference_context:
+        prompt += (
+            " AND the reference material from standards/methodologies above. "
+            "Check whether the document meets methodology-specific requirements "
+            "(eligibility, calculations, monitoring parameters, baseline approach). "
+            "Flag any gaps or inconsistencies with the methodology."
+        )
+    else:
+        prompt += "."
+
+    prompt += (
+        " Identify issues, suggest fixes, and ask questions about missing information. "
         "Provide a completeness score from 0 to 100."
     )
+
+    return prompt
 
 
 def _build_global_prompt(section_reviews: list[dict], doc_type_label: str) -> str:
@@ -212,8 +241,9 @@ def review_section(
     section_text: str,
     doc_type_label: str = "Monitoring Report",
     standard: str = "GoldStandard",
+    reference_context: str = "",
 ) -> dict:
-    prompt = _build_section_prompt(subsection_id, subsection_guide, section_text)
+    prompt = _build_section_prompt(subsection_id, subsection_guide, section_text, reference_context)
     system_prompt = _build_section_system_prompt(doc_type_label, standard)
     result = _call_openai_structured(
         api_key=api_key,
@@ -298,7 +328,13 @@ def run_ai_review(
 
         try:
             logger.info("Reviewing subsection %s ...", sub_id)
-            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label, standard)
+            context_chunks = retrieve_section_context(
+                sub_guide["title"], text, standard, doc_type
+            )
+            reference_context = format_context_for_prompt(context_chunks)
+            if reference_context:
+                logger.info("  Retrieved %d reference chunks for %s", len(context_chunks), sub_id)
+            review = review_section(api_key, sub_id, sub_guide, text, doc_type_label, standard, reference_context)
             per_section_reviews.append(review)
         except Exception as exc:
             logger.error("Failed to review subsection %s: %s", sub_id, exc)

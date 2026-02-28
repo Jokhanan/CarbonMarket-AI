@@ -9,7 +9,7 @@ GUIDE_ID = "Verra_VCS_PD_v4_4"
 SUBSECTIONS: dict[str, dict] = {
     "1.1": {
         "title": "Summary Description of the Project",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "summary description of technologies or measures implemented",
             "location of the project",
@@ -29,7 +29,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.2": {
         "title": "Audit History",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "audit history table for projects undergoing crediting period renewal",
             "audit type (validation or verification)",
@@ -49,7 +49,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.3": {
         "title": "Sectoral Scope and Project Type",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "sectoral scope number",
             "project activity type",
@@ -68,7 +68,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.4": {
         "title": "Project Eligibility",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "justification that the project activity is within the scope of the VCS Program",
             "demonstration that the project is not excluded under Table 2.1 of the VCS Standard",
@@ -89,7 +89,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.5": {
         "title": "Project Design",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "indication of project design type: single location, multiple locations, or grouped project",
             "for grouped projects: eligibility criteria for new project activity instances",
@@ -107,7 +107,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.6": {
         "title": "Project Proponent",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "organization name of the project proponent",
             "contact person name",
@@ -127,7 +127,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.7": {
         "title": "Other Entities Involved in the Project",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "organization name of each entity involved",
             "role in the project for each entity",
@@ -144,7 +144,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.8": {
         "title": "Ownership",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "evidence of project ownership",
             "conformance with VCS Program requirements on project ownership",
@@ -160,7 +160,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.9": {
         "title": "Project Start Date",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "project start date in DD-Month-YYYY format",
             "justification of how the start date conforms with VCS Program requirements",
@@ -176,7 +176,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.10": {
         "title": "Project Crediting Period",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "crediting period type selected (seven years twice renewable, ten years fixed, or other)",
             "start and end date of the first or fixed crediting period",
@@ -193,7 +193,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.11": {
         "title": "Project Scale and Estimated GHG Emission Reductions or Removals",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "indication of project scale (less than or greater than 300,000 tCO2e/year)",
             "table of estimated GHG emission reductions or removals by calendar year",
@@ -213,7 +213,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.12": {
         "title": "Description of the Project Activity",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "description of the project activity or activities",
             "technologies or measures employed",
@@ -235,7 +235,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.13": {
         "title": "Project Location",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "project location description",
             "geographic boundaries",
@@ -254,7 +254,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.14": {
         "title": "Conditions Prior to Project Initiation",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "description of conditions existing prior to project initiation",
             "demonstration that the project was not implemented to generate GHG emissions for subsequent reduction",
@@ -274,7 +274,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.15": {
         "title": "Compliance with Laws, Statutes and Other Regulatory Frameworks",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "identification of relevant local, regional and national laws and regulations",
             "demonstration of compliance with identified legal and regulatory frameworks",
@@ -290,7 +290,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.16": {
         "title": "Double Counting and Participation under Other GHG Programs",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "statement on whether the project is receiving or seeking credit under another GHG program (no double issuance)",
             "statement on whether the project has registered under any other GHG programs",
@@ -310,7 +310,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.17": {
         "title": "Double Claiming, Other Forms of Credit, and Scope 3 Emissions",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "statement on whether reductions are included in an emissions trading program or binding emission limit",
             "statement on whether the project has sought or received credit from another GHG-related environmental credit system",
@@ -329,7 +329,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.18": {
         "title": "Sustainable Development Contributions",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "summary description of project activities resulting in sustainable development contributions (max 500 words)",
             "explanation of how project activities result in expected SD contributions",
@@ -348,7 +348,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "1.19": {
         "title": "Additional Information Relevant to the Project",
-        "parent_section": "SECTION 1",
+        "parent_section": "Project Details",
         "must_include": [
             "leakage management plan and implementation of mitigation measures (where applicable)",
             "indication of whether commercially sensitive information has been excluded (with justification)",
@@ -366,7 +366,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "2.1": {
         "title": "Stakeholder Engagement and Consultation",
-        "parent_section": "SECTION 2",
+        "parent_section": "Safeguards and Stakeholder engagement",
         "must_include": [
             "stakeholder identification process and list of identified stakeholders",
             "description of legal or customary tenure/access rights held by stakeholders",
@@ -394,7 +394,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "2.2": {
         "title": "Risks to Stakeholders and the Environment",
-        "parent_section": "SECTION 2",
+        "parent_section": "Safeguards and Stakeholder engagement",
         "must_include": [
             "identification of risks the project poses to stakeholders and the environment",
             "natural and human-induced risks to the project and mitigation measures",
@@ -412,7 +412,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "2.3": {
         "title": "Respect for Human Rights and Equity",
-        "parent_section": "SECTION 2",
+        "parent_section": "Safeguards and Stakeholder engagement",
         "must_include": [
             "demonstration that the project respects human rights",
             "assessment of project impacts on equity",
@@ -431,7 +431,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "2.4": {
         "title": "Ecosystem Health",
-        "parent_section": "SECTION 2",
+        "parent_section": "Safeguards and Stakeholder engagement",
         "must_include": [
             "assessment of impacts on biodiversity and ecosystems",
             "identification of rare, threatened, or endangered species in the project area",
@@ -452,7 +452,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.1": {
         "title": "Title and Reference of Methodology",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "full title of the applied methodology",
             "version number of the methodology",
@@ -470,7 +470,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.2": {
         "title": "Applicability of Methodology",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "demonstration that the project meets all applicability conditions of the methodology",
             "each applicability condition addressed individually with project-specific justification",
@@ -487,7 +487,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.3": {
         "title": "Project Boundary",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "description of the project boundary",
             "GHG sources, sinks, and reservoirs included and excluded",
@@ -506,7 +506,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.4": {
         "title": "Baseline Scenario",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "identification and description of the baseline scenario",
             "justification for the selection of the baseline scenario",
@@ -524,7 +524,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.5": {
         "title": "Additionality",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "demonstration of additionality following the methodology or applicable VCS tool",
             "investment analysis, barrier analysis, or common practice analysis as required",
@@ -543,7 +543,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "3.6": {
         "title": "Methodology Deviations",
-        "parent_section": "SECTION 3",
+        "parent_section": "Application of Methodology",
         "must_include": [
             "description of any methodology deviations applied",
             "justification that deviations meet VCS Program requirements",
@@ -561,7 +561,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "4.1": {
         "title": "Baseline Emissions",
-        "parent_section": "SECTION 4",
+        "parent_section": "Quantification of Estimated GHG Emission Reductions and Removals",
         "must_include": [
             "equations used to estimate baseline emissions",
             "description of all parameters and data sources",
@@ -579,7 +579,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "4.2": {
         "title": "Project Emissions",
-        "parent_section": "SECTION 4",
+        "parent_section": "Quantification of Estimated GHG Emission Reductions and Removals",
         "must_include": [
             "equations used to estimate project emissions",
             "description of all parameters and data sources",
@@ -597,7 +597,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "4.3": {
         "title": "Leakage Emissions",
-        "parent_section": "SECTION 4",
+        "parent_section": "Quantification of Estimated GHG Emission Reductions and Removals",
         "must_include": [
             "equations used to estimate leakage emissions",
             "description of all parameters and data sources",
@@ -615,7 +615,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "4.4": {
         "title": "Estimated GHG Emission Reductions and Carbon Dioxide Removals",
-        "parent_section": "SECTION 4",
+        "parent_section": "Quantification of Estimated GHG Emission Reductions and Removals",
         "must_include": [
             "summary table of estimated GHG emission reductions or removals by year",
             "calculation: ERR_y = BE_y - PE_y - LE_y for each year",
@@ -633,7 +633,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "5.1": {
         "title": "Data and Parameters Available at Validation",
-        "parent_section": "SECTION 5",
+        "parent_section": "Monitoring",
         "must_include": [
             "table of all data and parameters available at validation (fixed ex ante)",
             "for each parameter: data unit, description, source of data",
@@ -655,7 +655,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "5.2": {
         "title": "Data and Parameters Monitored",
-        "parent_section": "SECTION 5",
+        "parent_section": "Monitoring",
         "must_include": [
             "table of all data and parameters to be monitored",
             "for each parameter: data unit, description, source of data",
@@ -678,7 +678,7 @@ SUBSECTIONS: dict[str, dict] = {
     },
     "5.3": {
         "title": "Monitoring Plan",
-        "parent_section": "SECTION 5",
+        "parent_section": "Monitoring",
         "must_include": [
             "description of the monitoring plan",
             "organizational structure and responsibilities for monitoring",

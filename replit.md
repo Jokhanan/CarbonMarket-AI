@@ -15,6 +15,7 @@ carbongpt/
 │   ├── orchestrator.py    Pipeline coordinator (docx → rules → response)
 │   ├── ai_review.py       AI review logic (prompt building, OpenAI calls)
 │   ├── ai_review_worker.py  Subprocess worker for async AI review
+│   ├── knowledge_retrieval.py  RAG: retrieves methodology/standard context from repo for AI review
 │   └── task_store.py      File-backed task store (/tmp/carbongpt_tasks/)
 ├── repository/
 │   ├── db.py              PostgreSQL connection manager (psycopg2)
@@ -128,6 +129,16 @@ Registry defined in `carbongpt/templates/registry.yaml`.
 - Uses OpenAI gpt-4o-mini (override with `CARBONGPT_AI_MODEL` env var)
 - Standard-aware prompts (Gold Standard vs Verra VCS)
 - Supported: Gold Standard (MR, PDD, PoA-DD, VPA-DD) + Verra (VCS-PD, VCS-MR, VCS-ValVer)
+
+### Knowledge-Augmented Review (RAG)
+
+When the document repository has embedded content, AI review automatically retrieves
+relevant methodology and standard text from the repository for each section being reviewed.
+This means the AI checks documents against BOTH template requirements AND methodology-specific
+requirements (eligibility criteria, calculation methods, monitoring parameters, baseline
+approach). The retrieval uses semantic search (cosine similarity) with a relevance threshold
+of 0.55 cosine distance, pulling up to 8 candidates per section, filtered by standard,
+capped at ~2000 tokens of context per section.
 
 ## Tech Stack
 
