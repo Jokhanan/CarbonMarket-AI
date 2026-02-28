@@ -210,6 +210,19 @@ def get_document(doc_id):
         return cur.fetchone()
 
 
+def find_document_by_reference(reference_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT d.*, sv.version as standard_version, s.name as standard_name "
+            "FROM documents d "
+            "LEFT JOIN standard_versions sv ON d.standard_version_id = sv.id "
+            "LEFT JOIN standards s ON sv.standard_id = s.id "
+            "WHERE d.reference_id = %s LIMIT 1",
+            (reference_id,)
+        )
+        return cur.fetchone()
+
+
 def delete_document(doc_id):
     with get_cursor() as cur:
         cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))

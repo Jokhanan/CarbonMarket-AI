@@ -441,3 +441,51 @@ def run_knowledge_refresh(data: KnowledgeRefreshRequest):
         "total_found": len(proposed_rules),
         "saved_count": saved_count,
     }
+
+
+class MethodologySyncRequest(BaseModel):
+    sources: list[str] = ["verra", "cdm", "goldstandard"]
+    max_per_source: int = 50
+    dry_run: bool = False
+
+
+@router.post("/methodology-sync")
+def run_methodology_sync(data: MethodologySyncRequest):
+    valid_sources = {"verra", "cdm", "goldstandard"}
+    for s in data.sources:
+        if s not in valid_sources:
+            raise HTTPException(status_code=400, detail=f"Invalid source: {s}. Valid: {', '.join(valid_sources)}")
+
+    from carbongpt.repository.methodology_sync import sync_methodologies
+    result = sync_methodologies(
+        sources=data.sources,
+        max_per_source=data.max_per_source,
+        dry_run=data.dry_run,
+    )
+    return result
+
+
+@router.get("/methodology-sync/status")
+def get_sync_status():
+    from carbongpt.repository.methodology_sync import _scheduler_started
+    from carbongpt.repository.store import list_documents
+    all_docs = list_documents(category="methodology") or []
+    sources = {}
+    for doc in all_docs:
+        ref = doc.get("reference_id", "") or ""
+        if ref.startswith("verra_"):
+            sources.setdefault("verra", 0)
+            sources["verra"] += 1
+        elif ref.startswith("cdm_"):
+            sources.setdefault("cdm", 0)
+            sources["cdm"] += 1
+        elif ref.startswith("goldstandard_"):
+            sources.setdefault("goldstandard", 0)
+            sources["goldstandard"] += 1
+
+    return {
+        "scheduler_active": _scheduler_started,
+        "total_methodologies": len(all_docs),
+        "by_source": sources,
+        "sync_interval_hours": int(os.getenv("CARBONGPT_SYNC_INTERVAL_HOURS", "168")),
+    }

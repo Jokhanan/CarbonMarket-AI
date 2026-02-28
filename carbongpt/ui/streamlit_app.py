@@ -350,12 +350,13 @@ def render_repository():
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Upload Documents",
         "Document Library",
         "Semantic Search",
         "Compliance Rules",
         "Web Intelligence",
+        "Methodology Sync",
         "Manage Standards",
     ])
 
@@ -370,6 +371,8 @@ def render_repository():
     with tab5:
         _render_web_intelligence()
     with tab6:
+        _render_methodology_sync()
+    with tab7:
         _render_manage_standards()
 
 
@@ -752,6 +755,133 @@ def _render_compliance_rules():
                         st.rerun()
             else:
                 st.warning("Title and description are required.")
+
+
+def _render_methodology_sync():
+    st.subheader("Methodology Sync")
+    st.markdown(
+        "Download methodology documents from Verra, CDM/UNFCCC, and Gold Standard "
+        "public catalogs. Documents are stored in the repository, parsed, and embedded "
+        "for use in AI-powered reviews."
+    )
+
+    status = _fetch("/admin/methodology-sync/status")
+    if status:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Methodologies", status.get("total_methodologies", 0))
+        with col2:
+            by_source = status.get("by_source", {})
+            st.metric("Verra", by_source.get("verra", 0))
+        with col3:
+            st.metric("CDM", by_source.get("cdm", 0))
+        with col4:
+            st.metric("Gold Standard", by_source.get("goldstandard", 0))
+
+        scheduler_status = "Active" if status.get("scheduler_active") else "Inactive"
+        interval = status.get("sync_interval_hours", 168)
+        st.markdown(
+            f"**Auto-sync scheduler:** {scheduler_status} "
+            f"(interval: {interval} hours / {interval // 24} days). "
+            f"Set `CARBONGPT_AUTO_SYNC=true` to enable."
+        )
+
+    st.divider()
+
+    col_sync, col_config = st.columns(2)
+
+    with col_sync:
+        st.markdown("#### Run Sync Now")
+
+        source_options = {
+            "Verra VCS": "verra",
+            "CDM/UNFCCC": "cdm",
+            "Gold Standard": "goldstandard",
+        }
+        selected_sources = st.multiselect(
+            "Sources to sync",
+            options=list(source_options.keys()),
+            default=list(source_options.keys()),
+            key="sync_sources",
+        )
+
+        max_per_source = st.slider(
+            "Max methodologies per source",
+            min_value=5,
+            max_value=100,
+            value=20,
+            step=5,
+            key="sync_max",
+        )
+
+        dry_run = st.checkbox("Dry run (preview only, no downloads)", value=True, key="sync_dry_run")
+
+        if st.button("Start Sync", key="sync_start_btn"):
+            sources = [source_options[s] for s in selected_sources]
+            with st.spinner("Syncing methodologies (this may take several minutes)..."):
+                result = _fetch(
+                    "/admin/methodology-sync",
+                    method="POST",
+                    json={
+                        "sources": sources,
+                        "max_per_source": max_per_source,
+                        "dry_run": dry_run,
+                    },
+                )
+
+            if result:
+                st.success(
+                    f"Sync complete: {result.get('total_found', 0)} found, "
+                    f"{result.get('already_stored', 0)} already stored, "
+                    f"{result.get('newly_downloaded', 0)} newly downloaded, "
+                    f"{result.get('ingestion_started', 0)} ingestion started, "
+                    f"{result.get('errors', 0)} errors"
+                )
+
+                details = result.get("details", [])
+                if details:
+                    status_counts = {}
+                    for d in details:
+                        s = d.get("status", "unknown")
+                        status_counts[s] = status_counts.get(s, 0) + 1
+                    st.markdown("**Breakdown by status:**")
+                    for s, count in sorted(status_counts.items()):
+                        st.markdown(f"- {s}: {count}")
+
+                    with st.expander("Details", expanded=False):
+                        for d in details[:50]:
+                            status_label = d.get("status", "unknown")
+                            code = d.get("code", "?")
+                            source = d.get("source", "?")
+                            line = f"[{source}] {code}: {status_label}"
+                            if d.get("doc_id"):
+                                line += f" (doc #{d['doc_id']})"
+                            if d.get("pdf_url"):
+                                line += f" - {d['pdf_url']}"
+                            st.text(line)
+                        if len(details) > 50:
+                            st.text(f"... and {len(details) - 50} more")
+            else:
+                st.error("Sync failed.")
+
+    with col_config:
+        st.markdown("#### Configuration")
+        st.markdown(
+            "**Environment variables:**\n"
+            "- `CARBONGPT_AUTO_SYNC=true` - Enable weekly automatic sync\n"
+            "- `CARBONGPT_SYNC_INTERVAL_HOURS=168` - Sync interval (default: 168 = 7 days)\n"
+            "- `OPENAI_API_KEY` - Required for automatic ingestion (parsing + embedding)\n\n"
+            "**How it works:**\n"
+            "1. Fetches the public methodology catalog from each standard body\n"
+            "2. Identifies methodology PDFs available for download\n"
+            "3. Downloads new/updated documents (skips already-stored ones)\n"
+            "4. Stores in the document repository with proper metadata\n"
+            "5. Automatically ingests (parse, chunk, embed) if OpenAI key is set\n\n"
+            "**Rate limiting:** The sync respects a 2-second delay between requests "
+            "to avoid overloading source websites.\n\n"
+            "**Tip:** Run a dry-run first to preview what would be downloaded before "
+            "committing to a full sync."
+        )
 
 
 def _render_web_intelligence():

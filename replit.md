@@ -21,6 +21,7 @@ carbongpt/
 │   └── task_store.py      File-backed task store (/tmp/carbongpt_tasks/)
 ├── repository/
 │   ├── db.py              PostgreSQL connection manager (psycopg2)
+│   ├── methodology_sync.py  Automated methodology download from Verra/CDM/Gold Standard catalogs
 │   ├── schema.py          DDL schema + seed data, auto-runs on startup
 │   ├── store.py           CRUD operations for standards, documents, chunks, search
 │   └── ingestion.py       Document parsing (PDF/DOCX), chunking, embeddings, auto-detect
@@ -102,6 +103,8 @@ python -m pytest carbongpt/tests/ -v  # Tests
 | POST   | /admin/web-intelligence/verify-methodology | Verify methodology status via web search + AI |
 | POST   | /admin/web-intelligence/propose-rule       | Propose compliance rule from web research     |
 | POST   | /admin/web-intelligence/knowledge-refresh  | Research standard updates, propose rules      |
+| POST   | /admin/methodology-sync                    | Download methodologies from public catalogs   |
+| GET    | /admin/methodology-sync/status             | Sync status and methodology counts by source  |
 
 ## Document Repository
 
@@ -181,6 +184,19 @@ Real-time web search integration for discovering compliance-relevant information
   admin approval; low-confidence findings are discarded
 - **UI**: "Web Intelligence" tab in Document Repository page with methodology verification
   and knowledge refresh controls
+
+### Methodology Sync
+
+Automated download of methodology documents from public standard body catalogs:
+- **Verra VCS**: Scrapes verra.org/methodologies catalog, downloads methodology PDFs (VM series)
+- **CDM/UNFCCC**: Fetches from cdm.unfccc.int approved methodology listings (AM, AMS, ACM series)
+- **Gold Standard**: Downloads from goldstandard.org standard documents page
+- **Deduplication**: Uses reference_id (e.g., `verra_VM0001`) to skip already-stored documents
+- **Auto-ingestion**: Downloaded PDFs are automatically parsed, chunked, and embedded if OpenAI key is set
+- **Rate limiting**: 2-second delay between requests to respect source websites
+- **Weekly scheduler**: Set `CARBONGPT_AUTO_SYNC=true` to enable automatic weekly sync
+  (interval configurable via `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168 = 7 days)
+- **UI**: "Methodology Sync" tab with dry-run preview, source selection, and sync status dashboard
 
 ## Tech Stack
 

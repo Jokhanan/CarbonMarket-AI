@@ -3,6 +3,7 @@ main.py — FastAPI application entry point for CarbonGPT.
 """
 
 import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -67,6 +68,13 @@ def startup_init_db():
         ensure_schema()
     except Exception as exc:
         logger.warning("Database schema init skipped: %s", exc)
+
+    if os.getenv("CARBONGPT_AUTO_SYNC", "").lower() in ("1", "true", "yes"):
+        try:
+            from carbongpt.repository.methodology_sync import start_weekly_sync
+            start_weekly_sync()
+        except Exception as exc:
+            logger.warning("Methodology sync scheduler skipped: %s", exc)
 
 
 @app.get("/health", tags=["system"])
