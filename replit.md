@@ -224,11 +224,21 @@ documents from public standard body catalogs and registries:
 - Weekly scheduler: `CARBONGPT_AUTO_SYNC=true` (interval: `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168)
 - UI: "Document Sync" tab with dry-run preview, source selection, program/registry toggles
 
+## Search & AI Retrieval
+
+- **Hybrid search** (default): combines semantic (pgvector cosine distance, 70% weight) + keyword (PostgreSQL tsvector/tsquery, 30% weight) for best results
+- **Keyword search**: full-text search on chunk content via `to_tsvector('english', content)` — finds exact terms like methodology codes (VM0007, AMS-II.G)
+- **Document-level FTS**: weighted search vector on documents table (`title` A-weight, `summary` B-weight, `reference_id` A-weight, `applicability` C-weight)
+- **Chunk metadata enrichment**: every chunk stores `document_title`, `document_category`, `standard_name`, `reference_id`, `section_number`, `section_title` in JSONB metadata
+- **Section-chunk linkage**: chunks are mapped to their parent document_sections via token-boundary overlap matching
+- **Document summaries**: AI-generated 2-3 sentence summaries stored per document (generated during ingestion when OpenAI key available)
+- **Admin endpoints**: `GET /admin/search?q=...&mode=hybrid|keyword|semantic`, `GET /admin/search-documents?q=...` (document-level FTS), `POST /admin/backfill-metadata` (enriches existing chunks)
+
 ## Tech Stack
 
 - Python 3.11, FastAPI, Uvicorn, Streamlit
-- PostgreSQL + pgvector (semantic search)
+- PostgreSQL + pgvector (semantic search) + tsvector (full-text search)
 - psycopg2-binary, pdfplumber, tiktoken
 - python-docx, PyYAML, rapidfuzz
-- OpenAI API (AI review + embeddings + auto-detection)
+- OpenAI API (AI review + embeddings + auto-detection + document summaries)
 - pytest

@@ -287,17 +287,119 @@ def get_stats():
 
 
 @router.get("/search")
-def search_documents(q: str, limit: int = 10, standard_version_id: int = None):
+def search_documents(q: str, limit: int = 10, standard_version_id: int = None,
+                     mode: str = "hybrid",
+                     semantic_weight: float = 0.7, keyword_weight: float = 0.3):
+    if mode == "keyword":
+        from carbongpt.repository.store import full_text_search
+        results = full_text_search(q, limit=limit, standard_version_id=standard_version_id)
+        return results
+
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+
+    if mode == "semantic" and not api_key:
         raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for semantic search.")
 
-    from carbongpt.repository.ingestion import create_embeddings
-    from carbongpt.repository.store import search_chunks
+    from carbongpt.repository.store import search_chunks, hybrid_search
 
-    query_embedding = create_embeddings([q], api_key)[0]
-    results = search_chunks(query_embedding, limit=limit, standard_version_id=standard_version_id)
+    query_embedding = None
+    if api_key:
+        try:
+            from carbongpt.repository.ingestion import create_embeddings
+            query_embedding = create_embeddings([q], api_key)[0]
+        except Exception:
+            pass
+
+    if mode == "hybrid":
+        results = hybrid_search(
+            q, query_embedding, limit=limit,
+            standard_version_id=standard_version_id,
+            semantic_weight=semantic_weight, keyword_weight=keyword_weight,
+        )
+    else:
+        if query_embedding is None:
+            raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for semantic search.")
+        results = search_chunks(query_embedding, limit=limit, standard_version_id=standard_version_id)
     return results
+
+
+@router.get("/search-documents")
+def search_docs_fts(q: str, limit: int = 20, standard_version_id: int = None, category: str = None):
+    from carbongpt.repository.store import search_documents_fts
+    results = search_documents_fts(q, limit=limit, standard_version_id=standard_version_id, category=category)
+    return results
+
+
+@router.post("/backfill-metadata")
+def backfill_chunk_metadata():
+    import json
+    from carbongpt.repository.db import get_cursor
+    from carbongpt.repository.store import (
+        get_document, get_section_ids_for_document, update_search_vector
+    )
+
+    updated_chunks = 0
+    updated_docs = 0
+
+    with get_cursor() as cur:
+        cur.execute("SELECT DISTINCT document_id FROM document_chunks")
+        doc_ids = [r["document_id"] for r in cur.fetchall()]
+
+    for doc_id in doc_ids:
+        doc = get_document(doc_id)
+        if not doc:
+            continue
+
+        sections = get_section_ids_for_document(doc_id)
+        section_map = {s["id"]: s for s in sections}
+
+        doc_meta = {
+            "document_title": doc.get("title", ""),
+            "document_category": doc.get("category", ""),
+            "standard_name": doc.get("standard_name") or doc.get("auto_detected_standard", ""),
+            "reference_id": doc.get("reference_id", ""),
+        }
+
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT id, section_id, metadata FROM document_chunks WHERE document_id = %s",
+                (doc_id,)
+            )
+            chunks = cur.fetchall()
+
+        for chunk in chunks:
+            existing_meta = chunk["metadata"]
+            if isinstance(existing_meta, str):
+                try:
+                    existing_meta = json.loads(existing_meta)
+                except Exception:
+                    existing_meta = {}
+            elif existing_meta is None:
+                existing_meta = {}
+
+            new_meta = {**existing_meta, **doc_meta}
+
+            sec_id = chunk["section_id"]
+            if sec_id and sec_id in section_map:
+                sec = section_map[sec_id]
+                new_meta["section_number"] = sec.get("section_number")
+                new_meta["section_title"] = sec.get("title", "")
+
+            with get_cursor() as cur:
+                cur.execute(
+                    "UPDATE document_chunks SET metadata = %s, "
+                    "search_vector = to_tsvector('english', content) WHERE id = %s",
+                    (json.dumps(new_meta), chunk["id"])
+                )
+            updated_chunks += 1
+
+        update_search_vector(doc_id)
+        updated_docs += 1
+
+    return {
+        "updated_documents": updated_docs,
+        "updated_chunks": updated_chunks,
+    }
 
 
 @router.get("/compliance-rules")

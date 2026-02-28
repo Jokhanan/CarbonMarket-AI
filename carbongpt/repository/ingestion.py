@@ -204,6 +204,106 @@ def detect_document_metadata(text_preview: str, api_key: str) -> dict:
     return json.loads(content)
 
 
+def _assign_chunks_to_sections(chunks, sections, section_ids, full_text=""):
+    if not sections or not section_ids:
+        return chunks
+
+    section_boundaries = []
+    full_tokens = _enc.encode(full_text) if full_text else []
+    full_text_lower = full_text.lower() if full_text else ""
+
+    search_start = 0
+    for i, sec in enumerate(sections):
+        sec_content = sec.get("content", "")
+        sec_title = sec.get("title", "")
+        marker = sec_content[:80].strip() if sec_content else sec_title
+        marker_lower = marker.lower()
+
+        char_pos = full_text_lower.find(marker_lower, search_start)
+        if char_pos < 0:
+            char_pos = search_start
+
+        prefix = full_text[:char_pos]
+        prefix_tokens = len(_enc.encode(prefix))
+
+        heading_text = sec_title + "\n" if sec_title else ""
+        sec_combined = heading_text + sec_content
+        sec_tokens = count_tokens(sec_combined)
+
+        section_boundaries.append({
+            "section_id": section_ids[i],
+            "section_number": sec.get("number"),
+            "section_title": sec_title,
+            "start_token": prefix_tokens,
+            "end_token": prefix_tokens + sec_tokens,
+        })
+        search_start = char_pos + len(marker)
+
+    for chunk in chunks:
+        chunk_start = chunk["chunk_index"] * (CHUNK_SIZE - CHUNK_OVERLAP)
+        chunk_end = chunk_start + chunk.get("token_count", CHUNK_SIZE)
+        best_section = None
+        best_overlap = 0
+        for sb in section_boundaries:
+            overlap_start = max(chunk_start, sb["start_token"])
+            overlap_end = min(chunk_end, sb["end_token"])
+            overlap = max(0, overlap_end - overlap_start)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_section = sb
+        if best_section:
+            chunk["section_id"] = best_section["section_id"]
+            chunk["metadata"] = {
+                **(chunk.get("metadata") or {}),
+                "section_number": best_section["section_number"],
+                "section_title": best_section["section_title"],
+            }
+    return chunks
+
+
+def _build_chunk_metadata(chunk, doc_info):
+    meta = chunk.get("metadata") or {}
+    if doc_info:
+        meta["document_title"] = doc_info.get("title", "")
+        meta["document_category"] = doc_info.get("category", "")
+        meta["standard_name"] = doc_info.get("standard_name") or doc_info.get("auto_detected_standard", "")
+        meta["reference_id"] = doc_info.get("reference_id", "")
+    chunk["metadata"] = meta
+    return chunk
+
+
+def generate_document_summary(text_preview: str, api_key: str) -> str:
+    import requests
+    import json
+
+    prompt = (
+        "Write a concise 2-3 sentence summary of this carbon credit document. "
+        "Include: what type of document it is, which standard/methodology it relates to, "
+        "the project type or sector, and key topics covered.\n\n"
+        f"Document text (first ~3000 words):\n{text_preview[:12000]}"
+    )
+
+    resp = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "You are a carbon credit standards expert. Summarize documents concisely."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0,
+            "max_tokens": 200,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 def ingest_document(doc_id: int, file_path: str, api_key: str = None):
     from carbongpt.repository import store
 
@@ -219,7 +319,7 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
         page_count = extracted["page_count"]
         word_count = extracted["word_count"]
 
-        store.save_sections(doc_id, sections)
+        section_ids = store.save_sections(doc_id, sections)
 
         if api_key:
             try:
@@ -235,7 +335,19 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
             except Exception as e:
                 logger.warning("Auto-detection failed for doc %s: %s", doc_id, e)
 
+            try:
+                summary = generate_document_summary(full_text[:12000], api_key)
+                store.update_document_summary(doc_id, summary)
+            except Exception as e:
+                logger.warning("Summary generation failed for doc %s: %s", doc_id, e)
+
         chunks = chunk_text(full_text)
+
+        chunks = _assign_chunks_to_sections(chunks, sections, section_ids, full_text)
+
+        doc_info = store.get_document(doc_id)
+        for chunk in chunks:
+            _build_chunk_metadata(chunk, doc_info)
 
         if api_key:
             try:
@@ -248,6 +360,8 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
                 logger.warning("Embedding creation failed for doc %s: %s", doc_id, e)
 
         store.save_chunks(doc_id, chunks)
+
+        store.update_search_vector(doc_id)
 
         store.update_document_ingestion(doc_id, "completed",
                                          page_count=page_count, word_count=word_count)

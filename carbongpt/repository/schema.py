@@ -108,12 +108,23 @@ CREATE TABLE IF NOT EXISTS compliance_rules (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+ALTER TABLE document_sections ADD COLUMN IF NOT EXISTS section_path TEXT;
+
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
 CREATE INDEX IF NOT EXISTS idx_documents_standard_version ON documents(standard_version_id);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 CREATE INDEX IF NOT EXISTS idx_documents_ingestion_status ON documents(ingestion_status);
+CREATE INDEX IF NOT EXISTS idx_documents_reference_id ON documents(reference_id);
+CREATE INDEX IF NOT EXISTS idx_documents_search_vector ON documents USING GIN(search_vector);
 CREATE INDEX IF NOT EXISTS idx_document_sections_document ON document_sections(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_section ON document_chunks(section_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_metadata ON document_chunks USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector ON document_chunks USING GIN(search_vector);
 CREATE INDEX IF NOT EXISTS idx_compliance_rules_standard ON compliance_rules(standard_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_rules_type ON compliance_rules(rule_type);
 CREATE INDEX IF NOT EXISTS idx_compliance_rules_status ON compliance_rules(status);

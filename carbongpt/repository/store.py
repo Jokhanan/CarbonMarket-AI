@@ -231,25 +231,36 @@ def delete_document(doc_id):
 def save_sections(doc_id, sections):
     with get_cursor() as cur:
         cur.execute("DELETE FROM document_sections WHERE document_id = %s", (doc_id,))
+        section_ids = []
         for i, sec in enumerate(sections):
+            number = sec.get("number")
+            title = sec.get("title", "")
+            section_path = f"{number} {title}".strip() if number else title
             cur.execute(
                 "INSERT INTO document_sections (document_id, section_number, title, content, "
-                "section_order, word_count) VALUES (%s, %s, %s, %s, %s, %s)",
-                (doc_id, sec.get("number"), sec.get("title"), sec["content"],
-                 i, len(sec["content"].split()))
+                "section_order, word_count, section_path) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (doc_id, number, title, sec["content"],
+                 i, len(sec["content"].split()), section_path)
             )
+            row = cur.fetchone()
+            section_ids.append(row["id"] if row else None)
+        return section_ids
 
 
 def save_chunks(doc_id, chunks):
+    import json
     with get_cursor() as cur:
         cur.execute("DELETE FROM document_chunks WHERE document_id = %s", (doc_id,))
         for chunk in chunks:
             embedding = chunk.get("embedding")
+            metadata = chunk.get("metadata", {})
+            metadata_json = json.dumps(metadata) if isinstance(metadata, dict) else metadata
             cur.execute(
                 "INSERT INTO document_chunks (document_id, section_id, chunk_index, content, "
-                "token_count, embedding, metadata) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "token_count, embedding, metadata, search_vector) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, to_tsvector('english', %s))",
                 (doc_id, chunk.get("section_id"), chunk["chunk_index"], chunk["content"],
-                 chunk.get("token_count"), embedding, '{}')
+                 chunk.get("token_count"), embedding, metadata_json, chunk["content"])
             )
 
 
@@ -281,6 +292,158 @@ def search_chunks(query_embedding, limit=10, standard_version_id=None, category=
             f"ORDER BY dc.embedding <=> %s::vector "
             f"LIMIT %s",
             query_params
+        )
+        return cur.fetchall()
+
+
+def full_text_search(query_text, limit=10, standard_version_id=None, category=None):
+    with get_cursor() as cur:
+        filter_conditions = []
+        filter_params = []
+        if standard_version_id:
+            filter_conditions.append("d.standard_version_id = %s")
+            filter_params.append(standard_version_id)
+        if category:
+            filter_conditions.append("d.category = %s")
+            filter_params.append(category)
+        where_extra = ""
+        if filter_conditions:
+            where_extra = "AND " + " AND ".join(filter_conditions)
+        ts_query = " & ".join(w for w in query_text.split() if len(w) > 1)
+        if not ts_query:
+            return []
+        filter_params.extend([ts_query, ts_query, limit])
+        cur.execute(
+            f"SELECT dc.id, dc.content, dc.metadata, dc.token_count, "
+            f"d.title as document_title, d.category as document_category, "
+            f"s.name as standard_name, sv.version as standard_version, "
+            f"ts_rank(COALESCE(dc.search_vector, to_tsvector('english', dc.content)), to_tsquery('english', %s)) AS rank "
+            f"FROM document_chunks dc "
+            f"JOIN documents d ON dc.document_id = d.id "
+            f"LEFT JOIN standard_versions sv ON d.standard_version_id = sv.id "
+            f"LEFT JOIN standards s ON sv.standard_id = s.id "
+            f"WHERE COALESCE(dc.search_vector, to_tsvector('english', dc.content)) @@ to_tsquery('english', %s) {where_extra} "
+            f"ORDER BY rank DESC "
+            f"LIMIT %s",
+            filter_params
+        )
+        return cur.fetchall()
+
+
+def hybrid_search(query_text, query_embedding=None, limit=10,
+                  standard_version_id=None, category=None,
+                  semantic_weight=0.7, keyword_weight=0.3):
+    if query_embedding is not None:
+        semantic_results = search_chunks(
+            query_embedding, limit=limit * 2,
+            standard_version_id=standard_version_id, category=category,
+        )
+    else:
+        semantic_results = []
+        semantic_weight = 0.0
+        keyword_weight = 1.0
+
+    keyword_results = full_text_search(
+        query_text, limit=limit * 2,
+        standard_version_id=standard_version_id, category=category,
+    )
+
+    scored = {}
+    if semantic_results:
+        max_dist = max(r.get("distance", 1.0) for r in semantic_results) or 1.0
+        for r in semantic_results:
+            dist = r.get("distance", 1.0)
+            sem_score = max(0, 1 - dist / max_dist) if max_dist > 0 else 0
+            scored[r["id"]] = {
+                **r,
+                "semantic_score": sem_score,
+                "keyword_score": 0,
+            }
+
+    if keyword_results:
+        max_rank = max(r.get("rank", 0) for r in keyword_results) or 1.0
+        for r in keyword_results:
+            rank = r.get("rank", 0)
+            kw_score = rank / max_rank if max_rank > 0 else 0
+            if r["id"] in scored:
+                scored[r["id"]]["keyword_score"] = kw_score
+            else:
+                scored[r["id"]] = {
+                    **r,
+                    "semantic_score": 0,
+                    "keyword_score": kw_score,
+                }
+
+    for item in scored.values():
+        item["combined_score"] = (
+            semantic_weight * item["semantic_score"]
+            + keyword_weight * item["keyword_score"]
+        )
+
+    ranked = sorted(scored.values(), key=lambda x: x["combined_score"], reverse=True)
+    return ranked[:limit]
+
+
+def update_document_summary(doc_id, summary):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE documents SET summary = %s, updated_at = NOW() WHERE id = %s",
+            (summary, doc_id)
+        )
+
+
+def update_search_vector(doc_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE documents SET search_vector = ("
+            "  setweight(to_tsvector('english', COALESCE(title, '')), 'A') || "
+            "  setweight(to_tsvector('english', COALESCE(summary, '')), 'B') || "
+            "  setweight(to_tsvector('english', COALESCE(reference_id, '')), 'A') || "
+            "  setweight(to_tsvector('english', COALESCE(auto_detected_applicability, '')), 'C')"
+            ") WHERE id = %s",
+            (doc_id,)
+        )
+
+
+def search_documents_fts(query_text, limit=20, standard_version_id=None, category=None):
+    with get_cursor() as cur:
+        filter_conditions = []
+        filter_params = []
+        if standard_version_id:
+            filter_conditions.append("d.standard_version_id = %s")
+            filter_params.append(standard_version_id)
+        if category:
+            filter_conditions.append("d.category = %s")
+            filter_params.append(category)
+        where_extra = ""
+        if filter_conditions:
+            where_extra = "AND " + " AND ".join(filter_conditions)
+        ts_query = " & ".join(w for w in query_text.split() if len(w) > 1)
+        if not ts_query:
+            return []
+        filter_params.extend([ts_query, ts_query, limit])
+        cur.execute(
+            f"SELECT d.id, d.title, d.category, d.reference_id, d.summary, "
+            f"d.word_count, d.page_count, d.ingestion_status, "
+            f"s.name as standard_name, sv.version as standard_version, "
+            f"ts_rank(d.search_vector, to_tsquery('english', %s)) AS rank "
+            f"FROM documents d "
+            f"LEFT JOIN standard_versions sv ON d.standard_version_id = sv.id "
+            f"LEFT JOIN standards s ON sv.standard_id = s.id "
+            f"WHERE d.search_vector @@ to_tsquery('english', %s) {where_extra} "
+            f"ORDER BY rank DESC "
+            f"LIMIT %s",
+            filter_params
+        )
+        return cur.fetchall()
+
+
+def get_section_ids_for_document(doc_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, section_number, title, section_order, section_path "
+            "FROM document_sections WHERE document_id = %s ORDER BY section_order",
+            (doc_id,)
         )
         return cur.fetchall()
 

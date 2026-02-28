@@ -55,21 +55,36 @@ def retrieve_section_context(
         return []
 
     try:
-        results = search_chunks(
-            query_embedding,
+        from carbongpt.repository.store import hybrid_search
+        results = hybrid_search(
+            query_text=query,
+            query_embedding=query_embedding,
             limit=MAX_CHUNKS_PER_QUERY,
         )
-    except Exception as e:
-        logger.warning("Failed to search repository: %s", e)
-        return []
+        is_hybrid = True
+    except Exception:
+        try:
+            results = search_chunks(
+                query_embedding,
+                limit=MAX_CHUNKS_PER_QUERY,
+            )
+            is_hybrid = False
+        except Exception as e:
+            logger.warning("Failed to search repository: %s", e)
+            return []
 
     std_label = STANDARD_SLUG_MAP.get(standard, standard)
     context_chunks = []
     total_tokens = 0
     for r in results:
-        distance = r.get("distance", 1.0)
-        if distance > MAX_DISTANCE:
-            continue
+        if is_hybrid:
+            score = r.get("combined_score", 0)
+            relevance = round(min(1.0, score), 2)
+        else:
+            distance = r.get("distance", 1.0)
+            if distance > MAX_DISTANCE:
+                continue
+            relevance = round(max(0, 1 - distance), 2)
 
         chunk_std = r.get("standard_name", "")
         if chunk_std and chunk_std != std_label:
@@ -79,12 +94,25 @@ def retrieve_section_context(
         if total_tokens + token_count > MAX_CONTEXT_TOKENS:
             break
 
+        meta = r.get("metadata", {})
+        if isinstance(meta, str):
+            import json
+            try:
+                meta = json.loads(meta)
+            except Exception:
+                meta = {}
+
+        source = r.get("document_title", "Unknown")
+        section_info = meta.get("section_title", "")
+        if section_info:
+            source = f"{source} > {section_info}"
+
         context_chunks.append({
             "content": r["content"],
-            "source": r.get("document_title", "Unknown"),
+            "source": source,
             "category": r.get("document_category", ""),
             "standard": chunk_std,
-            "relevance": round(max(0, 1 - distance), 2),
+            "relevance": relevance,
         })
         total_tokens += token_count
 
