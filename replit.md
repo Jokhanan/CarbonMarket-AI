@@ -185,18 +185,37 @@ Real-time web search integration for discovering compliance-relevant information
 - **UI**: "Web Intelligence" tab in Document Repository page with methodology verification
   and knowledge refresh controls
 
-### Methodology Sync
+### Document Sync (expanded)
 
-Automated download of methodology documents from public standard body catalogs:
-- **Verra VCS**: Scrapes verra.org/methodologies catalog, downloads methodology PDFs (VM series)
-- **CDM/UNFCCC**: Fetches from cdm.unfccc.int approved methodology listings (AM, AMS, ACM series)
-- **Gold Standard**: Downloads from goldstandard.org standard documents page
-- **Deduplication**: Uses reference_id (e.g., `verra_VM0001`) to skip already-stored documents
-- **Auto-ingestion**: Downloaded PDFs are automatically parsed, chunked, and embedded if OpenAI key is set
-- **Rate limiting**: 2-second delay between requests to respect source websites
-- **Weekly scheduler**: Set `CARBONGPT_AUTO_SYNC=true` to enable automatic weekly sync
-  (interval configurable via `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168 = 7 days)
-- **UI**: "Methodology Sync" tab with dry-run preview, source selection, and sync status dashboard
+Automated download of methodologies, program standards, guides, templates, and project
+documents from public standard body catalogs and registries:
+
+**Verra VCS** (~30+ documents):
+- Methodology PDFs via WordPress REST API (VM/VMR series, all active + in-revision)
+- VCS Standard v4.7 (standard_text)
+- VCS Program Guide, Registration & Issuance Process, Methodology Requirements (guidance)
+- AFOLU Non-Permanence Risk Tool (tool)
+- Optional: real project docs from Verra Registry (PDs, MRs, validation/verification reports)
+
+**CDM/UNFCCC** (~12+ documents):
+- CDM Methodology Booklet (all approved methodologies)
+- CDM Methodological Tools (additionality, baseline, emission factors, etc.)
+
+**Gold Standard** (~23+ documents):
+- Sector methodologies (cooking, A/R, mangroves, SOC, WASH, etc.)
+- Principles & Requirements v2.0 (standard_text)
+- Safeguarding, Stakeholder Consultation, GHG Outcomes, SDG Impact, VVB, PoA, Activity
+  Requirements, Crediting Period (guidance)
+- MR Guide, PDD Guide, Validation/Verification Report Guides (template)
+
+**Features:**
+- WordPress API integration for Verra (bypasses JavaScript pagination, discovers all methodologies)
+- Deduplication via reference_id (e.g., `verra_VM0001`, `goldstandard_GS_PRINCIPLES_REQUIREMENTS`)
+- Auto-ingestion: downloaded PDFs are parsed, chunked, and embedded if OpenAI key is set
+- Rate limiting: 2-second delay between requests
+- Weekly scheduler: `CARBONGPT_AUTO_SYNC=true` (interval: `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168)
+- Optional registry project scanning: real PDs, MRs, validation/verification reports from Verra
+- UI: "Document Sync" tab with dry-run preview, source selection, program/registry toggles
 
 ## Tech Stack
 

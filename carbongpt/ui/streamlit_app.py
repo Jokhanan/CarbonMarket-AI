@@ -758,18 +758,18 @@ def _render_compliance_rules():
 
 
 def _render_methodology_sync():
-    st.subheader("Methodology Sync")
+    st.subheader("Document Sync")
     st.markdown(
-        "Download methodology documents from Verra, CDM/UNFCCC, and Gold Standard "
-        "public catalogs. Documents are stored in the repository, parsed, and embedded "
-        "for use in AI-powered reviews."
+        "Download program standards, methodologies, guides, templates, and project "
+        "documents from Verra, CDM/UNFCCC, and Gold Standard public catalogs and registries. "
+        "Documents are stored in the repository, parsed, and embedded for AI-powered reviews."
     )
 
     status = _fetch("/admin/methodology-sync/status")
     if status:
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            st.metric("Total Methodologies", status.get("total_methodologies", 0))
+            st.metric("Total Documents", status.get("total_documents", 0))
         with col2:
             by_source = status.get("by_source", {})
             st.metric("Verra", by_source.get("verra", 0))
@@ -777,6 +777,15 @@ def _render_methodology_sync():
             st.metric("CDM", by_source.get("cdm", 0))
         with col4:
             st.metric("Gold Standard", by_source.get("goldstandard", 0))
+        with col5:
+            st.metric("Manual", by_source.get("manual", 0))
+
+        by_category = status.get("by_category", {})
+        if by_category:
+            cat_parts = []
+            for cat, count in sorted(by_category.items()):
+                cat_parts.append(f"{cat}: {count}")
+            st.markdown(f"**By category:** {' | '.join(cat_parts)}")
 
         scheduler_status = "Active" if status.get("scheduler_active") else "Inactive"
         interval = status.get("sync_interval_hours", 168)
@@ -806,19 +815,43 @@ def _render_methodology_sync():
         )
 
         max_per_source = st.slider(
-            "Max methodologies per source",
+            "Max documents per source",
             min_value=5,
-            max_value=100,
-            value=20,
+            max_value=200,
+            value=50,
             step=5,
             key="sync_max",
         )
+
+        include_program = st.checkbox(
+            "Include program standards, guides, and templates",
+            value=True,
+            key="sync_program_docs",
+        )
+
+        include_registry = st.checkbox(
+            "Include real project documents from registries (PDs, MRs, validation/verification reports)",
+            value=False,
+            key="sync_registry",
+        )
+
+        if include_registry:
+            max_projects = st.slider(
+                "Max registry projects to scan",
+                min_value=1,
+                max_value=10,
+                value=5,
+                step=1,
+                key="sync_max_projects",
+            )
+        else:
+            max_projects = 5
 
         dry_run = st.checkbox("Dry run (preview only, no downloads)", value=True, key="sync_dry_run")
 
         if st.button("Start Sync", key="sync_start_btn"):
             sources = [source_options[s] for s in selected_sources]
-            with st.spinner("Syncing methodologies (this may take several minutes)..."):
+            with st.spinner("Syncing documents (this may take several minutes)..."):
                 result = _fetch(
                     "/admin/methodology-sync",
                     method="POST",
@@ -826,6 +859,9 @@ def _render_methodology_sync():
                         "sources": sources,
                         "max_per_source": max_per_source,
                         "dry_run": dry_run,
+                        "include_program_docs": include_program,
+                        "include_registry_projects": include_registry,
+                        "max_registry_projects": max_projects,
                     },
                 )
 
@@ -841,46 +877,54 @@ def _render_methodology_sync():
                 details = result.get("details", [])
                 if details:
                     status_counts = {}
+                    category_counts = {}
                     for d in details:
                         s = d.get("status", "unknown")
                         status_counts[s] = status_counts.get(s, 0) + 1
-                    st.markdown("**Breakdown by status:**")
+                        cat = d.get("category", "unknown")
+                        category_counts[cat] = category_counts.get(cat, 0) + 1
+
+                    st.markdown("**By status:**")
                     for s, count in sorted(status_counts.items()):
                         st.markdown(f"- {s}: {count}")
 
+                    st.markdown("**By type:**")
+                    for cat, count in sorted(category_counts.items()):
+                        st.markdown(f"- {cat}: {count}")
+
                     with st.expander("Details", expanded=False):
-                        for d in details[:50]:
+                        for d in details[:80]:
                             status_label = d.get("status", "unknown")
                             code = d.get("code", "?")
                             source = d.get("source", "?")
-                            line = f"[{source}] {code}: {status_label}"
+                            cat = d.get("category", "")
+                            title = d.get("title", "")
+                            line = f"[{source}/{cat}] {code}: {status_label}"
+                            if title:
+                                line += f" - {title[:60]}"
                             if d.get("doc_id"):
                                 line += f" (doc #{d['doc_id']})"
-                            if d.get("pdf_url"):
-                                line += f" - {d['pdf_url']}"
                             st.text(line)
-                        if len(details) > 50:
-                            st.text(f"... and {len(details) - 50} more")
+                        if len(details) > 80:
+                            st.text(f"... and {len(details) - 80} more")
             else:
                 st.error("Sync failed.")
 
     with col_config:
-        st.markdown("#### Configuration")
+        st.markdown("#### What Gets Downloaded")
         st.markdown(
-            "**Environment variables:**\n"
-            "- `CARBONGPT_AUTO_SYNC=true` - Enable weekly automatic sync\n"
-            "- `CARBONGPT_SYNC_INTERVAL_HOURS=168` - Sync interval (default: 168 = 7 days)\n"
-            "- `OPENAI_API_KEY` - Required for automatic ingestion (parsing + embedding)\n\n"
-            "**How it works:**\n"
-            "1. Fetches the public methodology catalog from each standard body\n"
-            "2. Identifies methodology PDFs available for download\n"
-            "3. Downloads new/updated documents (skips already-stored ones)\n"
-            "4. Stores in the document repository with proper metadata\n"
-            "5. Automatically ingests (parse, chunk, embed) if OpenAI key is set\n\n"
-            "**Rate limiting:** The sync respects a 2-second delay between requests "
-            "to avoid overloading source websites.\n\n"
-            "**Tip:** Run a dry-run first to preview what would be downloaded before "
-            "committing to a full sync."
+            "**Methodologies** - Active VM/VMR methodologies (Verra), CDM tools and "
+            "methodology booklet, Gold Standard sector methodologies\n\n"
+            "**Program Standards & Guides** - VCS Standard, Program Guide, Registration "
+            "Process, Methodology Requirements, AFOLU Non-Permanence Risk Tool, "
+            "GS Principles & Requirements, Safeguarding, Stakeholder Consultation, "
+            "VVB Requirements, CDM Glossary, Validation Standard\n\n"
+            "**Templates** - PD, MR, and ValVer report templates (Verra), "
+            "MR/PDD/Validation/Verification guides (Gold Standard), CDM PDD form\n\n"
+            "**Registry Projects** (optional) - Real project descriptions, monitoring reports, "
+            "and validation/verification reports from the Verra public registry\n\n"
+            "**Rate limiting:** 2-second delay between requests. "
+            "Run dry-run first to preview."
         )
 
 

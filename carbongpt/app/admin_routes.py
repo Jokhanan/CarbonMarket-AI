@@ -447,6 +447,9 @@ class MethodologySyncRequest(BaseModel):
     sources: list[str] = ["verra", "cdm", "goldstandard"]
     max_per_source: int = 50
     dry_run: bool = False
+    include_program_docs: bool = True
+    include_registry_projects: bool = False
+    max_registry_projects: int = 5
 
 
 @router.post("/methodology-sync")
@@ -461,6 +464,9 @@ def run_methodology_sync(data: MethodologySyncRequest):
         sources=data.sources,
         max_per_source=data.max_per_source,
         dry_run=data.dry_run,
+        include_program_docs=data.include_program_docs,
+        include_registry_projects=data.include_registry_projects,
+        max_registry_projects=data.max_registry_projects,
     )
     return result
 
@@ -469,23 +475,33 @@ def run_methodology_sync(data: MethodologySyncRequest):
 def get_sync_status():
     from carbongpt.repository.methodology_sync import _scheduler_started
     from carbongpt.repository.store import list_documents
-    all_docs = list_documents(category="methodology") or []
-    sources = {}
+    all_docs = list_documents() or []
+
+    by_source = {}
+    by_category = {}
     for doc in all_docs:
         ref = doc.get("reference_id", "") or ""
+        cat = doc.get("category", "unknown")
+        by_category.setdefault(cat, 0)
+        by_category[cat] += 1
+
         if ref.startswith("verra_"):
-            sources.setdefault("verra", 0)
-            sources["verra"] += 1
+            by_source.setdefault("verra", 0)
+            by_source["verra"] += 1
         elif ref.startswith("cdm_"):
-            sources.setdefault("cdm", 0)
-            sources["cdm"] += 1
+            by_source.setdefault("cdm", 0)
+            by_source["cdm"] += 1
         elif ref.startswith("goldstandard_"):
-            sources.setdefault("goldstandard", 0)
-            sources["goldstandard"] += 1
+            by_source.setdefault("goldstandard", 0)
+            by_source["goldstandard"] += 1
+        else:
+            by_source.setdefault("manual", 0)
+            by_source["manual"] += 1
 
     return {
         "scheduler_active": _scheduler_started,
-        "total_methodologies": len(all_docs),
-        "by_source": sources,
+        "total_documents": len(all_docs),
+        "by_source": by_source,
+        "by_category": by_category,
         "sync_interval_hours": int(os.getenv("CARBONGPT_SYNC_INTERVAL_HOURS", "168")),
     }
