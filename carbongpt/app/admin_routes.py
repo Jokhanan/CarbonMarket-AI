@@ -450,6 +450,7 @@ class MethodologySyncRequest(BaseModel):
     include_program_docs: bool = True
     include_registry_projects: bool = False
     max_registry_projects: int = 5
+    discover_projects: bool = False
 
 
 @router.post("/methodology-sync")
@@ -467,6 +468,7 @@ def run_methodology_sync(data: MethodologySyncRequest):
         include_program_docs=data.include_program_docs,
         include_registry_projects=data.include_registry_projects,
         max_registry_projects=data.max_registry_projects,
+        discover_projects=data.discover_projects,
     )
     return result
 

@@ -839,13 +839,24 @@ def _render_methodology_sync():
             max_projects = st.slider(
                 "Max registry projects to scan",
                 min_value=1,
-                max_value=10,
-                value=5,
-                step=1,
+                max_value=500,
+                value=10,
+                step=5,
                 key="sync_max_projects",
+            )
+            discover_projects = st.checkbox(
+                "Auto-discover projects (scan registries for new project IDs instead of using seed list)",
+                value=max_projects > 10,
+                key="sync_discover",
+            )
+            st.caption(
+                "Verra: direct PDF download from registry. "
+                "Gold Standard: document metadata scraped (downloads require auth -- metadata indexed for reference). "
+                f"Scanning {max_projects} projects takes ~{max_projects * 3 // 60 + 1} minutes."
             )
         else:
             max_projects = 5
+            discover_projects = False
 
         dry_run = st.checkbox("Dry run (preview only, no downloads)", value=True, key="sync_dry_run")
 
@@ -862,16 +873,19 @@ def _render_methodology_sync():
                         "include_program_docs": include_program,
                         "include_registry_projects": include_registry,
                         "max_registry_projects": max_projects,
+                        "discover_projects": discover_projects,
                     },
                 )
 
             if result:
+                skipped = result.get('skipped_no_download', 0)
+                skipped_msg = f", {skipped} metadata-only" if skipped else ""
                 st.success(
                     f"Sync complete: {result.get('total_found', 0)} found, "
                     f"{result.get('already_stored', 0)} already stored, "
                     f"{result.get('newly_downloaded', 0)} newly downloaded, "
                     f"{result.get('ingestion_started', 0)} ingestion started, "
-                    f"{result.get('errors', 0)} errors"
+                    f"{result.get('errors', 0)} errors{skipped_msg}"
                 )
 
                 details = result.get("details", [])
