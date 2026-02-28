@@ -364,3 +364,80 @@ def check_methodology(methodology: str = Form(...), standard_slug: str = Form("v
     from carbongpt.repository.store import check_methodology_rules
     matches = check_methodology_rules(methodology, standard_slug)
     return {"methodology": methodology, "standard": standard_slug, "matching_rules": matches}
+
+
+class WebVerifyRequest(BaseModel):
+    methodology: str = Field(..., min_length=1)
+    standard: str = "Verra VCS"
+    standard_id: int = None
+
+
+class KnowledgeRefreshRequest(BaseModel):
+    standard: str = "Verra VCS"
+    standard_id: int = None
+    topics: list[str] = None
+    auto_save: bool = False
+
+
+@router.post("/web-intelligence/verify-methodology")
+def verify_methodology_via_web(data: WebVerifyRequest):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+
+    from carbongpt.core.web_intelligence import verify_methodology_status
+    result = verify_methodology_status(data.methodology, data.standard)
+    if not result:
+        raise HTTPException(status_code=500, detail="Web verification failed.")
+    return {"methodology": data.methodology, "standard": data.standard, "result": result}
+
+
+@router.post("/web-intelligence/propose-rule")
+def propose_rule_from_web(data: WebVerifyRequest):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+
+    from carbongpt.core.web_intelligence import propose_compliance_rule_from_web
+    proposed = propose_compliance_rule_from_web(data.methodology, data.standard, data.standard_id)
+    if not proposed:
+        return {"methodology": data.methodology, "message": "No compliance issues found or rule already exists.", "proposed_rule": None}
+    return {"methodology": data.methodology, "proposed_rule": proposed}
+
+
+@router.post("/web-intelligence/knowledge-refresh")
+def run_knowledge_refresh(data: KnowledgeRefreshRequest):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+
+    from carbongpt.core.web_intelligence import research_standard_updates
+    proposed_rules = research_standard_updates(data.standard, data.standard_id, data.topics)
+
+    saved_count = 0
+    if data.auto_save and proposed_rules:
+        from carbongpt.repository.store import create_compliance_rule
+        for rule in proposed_rules:
+            try:
+                create_compliance_rule(
+                    rule_type=rule["rule_type"],
+                    severity=rule["severity"],
+                    title=rule["title"],
+                    description=rule["description"],
+                    conditions=rule.get("conditions", {}),
+                    standard_id=rule.get("standard_id"),
+                    source_url=rule.get("source_url"),
+                    source_description=rule.get("source_description"),
+                    status="proposed",
+                    discovered_by="web_search",
+                )
+                saved_count += 1
+            except Exception as e:
+                logger.warning("Could not save proposed rule '%s': %s", rule.get("title"), e)
+
+    return {
+        "standard": data.standard,
+        "proposed_rules": proposed_rules,
+        "total_found": len(proposed_rules),
+        "saved_count": saved_count,
+    }

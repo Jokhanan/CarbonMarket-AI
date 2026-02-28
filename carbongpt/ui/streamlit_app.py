@@ -5,7 +5,7 @@ import streamlit as st
 
 API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
-st.set_page_config(page_title="CarbonGPT", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="CarbonGPT", layout="wide")
 
 PAGES = ["Compliance Analyzer", "Document Repository"]
 
@@ -125,7 +125,7 @@ def _fetch(endpoint, method="GET", **kwargs):
         if method == "GET":
             resp = requests.get(url, timeout=10, **kwargs)
         elif method == "POST":
-            resp = requests.post(url, timeout=60, **kwargs)
+            resp = requests.post(url, timeout=120, **kwargs)
         elif method == "PATCH":
             resp = requests.patch(url, timeout=10, **kwargs)
         elif method == "DELETE":
@@ -350,11 +350,12 @@ def render_repository():
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Upload Documents",
         "Document Library",
         "Semantic Search",
         "Compliance Rules",
+        "Web Intelligence",
         "Manage Standards",
     ])
 
@@ -367,6 +368,8 @@ def render_repository():
     with tab4:
         _render_compliance_rules()
     with tab5:
+        _render_web_intelligence()
+    with tab6:
         _render_manage_standards()
 
 
@@ -749,6 +752,175 @@ def _render_compliance_rules():
                         st.rerun()
             else:
                 st.warning("Title and description are required.")
+
+
+def _render_web_intelligence():
+    st.subheader("Web Intelligence")
+    st.markdown(
+        "Search the web for methodology status updates, regulatory changes, "
+        "and compliance-relevant information. Findings can be saved as proposed "
+        "compliance rules for admin review."
+    )
+
+    col_verify, col_refresh = st.columns(2)
+
+    with col_verify:
+        st.markdown("#### Verify Methodology")
+        meth_input = st.text_input(
+            "Methodology ID",
+            placeholder="e.g. AMS-II.G, VM0050, VMR0006",
+            key="wi_meth_input",
+        )
+        standard_choice = st.selectbox(
+            "Standard",
+            ["Verra VCS", "Gold Standard", "CDM/UNFCCC"],
+            key="wi_standard",
+        )
+
+        standards = _fetch("/admin/standards") or []
+        std_id = None
+        for s in standards:
+            if standard_choice == "Verra VCS" and s.get("slug") == "verra":
+                std_id = s["id"]
+            elif standard_choice == "Gold Standard" and s.get("slug") == "goldstandard":
+                std_id = s["id"]
+
+        if st.button("Verify Status", key="wi_verify_btn", disabled=not meth_input):
+            with st.spinner("Searching web and analyzing..."):
+                result = _fetch(
+                    "/admin/web-intelligence/verify-methodology",
+                    method="POST",
+                    json={"methodology": meth_input, "standard": standard_choice, "standard_id": std_id},
+                )
+            if result and result.get("result"):
+                r = result["result"]
+                status = r.get("status", "unknown")
+                confidence = r.get("confidence", "unknown")
+
+                status_colors = {
+                    "approved": "green",
+                    "deprecated": "red",
+                    "transitioning": "orange",
+                    "conditional": "yellow",
+                    "unknown": "gray",
+                }
+                color = status_colors.get(status, "gray")
+                st.markdown(f"**Status:** :{color}[{status.upper()}] (confidence: {confidence})")
+                st.markdown(f"**Summary:** {r.get('summary', 'N/A')}")
+                if r.get("replacement"):
+                    st.info(f"Replacement: {r['replacement']}")
+                if r.get("deadline"):
+                    st.warning(f"Deadline: {r['deadline']}")
+                if r.get("source_url"):
+                    st.markdown(f"[Source]({r['source_url']})")
+
+                if r.get("proposed_rule_title"):
+                    st.divider()
+                    st.markdown("**Proposed compliance rule:**")
+                    st.markdown(f"- **{r['proposed_rule_title']}**")
+                    st.markdown(f"  {r.get('proposed_rule_description', '')}")
+                    if st.button("Save as Proposed Rule", key="wi_save_rule"):
+                        save_result = _fetch(
+                            "/admin/web-intelligence/propose-rule",
+                            method="POST",
+                            json={"methodology": meth_input, "standard": standard_choice, "standard_id": std_id},
+                        )
+                        if save_result and save_result.get("proposed_rule"):
+                            rule_data = save_result["proposed_rule"]
+                            create_result = _fetch("/admin/compliance-rules", method="POST", json=rule_data)
+                            if create_result and create_result.get("id"):
+                                st.success(f"Rule saved as proposed (ID: {create_result['id']}). Review it in the Compliance Rules tab.")
+                            else:
+                                st.error("Failed to save rule.")
+                        else:
+                            msg = save_result.get("message", "No rule to propose.") if save_result else "Request failed."
+                            st.info(msg)
+            else:
+                st.error("Verification failed. Check that OPENAI_API_KEY is set.")
+
+    with col_refresh:
+        st.markdown("#### Knowledge Refresh")
+        st.markdown(
+            "Search for recent regulatory updates across a standard. "
+            "Findings are saved as proposed rules for your review."
+        )
+        refresh_standard = st.selectbox(
+            "Standard to research",
+            ["Verra VCS", "Gold Standard", "CDM/UNFCCC"],
+            key="wi_refresh_standard",
+        )
+        custom_topics = st.text_area(
+            "Custom search topics (one per line, optional)",
+            placeholder="e.g.\nVCS buffer pool update 2025\nNew cookstove methodology M0174",
+            key="wi_custom_topics",
+            height=100,
+        )
+
+        refresh_std_id = None
+        for s in standards:
+            if refresh_standard == "Verra VCS" and s.get("slug") == "verra":
+                refresh_std_id = s["id"]
+            elif refresh_standard == "Gold Standard" and s.get("slug") == "goldstandard":
+                refresh_std_id = s["id"]
+
+        auto_save = st.checkbox("Auto-save findings as proposed rules", value=True, key="wi_auto_save")
+
+        if st.button("Run Knowledge Refresh", key="wi_refresh_btn"):
+            topics = None
+            if custom_topics.strip():
+                topics = [t.strip() for t in custom_topics.strip().split("\n") if t.strip()]
+
+            with st.spinner("Researching standard updates (this may take 30-60 seconds)..."):
+                result = _fetch(
+                    "/admin/web-intelligence/knowledge-refresh",
+                    method="POST",
+                    json={
+                        "standard": refresh_standard,
+                        "standard_id": refresh_std_id,
+                        "topics": topics,
+                        "auto_save": auto_save,
+                    },
+                )
+
+            if result:
+                total = result.get("total_found", 0)
+                saved = result.get("saved_count", 0)
+
+                if total == 0:
+                    st.info("No new compliance-relevant findings discovered.")
+                else:
+                    st.success(f"Found {total} potential update(s). {saved} saved as proposed rules.")
+                    for i, rule in enumerate(result.get("proposed_rules", [])):
+                        sev = rule.get("severity", "info").upper()
+                        with st.expander(f"[{sev}] {rule.get('title', 'Untitled')}", expanded=(i < 3)):
+                            st.markdown(f"**Type:** {rule.get('rule_type', 'general')}")
+                            st.markdown(f"**Description:** {rule.get('description', 'N/A')}")
+                            if rule.get("source_url"):
+                                st.markdown(f"**Source:** [{rule['source_url']}]({rule['source_url']})")
+                            if rule.get("source_description"):
+                                st.markdown(f"**Source info:** {rule['source_description']}")
+            else:
+                st.error("Knowledge refresh failed. Check that OPENAI_API_KEY is set.")
+
+    st.divider()
+    st.markdown("#### Web Search Configuration")
+    serper_status = "Configured" if os.environ.get("SERPER_API_KEY") else "Not configured"
+    openai_status = "Configured" if os.environ.get("OPENAI_API_KEY") else "Not configured"
+    web_search_enabled = os.environ.get("CARBONGPT_WEB_SEARCH", "").lower() in ("1", "true", "yes")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("OpenAI API", openai_status)
+    with col2:
+        st.metric("Serper Search API", serper_status)
+    with col3:
+        st.metric("Auto Web Search in Reviews", "Enabled" if web_search_enabled else "Disabled")
+
+    st.markdown(
+        "**Setup:** Set `SERPER_API_KEY` for web search (get one at [serper.dev](https://serper.dev)). "
+        "Set `CARBONGPT_WEB_SEARCH=true` to enable automatic web search during AI reviews for "
+        "methodologies not found in the compliance rules database."
+    )
 
 
 def _render_manage_standards():

@@ -17,6 +17,7 @@ carbongpt/
 │   ├── ai_review_worker.py  Subprocess worker for async AI review
 │   ├── knowledge_retrieval.py  RAG: retrieves methodology/standard context from repo for AI review
 │   ├── compliance_checker.py   Compliance rules engine: methodology checks, regulatory alerts
+│   ├── web_intelligence.py    Web search integration for methodology verification & knowledge refresh
 │   └── task_store.py      File-backed task store (/tmp/carbongpt_tasks/)
 ├── repository/
 │   ├── db.py              PostgreSQL connection manager (psycopg2)
@@ -98,6 +99,9 @@ python -m pytest carbongpt/tests/ -v  # Tests
 | PATCH  | /admin/compliance-rules/{id}        | Update a compliance rule                          |
 | DELETE | /admin/compliance-rules/{id}        | Delete a compliance rule                          |
 | POST   | /admin/compliance-rules/check       | Check methodology against compliance rules        |
+| POST   | /admin/web-intelligence/verify-methodology | Verify methodology status via web search + AI |
+| POST   | /admin/web-intelligence/propose-rule       | Propose compliance rule from web research     |
+| POST   | /admin/web-intelligence/knowledge-refresh  | Research standard updates, propose rules      |
 
 ## Document Repository
 
@@ -161,6 +165,22 @@ Database-driven compliance intelligence that checks documents against verified r
 - **AI-discoverable**: Rules can be marked as "proposed" (by AI) and approved by admin
 - Seeded with 4 initial rules (AMS-II.G deprecation, VMR0006→M0174 transition, CDM methodology
   VCS approval requirement, VCS crediting period limits)
+
+### Web Intelligence
+
+Real-time web search integration for discovering compliance-relevant information:
+- **Methodology verification**: Look up any methodology's current status (approved, deprecated,
+  transitioning) using web search + AI analysis
+- **Knowledge refresh**: Batch search for regulatory updates across a standard, auto-propose
+  compliance rules from findings
+- **Review integration**: When `CARBONGPT_WEB_SEARCH=true`, the compliance checker automatically
+  searches the web for methodology references not found in the rules database during AI review
+- **Search provider**: Uses Serper.dev API (`SERPER_API_KEY` env var) for Google search results.
+  Falls back to AI knowledge only if no search key is set.
+- **Conservative by design**: Web-discovered findings are saved as "proposed" rules requiring
+  admin approval; low-confidence findings are discarded
+- **UI**: "Web Intelligence" tab in Document Repository page with methodology verification
+  and knowledge refresh controls
 
 ## Tech Stack
 

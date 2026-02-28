@@ -32,6 +32,17 @@ def extract_methodology_references(text: str) -> list[str]:
     return sorted(refs)
 
 
+def _resolve_standard_id(slug: str) -> int | None:
+    try:
+        from carbongpt.repository.store import list_standards
+        for s in list_standards():
+            if s.get("slug") == slug:
+                return s["id"]
+    except Exception:
+        pass
+    return None
+
+
 def check_document_compliance(document_text: str, standard: str = "GoldStandard") -> list[dict]:
     slug = STANDARD_SLUG_MAP.get(standard, standard.lower())
     findings = []
@@ -56,6 +67,36 @@ def check_document_compliance(document_text: str, standard: str = "GoldStandard"
                     })
         except Exception as e:
             logger.debug("Could not check methodology rules: %s", e)
+
+    if methodology_refs and os.getenv("CARBONGPT_WEB_SEARCH", "").lower() in ("1", "true", "yes"):
+        found_methodologies = {f.get("methodology") for f in findings if f.get("methodology")}
+        unchecked = [ref for ref in methodology_refs if ref not in found_methodologies]
+        if unchecked:
+            try:
+                from carbongpt.core.web_intelligence import propose_compliance_rule_from_web
+                standard_name_map = {
+                    "verra": "Verra VCS",
+                    "goldstandard": "Gold Standard",
+                    "cdm": "CDM/UNFCCC",
+                }
+                standard_name = standard_name_map.get(slug, standard)
+                standard_id = _resolve_standard_id(slug)
+                for ref in unchecked:
+                    proposed = propose_compliance_rule_from_web(ref, standard_name, standard_id)
+                    if proposed:
+                        findings.append({
+                            "type": "web_intelligence",
+                            "rule_type": proposed.get("rule_type", "general"),
+                            "severity": proposed.get("severity", "warning"),
+                            "title": proposed.get("title", f"Web intelligence: {ref}"),
+                            "description": proposed.get("description", ""),
+                            "methodology": ref,
+                            "source_url": proposed.get("source_url"),
+                            "source_description": proposed.get("source_description"),
+                            "proposed_rule": proposed,
+                        })
+            except Exception as e:
+                logger.debug("Web intelligence lookup failed: %s", e)
 
     try:
         from carbongpt.repository.store import get_active_rules_for_standard
@@ -118,5 +159,17 @@ def format_compliance_findings_for_prompt(findings: list[dict]) -> str:
         for f in infos:
             meth = f" (methodology: {f['methodology']})" if f.get("methodology") else ""
             parts.append(f"- {f['title']}{meth}: {f['description']}")
+
+    web_findings = [f for f in findings if f.get("type") == "web_intelligence"]
+    if web_findings:
+        parts.append(
+            "\n**WEB INTELLIGENCE (AI-researched, pending admin verification):**"
+        )
+        for f in web_findings:
+            meth = f" (methodology: {f['methodology']})" if f.get("methodology") else ""
+            sev = f["severity"].upper()
+            parts.append(f"- [{sev}] {f['title']}{meth}: {f['description']}")
+            if f.get("source_url"):
+                parts.append(f"  Source: {f['source_url']}")
 
     return "\n".join(parts)
