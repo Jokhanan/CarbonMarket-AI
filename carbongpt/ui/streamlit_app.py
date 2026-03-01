@@ -1844,36 +1844,40 @@ def _render_calculations_tab(project):
     all_params = parsed.get("parameters", [])
     method_id = selected_method["method_id"] if selected_method else None
 
-    eq_symbols = set()
+    eq_var_symbols = set()
     if selected_method:
         for eq in selected_method.get("equations", []):
             for var in eq.get("variables", []):
-                eq_symbols.add(var.get("symbol", ""))
-            formula = eq.get("formula_text", "")
-            import re as _re
-            eq_symbols.update(_re.findall(r'[A-Za-z_][A-Za-z_0-9,]+', formula))
+                eq_var_symbols.add(var.get("symbol", ""))
 
     def _param_relevant(p):
+        cat = p.get("category", "")
+        if cat == "qualitative":
+            return False
+        role = p.get("equation_role", "")
+        if role == "output":
+            return False
         sym = p.get("symbol", "")
         sym_base = sym.split("_")[0] if "_" in sym else sym
-        in_equations = sym in eq_symbols or sym_base in {s.split("_")[0] for s in eq_symbols}
-        if in_equations:
+        if sym in eq_var_symbols or sym_base in {s.split("_")[0] for s in eq_var_symbols}:
             return True
         applicable = p.get("applicable_methods", [])
-        if applicable and method_id and method_id not in applicable and "all" not in applicable:
-            return False
-        if not eq_symbols:
+        if not applicable or "all" in applicable:
+            if role in ("input", "intermediate") or cat in ("monitored", "methodology_default", "project_input"):
+                return True
+        if applicable and method_id and method_id in applicable:
             return True
         return False
 
     relevant_params = [p for p in all_params if _param_relevant(p)]
 
     proj_settings = project.get("project_settings") or {}
-
-    context_dims = []
-    if parsed:
-        context_dims = parsed.get("context_dimensions", [])
+    context_dims = parsed.get("context_dimensions", []) if parsed else []
     dim_keys = [d["dimension_key"] for d in context_dims]
+
+    import hashlib as _hashlib
+    import json as _json_mod
+    settings_hash = _hashlib.md5(_json_mod.dumps(proj_settings, sort_keys=True).encode()).hexdigest()[:8]
 
     def _resolve_default(param):
         dbc = param.get("defaults_by_context", [])
@@ -1901,29 +1905,17 @@ def _render_calculations_tab(project):
             return str(best_match["value"])
         return str(dbc[0]["value"])
 
-    direct_eq_vars = set()
-    if selected_method:
-        for eq in selected_method.get("equations", []):
-            for var in eq.get("variables", []):
-                sym_v = var.get("symbol", "")
-                if sym_v:
-                    direct_eq_vars.add(sym_v)
-
-    def _effective_category(p):
-        sym = p.get("symbol", "")
+    def _display_group(p):
         cat = p.get("category", "")
-        sym_base = sym.split("_")[0] if "_" in sym else sym
-        is_direct_var = sym in direct_eq_vars or any(
-            sym_base == dv.split("_")[0] for dv in direct_eq_vars
-        )
-        if cat == "calculated" and is_direct_var:
-            role = p.get("equation_role", "")
-            if role == "output":
-                return "output"
+        dbc = p.get("defaults_by_context", [])
+        dn = p.get("default_numeric")
+        if cat == "methodology_default" or dbc or dn is not None:
+            return "methodology_default"
+        if cat in ("monitored", "calculated"):
             return "monitored"
-        if cat == "qualitative":
-            return "qualitative"
-        return cat
+        if cat == "project_input":
+            return "project_input"
+        return "monitored"
 
     group_order = ["methodology_default", "monitored", "project_input"]
     group_labels = {
@@ -1932,7 +1924,7 @@ def _render_calculations_tab(project):
         "project_input": "Project-Specific Inputs",
     }
     group_captions = {
-        "methodology_default": "Pre-filled from methodology. Override if your project uses different values.",
+        "methodology_default": "Pre-filled from methodology based on your project settings. You can override any value.",
         "monitored": "Values from field surveys, monitoring, or project records. Enter your project data.",
         "project_input": "Project-specific values defined by the developer.",
     }
@@ -1940,7 +1932,7 @@ def _render_calculations_tab(project):
     user_inputs = {}
 
     for grp in group_order:
-        grp_params = [p for p in relevant_params if _effective_category(p) == grp]
+        grp_params = [p for p in relevant_params if _display_group(p) == grp]
         if not grp_params:
             continue
 
@@ -1955,7 +1947,7 @@ def _render_calculations_tab(project):
             unit = param.get("unit", "")
 
             label = f"{sym} - {param['name']}"
-            if unit:
+            if unit and unit != "NA":
                 label += f" [{unit}]"
 
             help_parts = []
@@ -1963,8 +1955,8 @@ def _render_calculations_tab(project):
                 help_parts.append(f"Source: {param['source']}")
             dbc = param.get("defaults_by_context", [])
             if dbc:
-                defaults_text = ", ".join(f"{d['context_key']}: {d['value']} {d.get('unit','')}" for d in dbc[:5])
-                help_parts.append(f"Defaults: {defaults_text}")
+                defaults_text = "; ".join(f"{d['context_key']}: {d['value']} {d.get('unit','')}" for d in dbc[:6])
+                help_parts.append(f"Available defaults: {defaults_text}")
             elif param.get("default_value"):
                 help_parts.append(f"Default: {param['default_value']}")
             if param.get("monitoring_frequency"):
@@ -1972,10 +1964,12 @@ def _render_calculations_tab(project):
             help_text = " | ".join(help_parts) if help_parts else None
 
             param_key = param.get("parameter_id", f"p{i}").replace(" ", "_").replace(".", "_")
+            widget_key = f"param_{project_id}_{settings_hash}_{param_key}"
+
             val = st.text_input(
                 label,
                 value=default_resolved,
-                key=f"param_{project_id}_{grp}_{param_key}",
+                key=widget_key,
                 help=help_text,
             )
             if val:
