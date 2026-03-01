@@ -10,7 +10,7 @@ MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
-def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=4000):
+def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=6000):
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set.")
@@ -21,7 +21,7 @@ def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=40
             {"role": "user", "content": user_prompt},
         ],
         "max_tokens": max_tokens,
-        "temperature": 0.2,
+        "temperature": 0.1,
     }
     if response_format:
         payload["response_format"] = response_format
@@ -29,7 +29,7 @@ def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=40
         OPENAI_API_URL,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json=payload,
-        timeout=120,
+        timeout=180,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -113,6 +113,23 @@ CALC_SCHEMA = {
 }
 
 
+CALC_SYSTEM_PROMPT = """You are an expert carbon credit calculation engine. You must calculate emission reductions using the EXACT equations and parameters from the methodology.
+
+CRITICAL RULES:
+1. APPLY THE METHODOLOGY'S EQUATIONS EXACTLY as specified — do not simplify or substitute different formulas.
+2. Use the exact parameter symbols and values provided. Where a user provides a value, use it. Where a methodology default exists, use it.
+3. Show ALL calculation steps with actual numbers substituted into the exact equations.
+4. Be conservative in all assumptions (as required by carbon standards).
+5. If a required parameter value is missing and no default exists, state this clearly and use the most conservative reasonable assumption.
+6. Calculate for EACH YEAR of the crediting period.
+7. For leakage: use the methodology's specified approach (e.g., 5% default discount factor means multiply ER by 0.95, or calculate specific leakage if data is provided).
+8. All results must be in tCO2e.
+9. When converting units, show the conversion explicitly.
+10. Cross-check: the ratio of baseline to project emissions should be consistent with the efficiency improvement ratio.
+
+IMPORTANT: Your calculation steps should be detailed enough that a carbon auditor can verify each number."""
+
+
 def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_years=7, project_info=None):
     if not parsed_methodology:
         raise ValueError("No parsed methodology provided")
@@ -126,64 +143,66 @@ def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_y
     if not method and parsed_methodology.get("calculation_methods"):
         method = parsed_methodology["calculation_methods"][0]
 
-    system_prompt = (
-        "You are an expert carbon credit calculation engine. Given a methodology's equations, "
-        "parameters, and user-provided project data, you must calculate the emission reductions "
-        "for each year of the crediting period.\n\n"
-        "RULES:\n"
-        "- Apply the methodology's equations exactly as specified\n"
-        "- Use IPCC and methodology default values where specified\n"
-        "- Show all calculation steps with actual numbers\n"
-        "- Be conservative in assumptions (as required by carbon standards)\n"
-        "- If a value is missing, use the most conservative default or state the assumption\n"
-        "- Calculate for each year of the crediting period\n"
-        "- Include leakage calculations (use 5% default if no specific method given)\n"
-        "- Provide a clear narrative explanation of the calculation\n"
-        "- All results must be in tCO2e"
-    )
-
     user_prompt = f"## Methodology: {parsed_methodology.get('methodology_code', 'Unknown')}\n"
     user_prompt += f"## Methodology Name: {parsed_methodology.get('methodology_name', '')}\n\n"
 
     if method:
-        user_prompt += f"## Calculation Method: {method['method_name']}\n"
+        user_prompt += f"## Selected Calculation Method: {method['method_name']}\n"
         if method.get("description"):
             user_prompt += f"Description: {method['description']}\n"
         if method.get("applicability"):
             user_prompt += f"Applicability: {method['applicability']}\n"
-        user_prompt += "\n### Equations:\n"
+        if method.get("scale_restrictions"):
+            user_prompt += f"Scale: {method['scale_restrictions']}\n"
+        user_prompt += "\n### EQUATIONS TO APPLY (use these EXACTLY):\n"
         for eq in method.get("equations", []):
-            user_prompt += f"- {eq.get('equation_id', '')}: {eq.get('formula_text', '')}\n"
+            user_prompt += f"\n{eq.get('equation_id', '')}"
+            if eq.get("equation_label"):
+                user_prompt += f" — {eq['equation_label']}"
+            user_prompt += f":\n  {eq.get('formula_text', '')}\n"
             if eq.get("formula_description"):
-                user_prompt += f"  ({eq['formula_description']})\n"
+                user_prompt += f"  Description: {eq['formula_description']}\n"
+            if eq.get("variables"):
+                user_prompt += "  Variables:\n"
+                for var in eq["variables"]:
+                    user_prompt += f"    - {var.get('symbol', '?')}: {var.get('name', '?')} ({var.get('unit', '?')})\n"
         user_prompt += "\n"
 
-    user_prompt += "### All Methodology Parameters:\n"
+    user_prompt += "### ALL PARAMETERS FROM METHODOLOGY:\n"
     for p in parsed_methodology.get("parameters", []):
-        line = f"- {p['symbol']} ({p['name']}): {p['unit']}"
+        line = f"- {p['symbol']} [{p.get('parameter_id', '')}] ({p['name']}): {p['unit']}"
         if p.get("default_value"):
             line += f" [Default: {p['default_value']}]"
+        if p.get("source"):
+            line += f" [Source: {p['source']}]"
         if p.get("description"):
-            line += f" - {p['description']}"
+            line += f" — {p['description']}"
         user_prompt += line + "\n"
 
     defaults = parsed_methodology.get("default_values", {})
     if defaults:
-        user_prompt += "\n### Default Values from Methodology:\n"
+        user_prompt += "\n### DEFAULT VALUES FROM METHODOLOGY:\n"
         for k, v in defaults.items():
             user_prompt += f"- {k}: {v}\n"
 
     if parsed_methodology.get("leakage_approach"):
-        user_prompt += f"\n### Leakage Approach:\n{parsed_methodology['leakage_approach']}\n"
+        user_prompt += f"\n### LEAKAGE APPROACH:\n{parsed_methodology['leakage_approach']}\n"
 
-    user_prompt += f"\n### Crediting Period: {crediting_years} years\n"
+    user_prompt += f"\n### CREDITING PERIOD: {crediting_years} years\n"
 
-    user_prompt += "\n### Project-Specific Inputs Provided by User:\n"
-    for param_id, value in user_inputs.items():
-        user_prompt += f"- {param_id}: {value}\n"
+    user_prompt += "\n### PROJECT-SPECIFIC VALUES PROVIDED BY USER:\n"
+    if user_inputs:
+        for param_symbol, value in user_inputs.items():
+            try:
+                numeric_val = float(str(value).replace(",", ""))
+                user_prompt += f"- {param_symbol} = {numeric_val}\n"
+            except (ValueError, TypeError):
+                user_prompt += f"- {param_symbol} = {value}\n"
+    else:
+        user_prompt += "(No user inputs provided — use all methodology defaults where available)\n"
 
     if project_info:
-        user_prompt += "\n### Project Context:\n"
+        user_prompt += "\n### PROJECT CONTEXT:\n"
         if project_info.get("name"):
             user_prompt += f"- Project: {project_info['name']}\n"
         if project_info.get("country"):
@@ -192,11 +211,12 @@ def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_y
             user_prompt += f"- Description: {project_info['description']}\n"
 
     user_prompt += (
-        "\n\nPerform the complete emission reduction calculation for each year of the crediting period. "
-        "Show all steps with actual numbers. Provide the results in the structured format."
+        "\n\nPerform the COMPLETE emission reduction calculation for each year of the crediting period. "
+        "Apply the exact equations listed above. Show all steps with actual numbers. "
+        "List every parameter value used and its source (user input, methodology default, or assumption)."
     )
 
-    result = _call_openai(system_prompt, user_prompt, response_format=CALC_SCHEMA, max_tokens=6000)
+    result = _call_openai(CALC_SYSTEM_PROMPT, user_prompt, response_format=CALC_SCHEMA, max_tokens=6000)
     try:
         return json.loads(result)
     except json.JSONDecodeError:

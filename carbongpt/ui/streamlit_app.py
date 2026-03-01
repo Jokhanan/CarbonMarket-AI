@@ -1785,57 +1785,91 @@ def _render_calculations_tab(project):
     methods = parsed.get("calculation_methods", [])
     if methods:
         st.markdown("**Calculation Methods Available:**")
-        method_names = [f"{m['method_id']}: {m['method_name']}" for m in methods]
+        method_labels = []
+        for m in methods:
+            mid = m.get("method_id", "")
+            mname = m.get("method_name", mid)
+            label = mname if mname.lower().startswith("method") else f"{mid}: {mname}"
+            method_labels.append(label)
         selected_method_idx = st.selectbox(
             "Select calculation method",
-            range(len(method_names)),
-            format_func=lambda i: method_names[i],
+            range(len(method_labels)),
+            format_func=lambda i: method_labels[i],
             key=f"calc_method_{project_id}",
         )
         selected_method = methods[selected_method_idx]
 
-        if selected_method.get("description"):
+        if selected_method.get("applicability"):
+            st.caption(f"Applicability: {selected_method['applicability']}")
+        elif selected_method.get("description"):
             st.caption(selected_method["description"])
 
+        if selected_method.get("scale_restrictions"):
+            st.caption(f"Scale: {selected_method['scale_restrictions']}")
+
         if selected_method.get("equations"):
-            with st.expander("View Equations", expanded=False):
+            with st.expander("View Equations", expanded=True):
                 for eq in selected_method["equations"]:
-                    eq_label = eq.get("equation_label", eq.get("equation_id", ""))
-                    st.markdown(f"**{eq_label}:** `{eq.get('formula_text', '')}`")
+                    eq_id = eq.get("equation_id", "")
+                    eq_label = eq.get("equation_label", "")
+                    header = f"**{eq_id}**" if eq_id else ""
+                    if eq_label:
+                        header += f" - {eq_label}" if header else f"**{eq_label}**"
+                    if header:
+                        st.markdown(header)
+                    st.code(eq.get("formula_text", ""), language=None)
                     if eq.get("formula_description"):
                         st.caption(eq["formula_description"])
+                    if eq.get("variables"):
+                        var_text = ", ".join(
+                            f"{v['symbol']} ({v.get('name', '')})"
+                            for v in eq["variables"]
+                        )
+                        st.caption(f"Variables: {var_text}")
+                    st.markdown("---")
     else:
         selected_method = None
 
     st.divider()
     st.markdown("**Project-Specific Inputs:**")
 
-    params = parsed.get("parameters", [])
-    user_input_params = [p for p in params if p.get("is_user_input", False)]
+    method_id = selected_method["method_id"] if selected_method else None
+    from carbongpt.core.methodology_parser import get_calculation_inputs
+    user_input_params = get_calculation_inputs(parsed, method_id=method_id)
 
     if not user_input_params:
-        user_input_params = params[:10]
+        params = parsed.get("parameters", [])
+        user_input_params = [p for p in params if p.get("is_user_input", False)]
+    if not user_input_params:
+        user_input_params = parsed.get("parameters", [])[:10]
 
     user_inputs = {}
-    cols = st.columns(2)
     for i, param in enumerate(user_input_params):
-        with cols[i % 2]:
-            default_val = param.get("default_value", "")
-            label = f"{param['symbol']} - {param['name']}"
-            if param.get("unit"):
-                label += f" ({param['unit']})"
-            help_text = param.get("description", "")
-            if default_val:
-                help_text += f" Default: {default_val}"
+        default_val = param.get("default_value", "")
+        label = f"{param['symbol']} - {param['name']}"
+        if param.get("unit"):
+            label += f" ({param['unit']})"
 
-            val = st.text_input(
-                label,
-                value=default_val if default_val else "",
-                key=f"param_{project_id}_{param['parameter_id']}",
-                help=help_text,
-            )
-            if val:
-                user_inputs[param["symbol"]] = val
+        help_parts = []
+        if param.get("description"):
+            help_parts.append(param["description"])
+        if param.get("source"):
+            help_parts.append(f"Source: {param['source']}")
+        if default_val:
+            help_parts.append(f"Methodology default: {default_val}")
+        if param.get("monitoring_frequency"):
+            help_parts.append(f"Monitoring: {param['monitoring_frequency']}")
+        help_text = " | ".join(help_parts)
+
+        param_key = param.get("parameter_id", f"p{i}").replace(" ", "_").replace(".", "_")
+        val = st.text_input(
+            label,
+            value=default_val if default_val else "",
+            key=f"param_{project_id}_{param_key}",
+            help=help_text,
+        )
+        if val:
+            user_inputs[param["symbol"]] = val
 
     st.divider()
 

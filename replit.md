@@ -49,4 +49,14 @@ The application features a streamlined two-section navigation:
     -   Verra JSON API: For discovering and retrieving project documents and metadata from the Verra registry.
 -   **Gold Standard Public API:** For retrieving project metadata and document templates.
 -   **UNFCCC (CDM) resources:** For downloading CDM methodology booklets and tools.
--   **Python Libraries:** `FastAPI`, `Streamlit`, `Uvicorn`, `psycopg2-binary`, `pdfplumber`, `tiktoken`, `python-docx`, `PyYAML`, `rapidfuzz`, `pytest`.
+-   **Python Libraries:** `FastAPI`, `Streamlit`, `Uvicorn`, `psycopg2-binary`, `pdfplumber`, `tiktoken`, `python-docx`, `openpyxl`, `PyYAML`, `rapidfuzz`, `pytest`.
+
+## Methodology Calculation Engine
+
+The platform includes an AI-powered methodology analysis and emission reduction calculation system:
+
+-   **Methodology Parser (`carbongpt/core/methodology_parser.py`):** Uses GPT-4o to extract calculation frameworks from methodology documents stored in the document repository. Employs intelligent section-level relevance scoring to send the most important content (equations, parameter tables, defaults) to the AI rather than just the first N characters. Extracts: calculation methods with exact names, equations with exact notation (Eq. 1-5), parameters with ICS/document IDs, default values (IPCC, methodology), leakage approaches, and monitoring requirements. Works generically across any methodology (GS, Verra, CDM).
+-   **Calculation Engine (`carbongpt/core/calculation_engine.py`):** Takes parsed methodology output + user-provided project-specific inputs and runs emission reduction calculations for each year of the crediting period. Produces structured results with annual BE/PE/LE/ER values, calculation steps, parameter sources, and narrative explanation.
+-   **Document Exporter (`carbongpt/core/doc_exporter.py`):** Exports calculation results to Excel (with annual breakdown, calculation steps, monitoring parameters) and generates filled Word templates from AI-drafted PDD/MR sections.
+-   **API Endpoints:** `POST /projects/{id}/parse-methodology`, `POST /projects/{id}/calculate`, `POST /projects/{id}/export-calculation`, `POST /projects/{id}/generate-template`
+-   **UI Tabs:** "Calculations" tab (analyze methodology, enter inputs, run calcs, view results) and "Export" tab (download Word/Excel) in the project workspace.
