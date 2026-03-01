@@ -204,6 +204,22 @@ CREATE TABLE IF NOT EXISTS methodologies (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS methodology_parsed (
+    id SERIAL PRIMARY KEY,
+    methodology_code VARCHAR(100) NOT NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    parsed_data JSONB NOT NULL,
+    model_used VARCHAR(50),
+    parse_status VARCHAR(20) DEFAULT 'completed' CHECK (parse_status IN ('pending', 'processing', 'completed', 'failed')),
+    parse_error TEXT,
+    parsed_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(methodology_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_methodology_parsed_code ON methodology_parsed(methodology_code);
+CREATE INDEX IF NOT EXISTS idx_methodology_parsed_status ON methodology_parsed(parse_status);
+
 CREATE INDEX IF NOT EXISTS idx_methodologies_standard ON methodologies(standard);
 CREATE INDEX IF NOT EXISTS idx_methodologies_category ON methodologies(category);
 CREATE INDEX IF NOT EXISTS idx_methodologies_status ON methodologies(status);

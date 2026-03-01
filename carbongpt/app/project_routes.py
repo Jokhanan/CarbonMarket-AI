@@ -428,17 +428,40 @@ def get_write_sessions_endpoint(project_id: int, doc_type: str = None):
     return get_write_sessions(project_id, doc_type=doc_type)
 
 
+@router.get("/{project_id}/methodology-data")
+def get_methodology_data_endpoint(project_id: int):
+    from carbongpt.repository.store import get_user_project, get_parsed_methodology
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    methodology = project.get("methodology")
+    if not methodology:
+        return {"status": "no_methodology", "parsed": None}
+
+    cached = get_parsed_methodology(methodology)
+    if cached and cached.get("parsed_data"):
+        data = cached["parsed_data"]
+        if isinstance(data, str):
+            import json as _json
+            data = _json.loads(data)
+        return {"status": "ready", "parsed": data, "parsed_at": str(cached.get("parsed_at", ""))}
+
+    return {"status": "not_parsed", "parsed": None}
+
+
 @router.post("/{project_id}/parse-methodology")
 def parse_methodology_endpoint(project_id: int, data: ParseMethodologyRequest):
     from carbongpt.repository.store import get_user_project
-    from carbongpt.core.methodology_parser import parse_methodology
+    from carbongpt.core.methodology_parser import parse_methodology_and_save
 
     project = get_user_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
     try:
-        parsed = parse_methodology(data.methodology_code)
+        parsed = parse_methodology_and_save(data.methodology_code, force=data.force if hasattr(data, 'force') else False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -451,7 +474,7 @@ def parse_methodology_endpoint(project_id: int, data: ParseMethodologyRequest):
 @router.post("/{project_id}/calculate")
 def run_calculation_endpoint(project_id: int, data: RunCalculationRequest):
     from carbongpt.repository.store import get_user_project
-    from carbongpt.core.methodology_parser import parse_methodology
+    from carbongpt.core.methodology_parser import get_or_parse_methodology
     from carbongpt.core.calculation_engine import run_calculation
 
     project = get_user_project(project_id)
@@ -463,7 +486,7 @@ def run_calculation_endpoint(project_id: int, data: RunCalculationRequest):
         raise HTTPException(status_code=400, detail="Project has no methodology assigned.")
 
     try:
-        parsed = parse_methodology(methodology)
+        parsed = get_or_parse_methodology(methodology)
     except Exception as e:
         logger.error("Methodology parse failed for calc: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to parse methodology: {e}")

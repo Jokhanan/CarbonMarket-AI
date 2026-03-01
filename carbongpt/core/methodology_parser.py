@@ -281,13 +281,38 @@ def get_methodology_text(methodology_code):
     return None
 
 
-def parse_methodology(methodology_code, methodology_text=None):
+def get_or_parse_methodology(methodology_code):
+    from carbongpt.repository.store import get_parsed_methodology
+    cached = get_parsed_methodology(methodology_code)
+    if cached and cached.get("parsed_data"):
+        data = cached["parsed_data"]
+        if isinstance(data, str):
+            data = json.loads(data)
+        return data
+
+    return parse_methodology_and_save(methodology_code)
+
+
+def parse_methodology_and_save(methodology_code, methodology_text=None, force=False):
+    from carbongpt.repository.store import save_parsed_methodology
+
+    if not force:
+        from carbongpt.repository.store import get_parsed_methodology
+        cached = get_parsed_methodology(methodology_code)
+        if cached and cached.get("parsed_data"):
+            data = cached["parsed_data"]
+            if isinstance(data, str):
+                data = json.loads(data)
+            return data
+
     sections_data = None
+    doc_id = None
     if not methodology_text:
         sections_data = get_methodology_sections(methodology_code)
         if sections_data:
             methodology_text = _extract_relevant_text(sections_data["sections"])
             doc_title = sections_data["title"]
+            doc_id = sections_data["doc_id"]
         else:
             raise ValueError(
                 f"No methodology document found for '{methodology_code}'. "
@@ -308,13 +333,82 @@ def parse_methodology(methodology_code, methodology_text=None):
         f"--- METHODOLOGY DOCUMENT ---\n{text_for_ai}\n--- END ---"
     )
 
-    result = _call_openai(SYSTEM_PROMPT, user_prompt, response_format=PARSE_SCHEMA, max_tokens=12000, model=PARSE_MODEL)
     try:
+        result = _call_openai(SYSTEM_PROMPT, user_prompt, response_format=PARSE_SCHEMA, max_tokens=12000, model=PARSE_MODEL)
         parsed = json.loads(result)
+        save_parsed_methodology(
+            methodology_code=methodology_code,
+            parsed_data=parsed,
+            document_id=doc_id,
+            model_used=PARSE_MODEL,
+            status="completed",
+        )
         return parsed
     except json.JSONDecodeError:
-        logger.error("Failed to parse methodology AI response as JSON")
-        return {"raw": result, "error": "Failed to parse response"}
+        logger.error("Failed to parse methodology AI response as JSON for %s", methodology_code)
+        save_parsed_methodology(
+            methodology_code=methodology_code,
+            parsed_data={"error": "JSON parse failure"},
+            document_id=doc_id,
+            model_used=PARSE_MODEL,
+            status="failed",
+            error="AI response was not valid JSON",
+        )
+        return {"error": "Failed to parse response"}
+    except Exception as e:
+        logger.error("Methodology parse failed for %s: %s", methodology_code, e)
+        save_parsed_methodology(
+            methodology_code=methodology_code,
+            parsed_data={"error": str(e)},
+            document_id=doc_id,
+            model_used=PARSE_MODEL,
+            status="failed",
+            error=str(e),
+        )
+        raise
+
+
+def parse_methodology(methodology_code, methodology_text=None):
+    return parse_methodology_and_save(methodology_code, methodology_text)
+
+
+def batch_parse_methodologies(codes=None, force=False):
+    from carbongpt.repository.db import get_cursor
+
+    if codes is None:
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT d.title, d.id
+                FROM documents d
+                JOIN document_sections ds ON ds.document_id = d.id
+                WHERE d.category = 'methodology'
+                ORDER BY d.title
+            """)
+            docs = cur.fetchall()
+    else:
+        docs = [{"title": c, "id": None} for c in codes]
+
+    results = {"parsed": 0, "skipped": 0, "failed": 0, "errors": []}
+
+    for doc in docs:
+        code = doc["title"]
+        if not force:
+            from carbongpt.repository.store import get_parsed_methodology
+            existing = get_parsed_methodology(code)
+            if existing and existing.get("parse_status") == "completed":
+                results["skipped"] += 1
+                continue
+
+        try:
+            logger.info("Batch parsing: %s", code)
+            parse_methodology_and_save(code, force=True)
+            results["parsed"] += 1
+        except Exception as e:
+            logger.error("Batch parse failed for %s: %s", code, e)
+            results["failed"] += 1
+            results["errors"].append({"code": code, "error": str(e)})
+
+    return results
 
 
 def get_calculation_inputs(parsed_methodology, method_id=None):

@@ -1759,25 +1759,34 @@ def _render_calculations_tab(project):
     if calc_key not in st.session_state:
         st.session_state[calc_key] = None
 
-    if st.button("Analyze Methodology", key=f"parse_meth_{project_id}",
-                  type="primary",
-                  help="AI will parse the methodology to extract equations, parameters, and default values"):
-        with st.spinner("Analyzing methodology equations and parameters..."):
-            result = _fetch(
-                f"/projects/{project_id}/parse-methodology",
-                method="POST",
-                json={"methodology_code": methodology},
-            )
-            if result and not result.get("error"):
-                st.session_state[parse_key] = result
-                st.success("Methodology analyzed successfully.")
-            else:
-                err = (result or {}).get("error", "Unknown error")
-                st.error(f"Failed to analyze methodology: {err}")
+    if st.session_state[parse_key] is None:
+        meth_data = _fetch(f"/projects/{project_id}/methodology-data")
+        if meth_data and meth_data.get("status") == "ready":
+            st.session_state[parse_key] = meth_data["parsed"]
+            parsed_at = meth_data.get("parsed_at", "")
+            if parsed_at:
+                st.caption(f"Methodology pre-analyzed: {parsed_at[:19]}")
 
     parsed = st.session_state.get(parse_key)
+
     if not parsed:
-        st.info("Click 'Analyze Methodology' to extract calculation equations and parameters from the methodology document.")
+        st.info("This methodology has not been analyzed yet. Click below to extract its calculation framework.")
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("Analyze Methodology", key=f"parse_meth_{project_id}",
+                          type="primary"):
+                with st.spinner("Analyzing methodology (this may take 30-60 seconds)..."):
+                    result = _fetch(
+                        f"/projects/{project_id}/parse-methodology",
+                        method="POST",
+                        json={"methodology_code": methodology},
+                    )
+                    if result and not result.get("error"):
+                        st.session_state[parse_key] = result
+                        st.rerun()
+                    else:
+                        err = (result or {}).get("error", "Unknown error")
+                        st.error(f"Failed to analyze methodology: {err}")
         return
 
     st.divider()

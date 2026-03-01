@@ -884,6 +884,59 @@ def get_methodology(code):
         return cur.fetchone()
 
 
+def save_parsed_methodology(methodology_code, parsed_data, document_id=None, model_used=None, status="completed", error=None):
+    import json as _json
+    with get_cursor() as cur:
+        cur.execute("""
+            INSERT INTO methodology_parsed
+                (methodology_code, document_id, parsed_data, model_used, parse_status, parse_error, parsed_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (methodology_code) DO UPDATE SET
+                document_id = EXCLUDED.document_id,
+                parsed_data = EXCLUDED.parsed_data,
+                model_used = EXCLUDED.model_used,
+                parse_status = EXCLUDED.parse_status,
+                parse_error = EXCLUDED.parse_error,
+                parsed_at = NOW()
+            RETURNING id
+        """, (methodology_code, document_id, _json.dumps(parsed_data), model_used, status, error))
+        return cur.fetchone()["id"]
+
+
+def get_parsed_methodology(methodology_code):
+    import re
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM methodology_parsed WHERE methodology_code = %s AND parse_status = 'completed'",
+            (methodology_code,)
+        )
+        row = cur.fetchone()
+        if row:
+            return row
+
+        normalized = methodology_code.strip()
+        normalized = re.sub(r'\s+[Vv]?\d+(\.\d+)?$', '', normalized)
+        normalized = normalized.replace("GS-", "").replace("gs-", "")
+        cur.execute(
+            "SELECT * FROM methodology_parsed WHERE methodology_code ILIKE %s AND parse_status = 'completed' LIMIT 1",
+            (f"%{normalized}%",)
+        )
+        return cur.fetchone()
+
+
+def list_parsed_methodologies():
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT mp.id, mp.methodology_code, mp.document_id, mp.model_used,
+                   mp.parse_status, mp.parse_error, mp.parsed_at,
+                   d.title as document_title
+            FROM methodology_parsed mp
+            LEFT JOIN documents d ON d.id = mp.document_id
+            ORDER BY mp.methodology_code
+        """)
+        return cur.fetchall()
+
+
 def get_methodology_categories():
     with get_cursor() as cur:
         cur.execute(

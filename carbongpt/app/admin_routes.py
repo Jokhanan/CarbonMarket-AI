@@ -692,3 +692,57 @@ def get_country_detail(country: str):
 def search_projects(q: str, limit: int = 50):
     from carbongpt.repository.store import search_carbon_projects
     return search_carbon_projects(q, limit=limit)
+
+
+@router.get("/methodology-parsed")
+def list_parsed_methodologies_endpoint():
+    from carbongpt.repository.store import list_parsed_methodologies
+    rows = list_parsed_methodologies()
+    result = []
+    for r in rows:
+        result.append({
+            "id": r["id"],
+            "methodology_code": r["methodology_code"],
+            "document_id": r.get("document_id"),
+            "document_title": r.get("document_title"),
+            "model_used": r.get("model_used"),
+            "parse_status": r.get("parse_status"),
+            "parse_error": r.get("parse_error"),
+            "parsed_at": str(r.get("parsed_at", "")),
+        })
+    return result
+
+
+@router.post("/methodology-parsed/parse")
+def parse_single_methodology(methodology_code: str, force: bool = False):
+    from carbongpt.core.methodology_parser import parse_methodology_and_save
+    try:
+        parsed = parse_methodology_and_save(methodology_code, force=force)
+        methods_count = len(parsed.get("calculation_methods", []))
+        params_count = len(parsed.get("parameters", []))
+        return {
+            "status": "success",
+            "methodology_code": methodology_code,
+            "methods": methods_count,
+            "parameters": params_count,
+        }
+    except Exception as e:
+        logger.error("Parse methodology failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/methodology-parsed/batch")
+def batch_parse_methodologies_endpoint(force: bool = False, codes: list[str] = None):
+    import threading
+    from carbongpt.core.methodology_parser import batch_parse_methodologies
+
+    def _run_batch():
+        try:
+            result = batch_parse_methodologies(codes=codes, force=force)
+            logger.info("Batch methodology parse complete: %s", result)
+        except Exception as e:
+            logger.error("Batch methodology parse failed: %s", e)
+
+    thread = threading.Thread(target=_run_batch, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "Batch methodology parsing started in background."}
