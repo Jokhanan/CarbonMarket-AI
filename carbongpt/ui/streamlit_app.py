@@ -1901,38 +1901,55 @@ def _render_calculations_tab(project):
             return str(best_match["value"])
         return str(dbc[0]["value"])
 
-    cat_order = ["methodology_default", "monitored", "project_input", "calculated"]
-    cat_labels = {
+    direct_eq_vars = set()
+    if selected_method:
+        for eq in selected_method.get("equations", []):
+            for var in eq.get("variables", []):
+                sym_v = var.get("symbol", "")
+                if sym_v:
+                    direct_eq_vars.add(sym_v)
+
+    def _effective_category(p):
+        sym = p.get("symbol", "")
+        cat = p.get("category", "")
+        sym_base = sym.split("_")[0] if "_" in sym else sym
+        is_direct_var = sym in direct_eq_vars or any(
+            sym_base == dv.split("_")[0] for dv in direct_eq_vars
+        )
+        if cat == "calculated" and is_direct_var:
+            role = p.get("equation_role", "")
+            if role == "output":
+                return "output"
+            return "monitored"
+        if cat == "qualitative":
+            return "qualitative"
+        return cat
+
+    group_order = ["methodology_default", "monitored", "project_input"]
+    group_labels = {
         "methodology_default": "Methodology Defaults",
         "monitored": "Monitored / Field Data",
         "project_input": "Project-Specific Inputs",
-        "calculated": "Calculated Parameters",
+    }
+    group_captions = {
+        "methodology_default": "Pre-filled from methodology. Override if your project uses different values.",
+        "monitored": "Values from field surveys, monitoring, or project records. Enter your project data.",
+        "project_input": "Project-specific values defined by the developer.",
     }
 
     user_inputs = {}
 
-    for cat in cat_order:
-        cat_params = [p for p in relevant_params if p.get("category") == cat]
-        if not cat_params:
+    for grp in group_order:
+        grp_params = [p for p in relevant_params if _effective_category(p) == grp]
+        if not grp_params:
             continue
 
-        eq_role_filter = None
-        if cat == "calculated":
-            eq_role_filter = "intermediate"
+        st.markdown(f"**{group_labels.get(grp, grp)}:**")
+        cap = group_captions.get(grp)
+        if cap:
+            st.caption(cap)
 
-        st.markdown(f"**{cat_labels.get(cat, cat)}:**")
-        if cat == "methodology_default":
-            st.caption("Pre-filled from methodology. Override if your project uses different values.")
-        elif cat == "monitored":
-            st.caption("Values from field surveys, monitoring, or project records.")
-        elif cat == "calculated":
-            st.caption("Auto-calculated from other parameters. Shown for reference.")
-
-        for i, param in enumerate(cat_params):
-            role = param.get("equation_role", "input")
-            if cat == "calculated" and role == "output":
-                continue
-
+        for i, param in enumerate(grp_params):
             default_resolved = _resolve_default(param)
             sym = param.get("symbol", "")
             unit = param.get("unit", "")
@@ -1955,49 +1972,15 @@ def _render_calculations_tab(project):
             help_text = " | ".join(help_parts) if help_parts else None
 
             param_key = param.get("parameter_id", f"p{i}").replace(" ", "_").replace(".", "_")
-            is_readonly = (cat == "calculated")
-
-            if is_readonly:
-                st.text_input(
-                    label,
-                    value=default_resolved or "(calculated)",
-                    key=f"param_{project_id}_{cat}_{param_key}",
-                    disabled=True,
-                    help=help_text,
-                )
-            else:
-                val = st.text_input(
-                    label,
-                    value=default_resolved,
-                    key=f"param_{project_id}_{cat}_{param_key}",
-                    help=help_text,
-                )
-                if val:
-                    user_inputs[sym] = val
-
-        st.markdown("---")
-
-    also_needed = [p for p in relevant_params
-                   if p.get("category") not in cat_order
-                   and p.get("category") != "qualitative"
-                   and p.get("equation_role") in ("input", "intermediate")]
-    if also_needed:
-        st.markdown("**Other Parameters:**")
-        for i, param in enumerate(also_needed):
-            default_resolved = _resolve_default(param)
-            sym = param.get("symbol", "")
-            unit = param.get("unit", "")
-            label = f"{sym} - {param['name']}"
-            if unit:
-                label += f" [{unit}]"
-            param_key = param.get("parameter_id", f"other{i}").replace(" ", "_").replace(".", "_")
             val = st.text_input(
                 label,
                 value=default_resolved,
-                key=f"param_{project_id}_other_{param_key}",
+                key=f"param_{project_id}_{grp}_{param_key}",
+                help=help_text,
             )
             if val:
                 user_inputs[sym] = val
+
         st.markdown("---")
 
     st.divider()
