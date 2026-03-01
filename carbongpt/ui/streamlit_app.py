@@ -1402,7 +1402,7 @@ def _render_project_browser():
 
     import pandas as pd
     df = pd.DataFrame(projects)
-    display_cols = ["registry_id", "name", "country", "status", "methodology",
+    display_cols = ["registry", "registry_id", "name", "country", "status", "methodology",
                     "project_type", "proponent", "estimated_annual_credits"]
     display_cols = [c for c in display_cols if c in df.columns]
     df_display = df[display_cols].copy()
@@ -1413,22 +1413,37 @@ def _render_project_browser():
 def _render_sync_controls(summary):
     st.subheader("Project Data Sync")
 
-    last_sync = summary.get("last_sync")
-    if last_sync:
-        st.write(f"Last sync: {last_sync}")
-    else:
-        st.write("No sync has been performed yet.")
+    sync_status = _fetch("/admin/sync-projects/status")
 
     st.write(f"Total projects in database: {summary.get('total_projects', 0):,}")
     st.write(f"Countries covered: {summary.get('total_countries', 0)}")
+
+    if sync_status and sync_status.get("running"):
+        st.info("A sync is currently running in the background. Refresh this page to check progress.")
+        current_count = sync_status.get("total_projects_in_db", 0)
+        st.write(f"Current project count: {current_count:,}")
+    else:
+        last_result = sync_status.get("last_result") if sync_status else None
+        if last_result and not last_result.get("error"):
+            verra = last_result.get("verra", {})
+            gs = last_result.get("goldstandard", {})
+            st.write(
+                f"Last sync: Verra {verra.get('synced', 0):,} projects, "
+                f"Gold Standard {gs.get('synced', 0):,} projects"
+            )
 
     st.divider()
 
     if st.button("Sync All Projects", key="sync_all_btn", type="primary",
                   help="Fetch latest project data from Verra and Gold Standard registries"):
-        with st.spinner("Syncing projects from registries (this may take a minute)..."):
-            result = _fetch("/admin/sync-projects", method="POST")
-            if result:
+        result = _fetch("/admin/sync-projects", method="POST")
+        if result:
+            status = result.get("status", "")
+            if status == "started":
+                st.success("Sync started in the background. Refresh this page in a few minutes to see results.")
+            elif status == "already_running":
+                st.warning("A sync is already running. Please wait for it to finish.")
+            else:
                 verra = result.get("verra", {})
                 gs = result.get("goldstandard", {})
                 st.success(

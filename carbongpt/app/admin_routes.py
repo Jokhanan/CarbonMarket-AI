@@ -611,11 +611,44 @@ def get_sync_status():
     }
 
 
+_project_sync_status = {"running": False, "last_result": None}
+
 @router.post("/sync-projects")
-def sync_projects(max_verra: int = None, max_gs: int = None):
+def sync_projects(max_verra: int = None, max_gs: int = None, background: bool = True):
+    import threading
     from carbongpt.repository.project_sync import sync_all_projects
-    result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
-    return result
+
+    if _project_sync_status["running"]:
+        return {"status": "already_running", "message": "A project sync is already in progress."}
+
+    if not background:
+        result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
+        _project_sync_status["last_result"] = result
+        return result
+
+    def _run_sync():
+        _project_sync_status["running"] = True
+        try:
+            result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
+            _project_sync_status["last_result"] = result
+        except Exception as e:
+            _project_sync_status["last_result"] = {"error": str(e)}
+        finally:
+            _project_sync_status["running"] = False
+
+    threading.Thread(target=_run_sync, daemon=True).start()
+    return {"status": "started", "message": "Project sync started in background. Check /admin/sync-projects/status for progress."}
+
+
+@router.get("/sync-projects/status")
+def get_sync_status():
+    from carbongpt.repository.store import get_project_count
+    count = get_project_count()
+    return {
+        "running": _project_sync_status["running"],
+        "total_projects_in_db": count,
+        "last_result": _project_sync_status["last_result"],
+    }
 
 
 @router.get("/projects")

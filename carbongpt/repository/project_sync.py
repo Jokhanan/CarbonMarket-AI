@@ -112,6 +112,7 @@ def sync_gs_projects(max_projects=None):
             resp = requests.get(
                 "https://public-api.goldstandard.org/projects",
                 params={"page": page, "size": page_size},
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
                 timeout=30,
             )
             resp.raise_for_status()
@@ -162,6 +163,10 @@ def sync_gs_projects(max_projects=None):
                 "project_type": _to_str(proj.get("type"), 200),
                 "project_subtype": None,
                 "estimated_annual_credits": _safe_int(proj.get("estimated_annual_credits")),
+                "crediting_period_start": _parse_date(proj.get("crediting_period_start_date")),
+                "crediting_period_end": _parse_date(proj.get("crediting_period_end_date")),
+                "latitude": proj.get("latitude"),
+                "longitude": proj.get("longitude"),
                 "description": proj.get("description"),
                 "sdgs": sdgs,
                 "extra_data": {
