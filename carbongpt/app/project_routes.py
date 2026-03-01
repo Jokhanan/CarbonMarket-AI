@@ -34,6 +34,9 @@ class ProjectUpdate(BaseModel):
     country: str | None = None
     description: str | None = None
     status: str | None = None
+    crediting_period_start: str | None = None
+    crediting_period_years: int | None = None
+    project_settings: dict | None = None
 
 
 class WriteSectionRequest(BaseModel):

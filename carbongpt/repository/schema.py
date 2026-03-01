@@ -231,6 +231,10 @@ CREATE INDEX IF NOT EXISTS idx_project_documents_project ON project_documents(pr
 CREATE INDEX IF NOT EXISTS idx_project_documents_doc_type ON project_documents(doc_type);
 CREATE INDEX IF NOT EXISTS idx_project_write_sessions_project ON project_write_sessions(project_id);
 
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS crediting_period_start DATE;
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS crediting_period_years INTEGER DEFAULT 7;
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS project_settings JSONB DEFAULT '{}';
+
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS search_vector tsvector;
 

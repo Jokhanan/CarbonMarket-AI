@@ -1840,62 +1840,182 @@ def _render_calculations_tab(project):
         selected_method = None
 
     st.divider()
-    st.markdown("**Project-Specific Inputs:**")
 
+    all_params = parsed.get("parameters", [])
     method_id = selected_method["method_id"] if selected_method else None
-    from carbongpt.core.methodology_parser import get_calculation_inputs
-    user_input_params = get_calculation_inputs(parsed, method_id=method_id)
 
-    if not user_input_params:
-        params = parsed.get("parameters", [])
-        user_input_params = [p for p in params if p.get("is_user_input", False)]
-    if not user_input_params:
-        user_input_params = parsed.get("parameters", [])[:10]
+    eq_symbols = set()
+    if selected_method:
+        for eq in selected_method.get("equations", []):
+            for var in eq.get("variables", []):
+                eq_symbols.add(var.get("symbol", ""))
+            formula = eq.get("formula_text", "")
+            import re as _re
+            eq_symbols.update(_re.findall(r'[A-Za-z_][A-Za-z_0-9,]+', formula))
+
+    def _param_relevant(p):
+        sym = p.get("symbol", "")
+        sym_base = sym.split("_")[0] if "_" in sym else sym
+        in_equations = sym in eq_symbols or sym_base in {s.split("_")[0] for s in eq_symbols}
+        if in_equations:
+            return True
+        applicable = p.get("applicable_methods", [])
+        if applicable and method_id and method_id not in applicable and "all" not in applicable:
+            return False
+        if not eq_symbols:
+            return True
+        return False
+
+    relevant_params = [p for p in all_params if _param_relevant(p)]
+
+    proj_settings = project.get("project_settings") or {}
+
+    context_dims = []
+    if parsed:
+        context_dims = parsed.get("context_dimensions", [])
+    dim_keys = [d["dimension_key"] for d in context_dims]
+
+    def _resolve_default(param):
+        dbc = param.get("defaults_by_context", [])
+        if not dbc:
+            dn = param.get("default_numeric")
+            if dn is not None:
+                return str(dn)
+            return ""
+        selected_values = []
+        for dk in dim_keys:
+            val = proj_settings.get(dk, "")
+            if val:
+                selected_values.append(val.lower())
+        if not selected_values:
+            return str(dbc[0]["value"])
+        best_match = None
+        best_score = -1
+        for entry in dbc:
+            ck = entry.get("context_key", "").lower()
+            score = sum(1 for sv in selected_values if sv in ck)
+            if score > best_score:
+                best_score = score
+                best_match = entry
+        if best_match and best_score > 0:
+            return str(best_match["value"])
+        return str(dbc[0]["value"])
+
+    cat_order = ["methodology_default", "monitored", "project_input", "calculated"]
+    cat_labels = {
+        "methodology_default": "Methodology Defaults",
+        "monitored": "Monitored / Field Data",
+        "project_input": "Project-Specific Inputs",
+        "calculated": "Calculated Parameters",
+    }
 
     user_inputs = {}
-    for i, param in enumerate(user_input_params):
-        default_val = param.get("default_value", "")
-        label = f"{param['symbol']} - {param['name']}"
-        if param.get("unit"):
-            label += f" ({param['unit']})"
 
-        help_parts = []
-        if param.get("description"):
-            help_parts.append(param["description"])
-        if param.get("source"):
-            help_parts.append(f"Source: {param['source']}")
-        if default_val:
-            help_parts.append(f"Methodology default: {default_val}")
-        if param.get("monitoring_frequency"):
-            help_parts.append(f"Monitoring: {param['monitoring_frequency']}")
-        help_text = " | ".join(help_parts)
+    for cat in cat_order:
+        cat_params = [p for p in relevant_params if p.get("category") == cat]
+        if not cat_params:
+            continue
 
-        param_key = param.get("parameter_id", f"p{i}").replace(" ", "_").replace(".", "_")
-        val = st.text_input(
-            label,
-            value=default_val if default_val else "",
-            key=f"param_{project_id}_{param_key}",
-            help=help_text,
-        )
-        if val:
-            user_inputs[param["symbol"]] = val
+        eq_role_filter = None
+        if cat == "calculated":
+            eq_role_filter = "intermediate"
+
+        st.markdown(f"**{cat_labels.get(cat, cat)}:**")
+        if cat == "methodology_default":
+            st.caption("Pre-filled from methodology. Override if your project uses different values.")
+        elif cat == "monitored":
+            st.caption("Values from field surveys, monitoring, or project records.")
+        elif cat == "calculated":
+            st.caption("Auto-calculated from other parameters. Shown for reference.")
+
+        for i, param in enumerate(cat_params):
+            role = param.get("equation_role", "input")
+            if cat == "calculated" and role == "output":
+                continue
+
+            default_resolved = _resolve_default(param)
+            sym = param.get("symbol", "")
+            unit = param.get("unit", "")
+
+            label = f"{sym} - {param['name']}"
+            if unit:
+                label += f" [{unit}]"
+
+            help_parts = []
+            if param.get("source"):
+                help_parts.append(f"Source: {param['source']}")
+            dbc = param.get("defaults_by_context", [])
+            if dbc:
+                defaults_text = ", ".join(f"{d['context_key']}: {d['value']} {d.get('unit','')}" for d in dbc[:5])
+                help_parts.append(f"Defaults: {defaults_text}")
+            elif param.get("default_value"):
+                help_parts.append(f"Default: {param['default_value']}")
+            if param.get("monitoring_frequency"):
+                help_parts.append(f"Monitoring: {param['monitoring_frequency']}")
+            help_text = " | ".join(help_parts) if help_parts else None
+
+            param_key = param.get("parameter_id", f"p{i}").replace(" ", "_").replace(".", "_")
+            is_readonly = (cat == "calculated")
+
+            if is_readonly:
+                st.text_input(
+                    label,
+                    value=default_resolved or "(calculated)",
+                    key=f"param_{project_id}_{cat}_{param_key}",
+                    disabled=True,
+                    help=help_text,
+                )
+            else:
+                val = st.text_input(
+                    label,
+                    value=default_resolved,
+                    key=f"param_{project_id}_{cat}_{param_key}",
+                    help=help_text,
+                )
+                if val:
+                    user_inputs[sym] = val
+
+        st.markdown("---")
+
+    also_needed = [p for p in relevant_params
+                   if p.get("category") not in cat_order
+                   and p.get("category") != "qualitative"
+                   and p.get("equation_role") in ("input", "intermediate")]
+    if also_needed:
+        st.markdown("**Other Parameters:**")
+        for i, param in enumerate(also_needed):
+            default_resolved = _resolve_default(param)
+            sym = param.get("symbol", "")
+            unit = param.get("unit", "")
+            label = f"{sym} - {param['name']}"
+            if unit:
+                label += f" [{unit}]"
+            param_key = param.get("parameter_id", f"other{i}").replace(" ", "_").replace(".", "_")
+            val = st.text_input(
+                label,
+                value=default_resolved,
+                key=f"param_{project_id}_other_{param_key}",
+            )
+            if val:
+                user_inputs[sym] = val
+        st.markdown("---")
 
     st.divider()
 
-    crediting_years = st.number_input(
-        "Crediting period (years)",
-        min_value=1, max_value=30, value=7,
-        key=f"cred_years_{project_id}",
-    )
+    crediting_years = project.get("crediting_period_years") or 7
+    cp_start = project.get("crediting_period_start")
+    if cp_start:
+        st.caption(f"Crediting period: {str(cp_start)[:10]}, {crediting_years} years (set in Project Settings)")
+    else:
+        st.caption(f"Crediting period: {crediting_years} years (set start date in Project Settings for vintage labels)")
 
     if st.button("Run Calculation", key=f"run_calc_{project_id}",
                   type="primary"):
         if not user_inputs:
-            st.warning("Please fill in at least some project-specific parameters.")
+            st.warning("Please fill in at least some parameter values.")
             return
 
         with st.spinner("Running emission reduction calculation..."):
-            method_id = selected_method["method_id"] if selected_method else None
             result = _fetch(
                 f"/projects/{project_id}/calculate",
                 method="POST",
@@ -2436,15 +2556,91 @@ def _render_project_settings(project):
                                if project.get("status") in STATUS_LABELS else 0,
                                key=f"settings_status_{project_id}")
 
+    st.divider()
+    st.subheader("Crediting Period")
+
+    from datetime import date as _date
+
+    cp_start_raw = project.get("crediting_period_start")
+    cp_start_val = None
+    if cp_start_raw:
+        try:
+            if isinstance(cp_start_raw, str):
+                cp_start_val = _date.fromisoformat(cp_start_raw[:10])
+            else:
+                cp_start_val = cp_start_raw
+        except Exception:
+            pass
+    cp_start = st.date_input(
+        "Crediting period start date",
+        value=cp_start_val,
+        key=f"settings_cp_start_{project_id}",
+    )
+    cp_years = st.number_input(
+        "Crediting period (years)",
+        min_value=1, max_value=30,
+        value=project.get("crediting_period_years") or 7,
+        key=f"settings_cp_years_{project_id}",
+    )
+    if cp_start:
+        from datetime import timedelta
+        cp_end = _date(cp_start.year + cp_years, cp_start.month, cp_start.day) if cp_start else None
+        if cp_end:
+            st.caption(f"Crediting period: {cp_start.isoformat()} to {cp_end.isoformat()} ({cp_years} years)")
+            vintages = [str(cp_start.year + i) for i in range(cp_years)]
+            st.caption(f"Vintages: {', '.join(vintages)}")
+
+    existing_settings = project.get("project_settings") or {}
+
+    meth_parsed = None
+    methodology = project.get("methodology")
+    if methodology:
+        meth_data = _fetch(f"/projects/{project_id}/methodology-data")
+        if meth_data and meth_data.get("status") == "ready":
+            meth_parsed = meth_data.get("parsed")
+
+    new_settings = dict(existing_settings)
+    context_dims = []
+    if meth_parsed:
+        context_dims = meth_parsed.get("context_dimensions", [])
+
+    if context_dims:
+        st.divider()
+        st.subheader("Methodology Parameters")
+        st.caption("These settings determine which default values are used in calculations.")
+
+        for dim in context_dims:
+            dim_key = dim["dimension_key"]
+            options = dim["options"]
+            current_val = existing_settings.get(dim_key, "")
+            idx = 0
+            if current_val in options:
+                idx = options.index(current_val)
+            selected = st.selectbox(
+                dim["label"],
+                options,
+                index=idx,
+                key=f"settings_dim_{project_id}_{dim_key}",
+                help=dim.get("description", ""),
+            )
+            new_settings[dim_key] = selected
+
+    st.divider()
+
     if st.button("Save Changes", key=f"save_settings_{project_id}", type="primary"):
-        _fetch(f"/projects/{project_id}", method="PATCH", json={
+        update_payload = {
             "name": new_name,
             "standard": new_standard,
             "methodology": new_methodology,
             "country": new_country or None,
             "description": new_desc or None,
             "status": new_status,
-        })
+            "crediting_period_years": cp_years,
+            "project_settings": new_settings,
+        }
+        if cp_start:
+            update_payload["crediting_period_start"] = cp_start.isoformat()
+        _fetch(f"/projects/{project_id}", method="PATCH", json=update_payload)
         st.success("Project updated.")
         time.sleep(0.5)
         st.rerun()

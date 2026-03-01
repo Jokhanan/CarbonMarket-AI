@@ -112,24 +112,67 @@ PARSE_SCHEMA = {
                             "unit": {"type": "string"},
                             "description": {"type": "string"},
                             "source": {"type": "string", "description": "Data source as specified in the methodology"},
-                            "default_value": {"type": "string", "description": "Methodology or IPCC default value if specified"},
+                            "default_value": {"type": "string", "description": "Raw text of methodology/IPCC default if specified"},
+                            "default_numeric": {
+                                "type": "number",
+                                "description": "Numeric default value if a single clear default exists. Omit if context-dependent (e.g. varies by fuel type).",
+                            },
+                            "defaults_by_context": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "context_key": {"type": "string", "description": "The condition, e.g. 'wood', 'charcoal', 'LPG', 'AR5', 'AR4'"},
+                                        "value": {"type": "number"},
+                                        "unit": {"type": "string"},
+                                        "source": {"type": "string", "description": "e.g. 'IPCC default', 'Methodology default', 'CDM Tool'"},
+                                        "notes": {"type": "string"},
+                                    },
+                                    "required": ["context_key", "value"],
+                                },
+                                "description": "When default depends on fuel type, GWP version, or other context. List all options.",
+                            },
                             "monitoring_frequency": {"type": "string"},
                             "applicable_methods": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Which methods use this parameter, e.g. ['method_1', 'method_2'] or ['all']",
                             },
+                            "category": {
+                                "type": "string",
+                                "enum": ["methodology_default", "monitored", "calculated", "project_input", "qualitative"],
+                                "description": "methodology_default: has a fixed/selectable default from methodology or IPCC (emission factors, NCV, fNRB approach). monitored: requires periodic monitoring/survey during crediting period (usage rate, fuel consumption from field tests). calculated: computed from other parameters (SFS, SE). project_input: project-specific value the developer provides (number of devices, crediting period). qualitative: descriptive/textual parameter not used in equations (survey descriptions, regulatory info).",
+                            },
+                            "equation_role": {
+                                "type": "string",
+                                "enum": ["input", "intermediate", "output", "none"],
+                                "description": "input: directly entered into equations. intermediate: calculated from other params then used in equations. output: the result (ER_y, BE_y, PE_y). none: not used in equations.",
+                            },
                             "is_monitored": {"type": "boolean"},
-                            "is_user_input": {"type": "boolean", "description": "True if the project developer must provide this value (project-specific data)"},
-                            "is_calculated": {"type": "boolean", "description": "True if this is calculated from other parameters"},
-                            "is_default_available": {"type": "boolean", "description": "True if a methodology/IPCC default exists"},
+                            "is_user_input": {"type": "boolean"},
+                            "is_calculated": {"type": "boolean"},
+                            "is_default_available": {"type": "boolean"},
                         },
-                        "required": ["parameter_id", "symbol", "name", "unit"],
+                        "required": ["parameter_id", "symbol", "name", "unit", "category"],
                     },
                 },
-                "default_values": {
-                    "type": "object",
-                    "description": "All default emission factors and constants from the methodology, with their exact values and sources",
+                "context_dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "dimension_key": {"type": "string", "description": "e.g. 'baseline_fuel', 'project_fuel', 'gwp_version'"},
+                            "label": {"type": "string", "description": "e.g. 'Baseline fuel type', 'GWP version'"},
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Available choices, e.g. ['wood', 'charcoal', 'LPG'] or ['AR4', 'AR5']",
+                            },
+                            "description": {"type": "string"},
+                        },
+                        "required": ["dimension_key", "label", "options"],
+                    },
+                    "description": "Context choices that affect which default values apply (fuel types, GWP versions, etc.). Extracted from the methodology.",
                 },
                 "leakage_approach": {"type": "string"},
                 "monitoring_requirements_summary": {"type": "string"},
@@ -165,13 +208,21 @@ CRITICAL RULES — follow these exactly:
 
 6. LINK PARAMETERS TO METHODS: For each parameter, indicate which calculation methods use it.
 
-7. DISTINGUISH PARAMETER TYPES:
-   - is_user_input=true: Values the project developer must provide from project-specific data (e.g., number of devices deployed, fuel consumption from field tests)
-   - is_monitored=true: Values that require periodic monitoring/surveys during the crediting period
-   - is_calculated=true: Values computed from other parameters (e.g., SFS calculated from baseline and project fuel consumption tests)
-   - is_default_available=true: Values where the methodology provides a default (e.g., IPCC emission factors, default NCV)
+7. CATEGORIZE EACH PARAMETER into exactly one category:
+   - "methodology_default": Has a fixed or selectable default value from the methodology or IPCC (emission factors like EF_CO2, net calorific values NCV, fNRB values). These are pre-filled for the user based on fuel type or other context.
+   - "monitored": Requires periodic monitoring or field surveys during the crediting period (usage rates U_p,y, fuel consumption from Water Boiling Tests or Kitchen Performance Tests, number of technology-days N_b,p,y).
+   - "calculated": Computed from other parameters — NOT entered by the user (e.g., SFS calculated from baseline minus project consumption, SE calculated from consumption × emission factors).
+   - "project_input": Project-specific value the developer defines once for the project (number of devices, project scale, crediting period duration). Not from monitoring, not from methodology.
+   - "qualitative": Descriptive/textual parameter not used in equations (survey descriptions, regulatory framework, IAP levels, avoidance of double counting).
+   Also set equation_role: "input" (directly in equations), "intermediate" (calculated then used in equations), "output" (result like ER_y), "none" (not in equations).
+   Keep the boolean flags (is_user_input, is_monitored, is_calculated, is_default_available) consistent with category.
 
-8. DO NOT HALLUCINATE: If something is not in the document, do not make it up. Only extract what is explicitly stated."""
+8. STRUCTURED DEFAULT VALUES: When a parameter has defaults that depend on context (fuel type, GWP version), use defaults_by_context array with each option as a separate entry. Include the numeric value, unit, source, and context_key. When a single clear numeric default exists, set default_numeric.
+   Example for NCV of wood: defaults_by_context: [{"context_key": "wood", "value": 0.0156, "unit": "TJ/ton", "source": "Methodology default"}]
+
+9. CONTEXT DIMENSIONS: Extract all choices that affect default values (fuel types available, GWP version options, etc.) into context_dimensions. These become dropdowns in the project settings so the system can auto-select the right defaults.
+
+10. DO NOT HALLUCINATE: If something is not in the document, do not make it up. Only extract what is explicitly stated."""
 
 
 def _normalize_meth_code(code):

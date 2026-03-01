@@ -992,10 +992,21 @@ def list_user_projects(status=None):
 
 
 def update_user_project(project_id, **kwargs):
-    allowed = {"name", "standard", "doc_type", "methodology", "country", "description", "status"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    import psycopg2.extras as _pg_extras
+    allowed = {"name", "standard", "doc_type", "methodology", "country", "description", "status",
+               "crediting_period_start", "crediting_period_years", "project_settings"}
+    nullable_fields = {"crediting_period_start", "country", "description"}
+    updates = {}
+    for k, v in kwargs.items():
+        if k not in allowed:
+            continue
+        if v is None and k not in nullable_fields:
+            continue
+        updates[k] = v
     if not updates:
         return
+    if "project_settings" in updates and isinstance(updates["project_settings"], dict):
+        updates["project_settings"] = _pg_extras.Json(updates["project_settings"])
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values = list(updates.values()) + [project_id]
     with get_cursor() as cur:
