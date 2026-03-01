@@ -1455,6 +1455,76 @@ def _render_sync_controls(summary):
                 st.rerun()
 
 
+@st.cache_data(ttl=300)
+def _load_methodologies(standard=None):
+    params = f"?limit=300"
+    if standard:
+        std_map = {"GoldStandard": "GoldStandard", "Verra": "Verra"}
+        mapped = std_map.get(standard)
+        if mapped:
+            params += f"&standard={mapped}"
+    result = _fetch(f"/projects/methodologies{params}")
+    return result or []
+
+
+def _methodology_selector(key_prefix, standard=None, current_value=None):
+    meths = _load_methodologies()
+    search = st.text_input("Search methodology", key=f"{key_prefix}_meth_search",
+                            placeholder="Type to search (e.g., AMS-II.G, cookstove, REDD)...")
+    if search:
+        search_lower = search.lower()
+        filtered = [m for m in meths if
+                    search_lower in (m.get("code") or "").lower() or
+                    search_lower in (m.get("name") or "").lower() or
+                    search_lower in (m.get("sector") or "").lower()]
+    else:
+        filtered = meths
+
+    if standard:
+        std_map = {"GoldStandard": "GoldStandard", "Verra": "Verra"}
+        mapped_std = std_map.get(standard)
+        if mapped_std:
+            std_filtered = [m for m in filtered if m.get("standard") in (mapped_std, "CDM/Verra", "Other", None)]
+            if std_filtered:
+                filtered = std_filtered
+
+    shown = filtered[:50]
+    shown_codes = {m["code"] for m in shown}
+    if current_value and current_value not in shown_codes:
+        current_meth = next((m for m in meths if m["code"] == current_value), None)
+        if current_meth:
+            shown.insert(0, current_meth)
+        else:
+            shown.insert(0, {"code": current_value, "name": current_value, "project_count": 0})
+
+    options = ["(none)"] + [m["code"] for m in shown]
+    labels = {
+        "(none)": "-- Select methodology --",
+    }
+    for m in shown:
+        name = m.get("name") or ""
+        proj = m.get("project_count", 0)
+        label = f"{m['code']}"
+        if name:
+            label += f" - {name[:60]}"
+        if proj:
+            label += f" ({proj} projects)"
+        labels[m["code"]] = label
+
+    default_idx = 0
+    if current_value and current_value in options:
+        default_idx = options.index(current_value)
+
+    selected = st.selectbox(
+        "Methodology",
+        options,
+        index=default_idx,
+        format_func=lambda x: labels.get(x, x),
+        key=f"{key_prefix}_meth_select",
+    )
+    return selected if selected != "(none)" else None
+
+
 STANDARD_OPTIONS = ["GoldStandard", "Verra"]
 DOC_TYPES_FOR_STANDARD = {
     "GoldStandard": {"pdd": "PDD", "mr": "Monitoring Report", "poa_dd": "PoA-DD", "vpa_dd": "VPA-DD"},
@@ -1512,8 +1582,7 @@ def _render_project_list():
             new_name = st.text_input("Project name", key="new_proj_name",
                                       placeholder="e.g., Ghana Improved Cookstoves")
             new_standard = st.selectbox("Standard", STANDARD_OPTIONS, key="new_proj_standard")
-            new_methodology = st.text_input("Methodology (optional)", key="new_proj_meth",
-                                             placeholder="e.g., AMS-II.G")
+            new_methodology = _methodology_selector("new_proj", standard=new_standard)
             new_country = st.text_input("Country", key="new_proj_country",
                                          placeholder="e.g., Ghana")
             new_desc = st.text_area("Description (optional)", key="new_proj_desc",
@@ -1523,7 +1592,7 @@ def _render_project_list():
                     result = _fetch("/projects", method="POST", json={
                         "name": new_name,
                         "standard": new_standard,
-                        "methodology": new_methodology or None,
+                        "methodology": new_methodology,
                         "country": new_country or None,
                         "description": new_desc or None,
                     })
@@ -1891,31 +1960,57 @@ def _render_project_settings(project):
     project_id = project["id"]
     st.subheader("Project Settings")
 
-    with st.form(key=f"settings_form_{project_id}"):
-        new_name = st.text_input("Project name", value=project.get("name", ""))
-        new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
-                                     index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
-                                     if project.get("standard") in STANDARD_OPTIONS else 0)
-        new_methodology = st.text_input("Methodology", value=project.get("methodology", "") or "")
-        new_country = st.text_input("Country", value=project.get("country", "") or "")
-        new_desc = st.text_area("Description", value=project.get("description", "") or "")
-        new_status = st.selectbox("Status", list(STATUS_LABELS.keys()),
-                                   format_func=lambda x: STATUS_LABELS[x],
-                                   index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
-                                   if project.get("status") in STATUS_LABELS else 0)
+    new_name = st.text_input("Project name", value=project.get("name", ""),
+                              key=f"settings_name_{project_id}")
+    new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
+                                 index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
+                                 if project.get("standard") in STANDARD_OPTIONS else 0,
+                                 key=f"settings_standard_{project_id}")
+    new_methodology = _methodology_selector(
+        f"settings_{project_id}", standard=new_standard,
+        current_value=project.get("methodology"))
 
-        if st.form_submit_button("Save Changes", type="primary"):
-            _fetch(f"/projects/{project_id}", method="PATCH", json={
-                "name": new_name,
-                "standard": new_standard,
-                "methodology": new_methodology or None,
-                "country": new_country or None,
-                "description": new_desc or None,
-                "status": new_status,
-            })
-            st.success("Project updated.")
-            time.sleep(0.5)
-            st.rerun()
+    meth_detail = None
+    if new_methodology:
+        meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
+    if meth_detail:
+        with st.container(border=True):
+            st.caption("Selected methodology")
+            st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
+            cols = st.columns(3)
+            with cols[0]:
+                st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
+            with cols[1]:
+                st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
+            with cols[2]:
+                st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
+            if meth_detail.get("applicability"):
+                st.markdown(f"Applicability: {meth_detail['applicability']}")
+            if meth_detail.get("status") == "deprecated":
+                st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
+
+    new_country = st.text_input("Country", value=project.get("country", "") or "",
+                                 key=f"settings_country_{project_id}")
+    new_desc = st.text_area("Description", value=project.get("description", "") or "",
+                             key=f"settings_desc_{project_id}")
+    new_status = st.selectbox("Status", list(STATUS_LABELS.keys()),
+                               format_func=lambda x: STATUS_LABELS[x],
+                               index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
+                               if project.get("status") in STATUS_LABELS else 0,
+                               key=f"settings_status_{project_id}")
+
+    if st.button("Save Changes", key=f"save_settings_{project_id}", type="primary"):
+        _fetch(f"/projects/{project_id}", method="PATCH", json={
+            "name": new_name,
+            "standard": new_standard,
+            "methodology": new_methodology,
+            "country": new_country or None,
+            "description": new_desc or None,
+            "status": new_status,
+        })
+        st.success("Project updated.")
+        time.sleep(0.5)
+        st.rerun()
 
     st.divider()
     st.subheader("Danger Zone")

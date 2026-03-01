@@ -71,6 +71,18 @@ def startup_init_db():
     except Exception as exc:
         logger.warning("Database schema init skipped: %s", exc)
 
+    try:
+        from carbongpt.repository.db import get_cursor
+        with get_cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM methodologies")
+            count = cur.fetchone()["count"]
+        if count == 0:
+            from carbongpt.repository.methodology_db import populate_methodologies_from_projects
+            n = populate_methodologies_from_projects()
+            logger.info("Auto-populated %d methodologies on first startup", n)
+    except Exception as exc:
+        logger.warning("Methodology auto-population skipped: %s", exc)
+
     if os.getenv("CARBONGPT_AUTO_SYNC", "").lower() in ("1", "true", "yes"):
         try:
             from carbongpt.repository.methodology_sync import start_weekly_sync

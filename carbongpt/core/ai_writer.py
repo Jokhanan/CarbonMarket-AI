@@ -32,6 +32,35 @@ STANDARD_DOC_TYPE_MAP = {
 }
 
 
+def _get_methodology_context(methodology_code):
+    if not methodology_code:
+        return ""
+    try:
+        from carbongpt.repository.store import get_methodology
+        meth = get_methodology(methodology_code)
+        if not meth:
+            return ""
+        parts = [f"METHODOLOGY REFERENCE: {meth['code']}"]
+        if meth.get("name"):
+            parts.append(f"Full name: {meth['name']}")
+        if meth.get("standard"):
+            parts.append(f"Standard: {meth['standard']}")
+        if meth.get("category"):
+            parts.append(f"Category: {meth['category']}")
+        if meth.get("sector"):
+            parts.append(f"Sector: {meth['sector']}")
+        if meth.get("applicability"):
+            parts.append(f"Applicability conditions: {meth['applicability']}")
+        if meth.get("status") == "deprecated":
+            parts.append(f"WARNING: This methodology is deprecated. Superseded by: {meth.get('superseded_by', 'unknown')}")
+        if meth.get("project_count"):
+            parts.append(f"Used in {meth['project_count']} registered projects globally")
+        return "\n".join(parts)
+    except Exception as e:
+        logger.warning("Methodology lookup failed: %s", e)
+        return ""
+
+
 def get_guide_doc_type(standard, project_doc_type):
     mapping = STANDARD_DOC_TYPE_MAP.get(standard, {})
     return mapping.get(project_doc_type)
@@ -111,6 +140,7 @@ def generate_section_draft(
     doc_label = DOC_TYPE_LABELS.get(guide_dt, guide_dt)
 
     knowledge_context = ""
+    methodology_context = ""
     try:
         methodology = project_info.get("methodology", "")
         if methodology:
@@ -125,6 +155,11 @@ def generate_section_draft(
                 knowledge_context = format_context_for_prompt(chunks)
     except Exception as e:
         logger.warning("Knowledge retrieval failed for writing: %s", e)
+
+    try:
+        methodology_context = _get_methodology_context(project_info.get("methodology"))
+    except Exception as e:
+        logger.warning("Methodology DB lookup failed: %s", e)
 
     system_prompt = (
         f"You are an expert carbon project developer and technical writer specialized in {std_label} projects. "
@@ -171,6 +206,12 @@ def generate_section_draft(
         user_prompt += (
             "### Additional reference documents provided by the user:\n"
             f'"""\n{ref_excerpt}\n"""\n\n'
+        )
+
+    if methodology_context:
+        user_prompt += (
+            "### Methodology database reference:\n"
+            f"{methodology_context}\n\n"
         )
 
     if knowledge_context:
@@ -266,6 +307,15 @@ def review_with_context(
     user_prompt += f"- Standard: {std_label}\n"
     user_prompt += f"- Methodology: {project_info.get('methodology', 'Not specified')}\n"
     user_prompt += f"- Country: {project_info.get('country', 'Not specified')}\n\n"
+
+    methodology_context = _get_methodology_context(project_info.get("methodology"))
+    if methodology_context:
+        user_prompt += (
+            "### Methodology database reference:\n"
+            f"{methodology_context}\n\n"
+            "Use this methodology information to check applicability conditions "
+            "and ensure the project properly addresses methodology requirements.\n\n"
+        )
 
     if pdd_text:
         pdd_excerpt = pdd_text[:6000]

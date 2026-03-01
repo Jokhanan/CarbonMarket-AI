@@ -187,6 +187,28 @@ CREATE TABLE IF NOT EXISTS project_write_sessions (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS methodologies (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(500),
+    standard VARCHAR(50),
+    category VARCHAR(100),
+    sector VARCHAR(200),
+    status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active', 'deprecated', 'under_revision', 'draft', 'withdrawn')),
+    applicability TEXT,
+    description TEXT,
+    source_url TEXT,
+    superseded_by VARCHAR(50),
+    project_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_methodologies_standard ON methodologies(standard);
+CREATE INDEX IF NOT EXISTS idx_methodologies_category ON methodologies(category);
+CREATE INDEX IF NOT EXISTS idx_methodologies_status ON methodologies(status);
+CREATE INDEX IF NOT EXISTS idx_methodologies_code ON methodologies(code);
+
 CREATE INDEX IF NOT EXISTS idx_user_projects_standard ON user_projects(standard);
 CREATE INDEX IF NOT EXISTS idx_user_projects_status ON user_projects(status);
 CREATE INDEX IF NOT EXISTS idx_project_documents_project ON project_documents(project_id);

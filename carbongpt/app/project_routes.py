@@ -48,6 +48,34 @@ class ReviewDocumentRequest(BaseModel):
     document_id: int
 
 
+@router.get("/methodologies")
+def get_methodologies(standard: str = None, category: str = None, search: str = None, limit: int = 200):
+    from carbongpt.repository.store import list_methodologies
+    return list_methodologies(standard=standard, category=category, search=search, limit=limit)
+
+
+@router.get("/methodologies/categories")
+def get_methodology_categories_endpoint():
+    from carbongpt.repository.store import get_methodology_categories
+    return get_methodology_categories()
+
+
+@router.get("/methodologies/{code}")
+def get_methodology_detail(code: str):
+    from carbongpt.repository.store import get_methodology
+    m = get_methodology(code)
+    if not m:
+        raise HTTPException(status_code=404, detail="Methodology not found.")
+    return m
+
+
+@router.post("/methodologies/populate")
+def populate_methodologies():
+    from carbongpt.repository.methodology_db import populate_methodologies_from_projects
+    count = populate_methodologies_from_projects()
+    return {"populated": count}
+
+
 @router.get("")
 def list_projects(status: str = None):
     from carbongpt.repository.store import list_user_projects

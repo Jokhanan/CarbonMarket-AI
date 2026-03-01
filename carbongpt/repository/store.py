@@ -825,6 +825,74 @@ def search_carbon_projects(query_text, limit=50):
         return cur.fetchall()
 
 
+def upsert_methodology(code, name=None, standard=None, category=None, sector=None,
+                       status="active", applicability=None, description=None,
+                       source_url=None, superseded_by=None, project_count=0):
+    with get_cursor() as cur:
+        cur.execute(
+            """INSERT INTO methodologies (code, name, standard, category, sector, status,
+               applicability, description, source_url, superseded_by, project_count)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (code) DO UPDATE SET
+               name = COALESCE(EXCLUDED.name, methodologies.name),
+               standard = COALESCE(EXCLUDED.standard, methodologies.standard),
+               category = COALESCE(EXCLUDED.category, methodologies.category),
+               sector = COALESCE(EXCLUDED.sector, methodologies.sector),
+               status = COALESCE(EXCLUDED.status, methodologies.status),
+               applicability = COALESCE(EXCLUDED.applicability, methodologies.applicability),
+               description = COALESCE(EXCLUDED.description, methodologies.description),
+               source_url = COALESCE(EXCLUDED.source_url, methodologies.source_url),
+               superseded_by = COALESCE(EXCLUDED.superseded_by, methodologies.superseded_by),
+               project_count = GREATEST(EXCLUDED.project_count, methodologies.project_count),
+               updated_at = NOW()
+               RETURNING id""",
+            (code, name, standard, category, sector, status, applicability,
+             description, source_url, superseded_by, project_count)
+        )
+        return cur.fetchone()["id"]
+
+
+def list_methodologies(standard=None, category=None, status=None, search=None, limit=200):
+    with get_cursor() as cur:
+        conditions = []
+        params = []
+        if standard:
+            conditions.append("standard = %s")
+            params.append(standard)
+        if category:
+            conditions.append("category = %s")
+            params.append(category)
+        if status:
+            conditions.append("status = %s")
+            params.append(status)
+        if search:
+            conditions.append("(code ILIKE %s OR name ILIKE %s OR description ILIKE %s)")
+            like = f"%{search}%"
+            params.extend([like, like, like])
+        where = " AND ".join(conditions) if conditions else "1=1"
+        params.append(limit)
+        cur.execute(
+            f"SELECT * FROM methodologies WHERE {where} ORDER BY code LIMIT %s",
+            params
+        )
+        return cur.fetchall()
+
+
+def get_methodology(code):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM methodologies WHERE code = %s", (code,))
+        return cur.fetchone()
+
+
+def get_methodology_categories():
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT category, COUNT(*) as count FROM methodologies "
+            "WHERE category IS NOT NULL GROUP BY category ORDER BY count DESC"
+        )
+        return cur.fetchall()
+
+
 def create_user_project(name, standard, doc_type=None, methodology=None, country=None, description=None):
     with get_cursor() as cur:
         cur.execute(
