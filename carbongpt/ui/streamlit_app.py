@@ -1723,7 +1723,7 @@ def _render_project_workspace(project_id):
     if project.get("description"):
         st.caption(project["description"])
 
-    tabs = st.tabs(["Documents", "Review", "Write / Draft", "Project Settings"])
+    tabs = st.tabs(["Documents", "Review", "Write / Draft", "Calculations", "Export", "Project Settings"])
 
     with tabs[0]:
         _render_documents_tab(project)
@@ -1732,7 +1732,348 @@ def _render_project_workspace(project_id):
     with tabs[2]:
         _render_write_tab(project)
     with tabs[3]:
+        _render_calculations_tab(project)
+    with tabs[4]:
+        _render_export_tab(project)
+    with tabs[5]:
         _render_project_settings(project)
+
+
+def _render_calculations_tab(project):
+    project_id = project["id"]
+    methodology = project.get("methodology")
+
+    st.subheader("Emission Reduction Calculations")
+
+    if not methodology:
+        st.warning("Assign a methodology to this project in Project Settings before running calculations.")
+        return
+
+    st.write(f"Methodology: **{methodology}**")
+
+    parse_key = f"parsed_methodology_{project_id}"
+    calc_key = f"calc_result_{project_id}"
+
+    if parse_key not in st.session_state:
+        st.session_state[parse_key] = None
+    if calc_key not in st.session_state:
+        st.session_state[calc_key] = None
+
+    if st.button("Analyze Methodology", key=f"parse_meth_{project_id}",
+                  type="primary",
+                  help="AI will parse the methodology to extract equations, parameters, and default values"):
+        with st.spinner("Analyzing methodology equations and parameters..."):
+            result = _fetch(
+                f"/projects/{project_id}/parse-methodology",
+                method="POST",
+                json={"methodology_code": methodology},
+            )
+            if result and not result.get("error"):
+                st.session_state[parse_key] = result
+                st.success("Methodology analyzed successfully.")
+            else:
+                err = (result or {}).get("error", "Unknown error")
+                st.error(f"Failed to analyze methodology: {err}")
+
+    parsed = st.session_state.get(parse_key)
+    if not parsed:
+        st.info("Click 'Analyze Methodology' to extract calculation equations and parameters from the methodology document.")
+        return
+
+    st.divider()
+
+    methods = parsed.get("calculation_methods", [])
+    if methods:
+        st.markdown("**Calculation Methods Available:**")
+        method_names = [f"{m['method_id']}: {m['method_name']}" for m in methods]
+        selected_method_idx = st.selectbox(
+            "Select calculation method",
+            range(len(method_names)),
+            format_func=lambda i: method_names[i],
+            key=f"calc_method_{project_id}",
+        )
+        selected_method = methods[selected_method_idx]
+
+        if selected_method.get("description"):
+            st.caption(selected_method["description"])
+
+        if selected_method.get("equations"):
+            with st.expander("View Equations", expanded=False):
+                for eq in selected_method["equations"]:
+                    eq_label = eq.get("equation_label", eq.get("equation_id", ""))
+                    st.markdown(f"**{eq_label}:** `{eq.get('formula_text', '')}`")
+                    if eq.get("formula_description"):
+                        st.caption(eq["formula_description"])
+    else:
+        selected_method = None
+
+    st.divider()
+    st.markdown("**Project-Specific Inputs:**")
+
+    params = parsed.get("parameters", [])
+    user_input_params = [p for p in params if p.get("is_user_input", False)]
+
+    if not user_input_params:
+        user_input_params = params[:10]
+
+    user_inputs = {}
+    cols = st.columns(2)
+    for i, param in enumerate(user_input_params):
+        with cols[i % 2]:
+            default_val = param.get("default_value", "")
+            label = f"{param['symbol']} - {param['name']}"
+            if param.get("unit"):
+                label += f" ({param['unit']})"
+            help_text = param.get("description", "")
+            if default_val:
+                help_text += f" Default: {default_val}"
+
+            val = st.text_input(
+                label,
+                value=default_val if default_val else "",
+                key=f"param_{project_id}_{param['parameter_id']}",
+                help=help_text,
+                data_testid=f"input-param-{param['parameter_id']}",
+            )
+            if val:
+                user_inputs[param["symbol"]] = val
+
+    st.divider()
+
+    crediting_years = st.number_input(
+        "Crediting period (years)",
+        min_value=1, max_value=30, value=7,
+        key=f"cred_years_{project_id}",
+    )
+
+    if st.button("Run Calculation", key=f"run_calc_{project_id}",
+                  type="primary"):
+        if not user_inputs:
+            st.warning("Please fill in at least some project-specific parameters.")
+            return
+
+        with st.spinner("Running emission reduction calculation..."):
+            method_id = selected_method["method_id"] if selected_method else None
+            result = _fetch(
+                f"/projects/{project_id}/calculate",
+                method="POST",
+                json={
+                    "method_id": method_id,
+                    "crediting_years": crediting_years,
+                    "user_inputs": user_inputs,
+                },
+            )
+            if result and not result.get("error"):
+                st.session_state[calc_key] = result
+            else:
+                err = (result or {}).get("error", "Calculation failed")
+                st.error(f"Calculation failed: {err}")
+
+    calc_result = st.session_state.get(calc_key)
+    if calc_result and not calc_result.get("error"):
+        st.divider()
+        _render_calc_results(project, calc_result)
+
+
+def _render_calc_results(project, calc_result):
+    import pandas as pd
+
+    project_id = project["id"]
+
+    st.markdown("### Calculation Results")
+
+    if calc_result.get("narrative_explanation"):
+        with st.expander("Narrative Explanation", expanded=True):
+            st.write(calc_result["narrative_explanation"])
+
+    annual = calc_result.get("annual_calculations", [])
+    if annual:
+        df = pd.DataFrame(annual)
+        display_cols = {
+            "year": "Year",
+            "baseline_emissions_tco2e": "Baseline (tCO2e)",
+            "project_emissions_tco2e": "Project (tCO2e)",
+            "leakage_tco2e": "Leakage (tCO2e)",
+            "net_emission_reductions_tco2e": "Net ER (tCO2e)",
+        }
+        available = [c for c in display_cols if c in df.columns]
+        df_display = df[available].rename(columns=display_cols)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+        total = calc_result.get("total_emission_reductions_tco2e", 0)
+        avg = calc_result.get("average_annual_reductions_tco2e", 0)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Emission Reductions",
+                       f"{total:,.0f} tCO2e")
+        with col2:
+            st.metric("Avg. Annual Reductions",
+                       f"{avg:,.0f} tCO2e/yr")
+
+        st.subheader("Emission Reductions by Year")
+        chart_df = df_display.set_index("Year")[["Net ER (tCO2e)"]] if "Year" in df_display.columns else None
+        if chart_df is not None:
+            st.bar_chart(chart_df)
+
+    if calc_result.get("parameters_used"):
+        with st.expander("Parameters Used"):
+            params_df = pd.DataFrame(calc_result["parameters_used"])
+            st.dataframe(params_df, use_container_width=True, hide_index=True)
+
+    if calc_result.get("assumptions"):
+        with st.expander("Assumptions"):
+            for a in calc_result["assumptions"]:
+                st.write(f"- {a}")
+
+    if calc_result.get("monitoring_parameters"):
+        with st.expander("Monitoring Parameters"):
+            mon_df = pd.DataFrame(calc_result["monitoring_parameters"])
+            st.dataframe(mon_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+    if st.button("Download Calculation Spreadsheet (Excel)",
+                  key=f"download_calc_{project_id}",
+                  type="primary"):
+        with st.spinner("Generating Excel file..."):
+            import io
+            resp = requests.post(
+                f"{API_BASE}/projects/{project_id}/export-calculation",
+                json={"calculation_result": calc_result},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                st.download_button(
+                    label="Save Excel File",
+                    data=resp.content,
+                    file_name=f"{project['name'][:30]}_calculations.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"save_calc_excel_{project_id}",
+                )
+            else:
+                st.error("Failed to generate Excel file.")
+
+
+def _render_export_tab(project):
+    project_id = project["id"]
+    standard = project.get("standard", "GoldStandard")
+    methodology = project.get("methodology")
+
+    st.subheader("Export Documents")
+    st.write("Generate filled templates with your drafted content, or download calculation spreadsheets.")
+
+    st.markdown("### Template Export")
+    st.write("Export a Word document with all your drafted sections filled into the standard template structure.")
+
+    doc_type_map = {
+        "GoldStandard": {"pdd": "Project Design Document (PDD)", "mr": "Monitoring Report (MR)"},
+        "Verra": {"pdd": "Project Description (VCS-PD)", "mr": "Monitoring Report (VCS-MR)"},
+    }
+    available_types = doc_type_map.get(standard, {"pdd": "PDD", "mr": "MR"})
+
+    selected_doc_type = st.selectbox(
+        "Document type to export",
+        list(available_types.keys()),
+        format_func=lambda x: available_types[x],
+        key=f"export_doc_type_{project_id}",
+    )
+
+    write_sessions = _fetch(f"/projects/{project_id}/write-sessions?doc_type={selected_doc_type}")
+    session_count = len(write_sessions) if write_sessions else 0
+
+    if session_count > 0:
+        st.info(f"{session_count} section(s) have been drafted using the AI Writer. These will be included in the template.")
+    else:
+        st.warning("No sections have been drafted yet. Use the Write / Draft tab to generate content before exporting.")
+
+    calc_key = f"calc_result_{project_id}"
+    has_calc = calc_key in st.session_state and st.session_state[calc_key] is not None
+    include_calc = False
+    if has_calc:
+        include_calc = st.checkbox(
+            "Include calculation results in the document",
+            value=True,
+            key=f"include_calc_{project_id}",
+        )
+
+    if st.button("Generate Template Document",
+                  key=f"gen_template_{project_id}",
+                  type="primary"):
+        with st.spinner("Generating filled template document..."):
+            payload = {
+                "doc_type": selected_doc_type,
+                "include_calculations": include_calc,
+            }
+            if include_calc and has_calc:
+                payload["calculation_result"] = st.session_state[calc_key]
+            resp = requests.post(
+                f"{API_BASE}/projects/{project_id}/generate-template",
+                json=payload,
+                timeout=60,
+            )
+            if resp.status_code == 200:
+                doc_label = available_types.get(selected_doc_type, selected_doc_type)
+                safe_name = project["name"].replace(" ", "_")[:30]
+                filename = f"{safe_name}_{selected_doc_type.upper()}.docx"
+                st.download_button(
+                    label=f"Save {doc_label}",
+                    data=resp.content,
+                    file_name=filename,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"save_template_{project_id}",
+                )
+                st.success("Template generated successfully.")
+            else:
+                detail = ""
+                try:
+                    detail = resp.json().get("detail", "")
+                except Exception:
+                    pass
+                st.error(f"Failed to generate template. {detail}")
+
+    st.divider()
+    st.markdown("### Calculation Spreadsheet")
+
+    if has_calc:
+        calc_result = st.session_state[calc_key]
+        total_er = calc_result.get("total_emission_reductions_tco2e", 0)
+        st.write(f"Calculation available: {total_er:,.0f} tCO2e total emission reductions")
+        if st.button("Download Excel Spreadsheet",
+                      key=f"export_calc_excel_{project_id}",
+                      type="primary"):
+            with st.spinner("Generating spreadsheet..."):
+                resp = requests.post(
+                    f"{API_BASE}/projects/{project_id}/export-calculation",
+                    json={"calculation_result": calc_result},
+                    timeout=30,
+                )
+                if resp.status_code == 200:
+                    safe_name = project["name"].replace(" ", "_")[:30]
+                    st.download_button(
+                        label="Save Excel File",
+                        data=resp.content,
+                        file_name=f"{safe_name}_calculations.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"save_export_excel_{project_id}",
+                    )
+                else:
+                    st.error("Failed to generate spreadsheet.")
+    else:
+        st.info("No calculations available yet. Use the Calculations tab to run emission reduction calculations first.")
+
+    st.divider()
+    st.markdown("### Methodology Reference")
+    if methodology:
+        meth_detail = _fetch(f"/projects/methodologies/{methodology}")
+        if meth_detail:
+            with st.container(border=True):
+                st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', '')}")
+                if meth_detail.get("standard"):
+                    st.caption(f"Standard: {meth_detail['standard']}")
+                if meth_detail.get("applicability"):
+                    st.caption(f"Applicability: {meth_detail['applicability'][:300]}")
+    else:
+        st.caption("No methodology assigned to this project.")
 
 
 def _render_documents_tab(project):

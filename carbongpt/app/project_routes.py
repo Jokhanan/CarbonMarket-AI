@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from carbongpt.app.config import BASE_DIR
@@ -42,6 +43,29 @@ class WriteSectionRequest(BaseModel):
 
 class ExplainSectionRequest(BaseModel):
     section_id: str
+
+
+class ParseMethodologyRequest(BaseModel):
+    methodology_code: str
+
+
+class RunCalculationRequest(BaseModel):
+    method_id: str | None = None
+    crediting_years: int = 7
+    user_inputs: dict = Field(default_factory=dict)
+
+
+class ExportCalculationRequest(BaseModel):
+    calculation_result: dict
+    format: str = "excel"
+
+
+class GenerateTemplateRequest(BaseModel):
+    doc_type: str = "pdd"
+    sections_to_generate: list[str] | None = None
+    include_calculations: bool = True
+    calculation_result: dict | None = None
+    user_instructions: str | None = None
 
 
 class ReviewDocumentRequest(BaseModel):
@@ -402,3 +426,157 @@ def review_document(project_id: int, doc_id: int):
 def get_write_sessions_endpoint(project_id: int, doc_type: str = None):
     from carbongpt.repository.store import get_write_sessions
     return get_write_sessions(project_id, doc_type=doc_type)
+
+
+@router.post("/{project_id}/parse-methodology")
+def parse_methodology_endpoint(project_id: int, data: ParseMethodologyRequest):
+    from carbongpt.repository.store import get_user_project
+    from carbongpt.core.methodology_parser import parse_methodology
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    try:
+        parsed = parse_methodology(data.methodology_code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Methodology parse failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to parse methodology: {e}")
+
+    return parsed
+
+
+@router.post("/{project_id}/calculate")
+def run_calculation_endpoint(project_id: int, data: RunCalculationRequest):
+    from carbongpt.repository.store import get_user_project
+    from carbongpt.core.methodology_parser import parse_methodology
+    from carbongpt.core.calculation_engine import run_calculation
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    methodology = project.get("methodology")
+    if not methodology:
+        raise HTTPException(status_code=400, detail="Project has no methodology assigned.")
+
+    try:
+        parsed = parse_methodology(methodology)
+    except Exception as e:
+        logger.error("Methodology parse failed for calc: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to parse methodology: {e}")
+
+    project_info = {
+        "name": project["name"],
+        "standard": project.get("standard"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+    }
+
+    try:
+        calc_result = run_calculation(
+            parsed_methodology=parsed,
+            user_inputs=data.user_inputs,
+            method_id=data.method_id,
+            crediting_years=data.crediting_years,
+            project_info=project_info,
+        )
+    except Exception as e:
+        logger.error("Calculation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Calculation failed: {e}")
+
+    return calc_result
+
+
+@router.post("/{project_id}/export-calculation")
+def export_calculation_endpoint(project_id: int, data: ExportCalculationRequest):
+    from carbongpt.repository.store import get_user_project
+    from carbongpt.core.doc_exporter import export_calculation_excel
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    project_info = {
+        "name": project["name"],
+        "standard": project.get("standard"),
+        "country": project.get("country"),
+    }
+
+    try:
+        buf = export_calculation_excel(data.calculation_result, project_info=project_info)
+    except Exception as e:
+        logger.error("Excel export failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Export failed: {e}")
+
+    safe_name = project["name"].replace(" ", "_")[:30]
+    filename = f"{safe_name}_calculations.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{project_id}/generate-template")
+def generate_template_endpoint(project_id: int, data: GenerateTemplateRequest):
+    from carbongpt.repository.store import get_user_project, get_write_sessions
+    from carbongpt.core.ai_writer import get_sections_for_doc_type
+    from carbongpt.core.doc_exporter import generate_filled_template
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    project_info = {
+        "name": project["name"],
+        "standard": project.get("standard"),
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "doc_type": data.doc_type,
+    }
+
+    sections = get_sections_for_doc_type(project["standard"], data.doc_type)
+    if not sections:
+        raise HTTPException(status_code=400,
+                            detail=f"No template guide found for {project['standard']}/{data.doc_type}")
+
+    write_sessions = get_write_sessions(project_id, doc_type=data.doc_type)
+    session_map = {ws["section_id"]: ws for ws in write_sessions}
+
+    generated_sections = []
+    for sec in sections:
+        sid = sec["id"]
+        content = ""
+        ws = session_map.get(sid)
+        if ws:
+            content = ws.get("user_text") or ws.get("generated_text") or ""
+        generated_sections.append({
+            "section_id": sid,
+            "title": sec.get("title", ""),
+            "content": content,
+        })
+
+    calc_result = None
+    if data.include_calculations and data.calculation_result:
+        calc_result = data.calculation_result
+
+    try:
+        buf = generate_filled_template(project_info, generated_sections, calc_result=calc_result)
+    except Exception as e:
+        logger.error("Template generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Template generation failed: {e}")
+
+    safe_name = project["name"].replace(" ", "_")[:30]
+    doc_type_label = data.doc_type.upper().replace("_", "-")
+    filename = f"{safe_name}_{doc_type_label}.docx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
