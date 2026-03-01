@@ -51,15 +51,29 @@ The application features a streamlined two-section navigation:
 -   **UNFCCC (CDM) resources:** For downloading CDM methodology booklets and tools.
 -   **Python Libraries:** `FastAPI`, `Streamlit`, `Uvicorn`, `psycopg2-binary`, `pdfplumber`, `tiktoken`, `python-docx`, `openpyxl`, `PyYAML`, `rapidfuzz`, `pytest`.
 
+## Methodology Knowledge Base
+
+The platform includes a multi-layered, format-resilient methodology intelligence system:
+
+-   **Methodology Knowledge Base (`carbongpt/core/methodology_kb.py`):** The primary system for extracting and storing methodology intelligence. Replaces one-shot AI parsing with a format-resilient pipeline:
+    - **Layer 1 (Programmatic):** Detects document structure using universal semantic markers (`Data/Parameter`, `Data unit:`, `Source of data:`, `Equation`, `Where:`) that work across all carbon standards (Gold Standard, Verra VCS, CDM).
+    - **Layer 2 (AI Structure Detection):** One cheap AI call per new document to identify the parameter block format (named_id_blocks, labeled_blocks, tabular, narrative).
+    - **Multi-pass Extraction:** Pass 1 (methods/structure), Pass 2 (equations), Pass 3 (parameters one-by-one), Pass 4 (context dimensions). Each pass is focused and small, improving accuracy.
+    - **Backward Compatibility:** Automatically generates `methodology_parsed` entries in the legacy format so existing calculation engine and UI work unchanged.
+-   **Knowledge Chunk Types:** Each methodology is stored as semantically tagged chunks: `applicability`, `method_selection`, `equations`, `parameters`, `default_values`, `sampling`, `monitoring`, `safeguards`, `tools_referenced`, `definitions`, `leakage`, `quantification`, `general`. Rich text is preserved alongside structured extracted data.
+-   **Format Resilience:** Tested across Gold Standard (TPDDTEC: named ICS blocks), Verra VCS (VM0006: labeled EA blocks), CDM tools (tabular parameter tables). Adapts automatically to any format via semantic marker detection.
+-   **Database Tables:** `methodology_knowledge` (stores chunks with type, key, content, structured_data JSONB), `methodology_structure` (caches detected format per document). Indexes on methodology_code, chunk_type, document_id.
+-   **API Endpoints:** `POST /admin/methodology-kb/build/{code}` (trigger KB build), `GET /admin/methodology-kb/{code}` (get all chunks), `GET /admin/methodology-kb/{code}/structure` (get detected format), `POST /admin/methodology-kb/batch` (batch build).
+
 ## Methodology Calculation Engine
 
 The platform includes an AI-powered methodology analysis and emission reduction calculation system:
 
--   **Methodology Parser (`carbongpt/core/methodology_parser.py`):** Uses GPT-4o to extract calculation frameworks from methodology documents. Now extracts structured data including: parameter `category` (methodology_default, monitored, calculated, project_input, qualitative), `equation_role` (input, intermediate, output, none), `defaults_by_context` (numeric defaults keyed by fuel type/GWP version), and `context_dimensions` (choices that affect defaults, e.g. baseline_fuel: wood/charcoal, gwp_version: AR4/AR5). Works generically across any methodology.
--   **Pre-parsed Methodology Cache (`methodology_parsed` table):** Methodologies are parsed once and stored in the database. Loads instantly from DB — no AI call needed. Admin endpoints: `POST /admin/methodology-parsed/parse`, `POST /admin/methodology-parsed/batch`.
+-   **Legacy Methodology Parser (`carbongpt/core/methodology_parser.py`):** Uses GPT-4o to extract calculation frameworks in a single AI call. Still available as fallback. The Knowledge Base system above is now the primary parsing path.
+-   **Pre-parsed Methodology Cache (`methodology_parsed` table):** Methodologies are parsed once and stored in the database. Loads instantly from DB — no AI cost per user per project. Updated by both KB builder (primary) and legacy parser (fallback).
 -   **Project Settings:** `user_projects` table includes `crediting_period_start` (DATE), `crediting_period_years` (INTEGER, default 7), `project_settings` (JSONB — stores context dimension selections like baseline_fuel, gwp_version). These drive default resolution in the Calculations tab.
--   **Calculations Tab:** Parameters grouped by category: Methodology Defaults (pre-filled from context), Monitored/Field Data, Calculated (disabled). Units shown in brackets. Defaults auto-resolve based on project settings (e.g. wood+AR5 → NCV=0.0156, EF_CO2=112, EF_nonCO2=9.46). Crediting period from project settings.
+-   **Calculations Tab:** Parameters grouped by category: Methodology Defaults (pre-filled from context), Monitored/Field Data, Calculated (disabled). Units shown in brackets. Defaults auto-resolve based on project settings (e.g. wood+AR5 -> NCV=0.0156, EF_CO2=112, EF_nonCO2=9.46). Crediting period from project settings.
 -   **Calculation Engine (`carbongpt/core/calculation_engine.py`):** Takes parsed methodology output + user-provided project-specific inputs and runs emission reduction calculations for each year of the crediting period.
 -   **Document Exporter (`carbongpt/core/doc_exporter.py`):** Exports calculation results to Excel and generates filled Word templates.
--   **API Endpoints:** `GET /projects/{id}/methodology-data`, `POST /projects/{id}/parse-methodology`, `POST /projects/{id}/calculate`, `POST /projects/{id}/export-calculation`, `POST /projects/{id}/generate-template`
+-   **API Endpoints:** `GET /projects/{id}/methodology-data`, `POST /projects/{id}/parse-methodology` (now uses KB builder with legacy fallback), `POST /projects/{id}/calculate`, `POST /projects/{id}/export-calculation`, `POST /projects/{id}/generate-template`
 -   **UI Tabs:** "Calculations" tab (auto-loads parsed methodology, grouped param inputs with defaults, run calcs), "Settings" tab (crediting period, context dimensions), "Export" tab (Word/Excel).

@@ -746,3 +746,84 @@ def batch_parse_methodologies_endpoint(force: bool = False, codes: list[str] = N
     thread = threading.Thread(target=_run_batch, daemon=True)
     thread.start()
     return {"status": "started", "message": "Batch methodology parsing started in background."}
+
+
+@router.post("/methodology-kb/build/{methodology_code}")
+def build_methodology_kb(methodology_code: str, document_id: int = None, force: bool = False):
+    from carbongpt.core.methodology_kb import build_methodology_knowledge
+    from carbongpt.core.methodology_parser import get_methodology_sections
+
+    if not document_id:
+        sections_data = get_methodology_sections(methodology_code)
+        if not sections_data:
+            raise HTTPException(status_code=404, detail=f"No methodology document found for '{methodology_code}'")
+        document_id = sections_data["doc_id"]
+
+    try:
+        result = build_methodology_knowledge(document_id, methodology_code, force=force)
+        return result
+    except Exception as e:
+        logger.error("KB build failed for %s: %s", methodology_code, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/methodology-kb/{methodology_code}")
+def get_methodology_kb(methodology_code: str, chunk_type: str = None):
+    from carbongpt.core.methodology_kb import get_methodology_knowledge
+    knowledge = get_methodology_knowledge(methodology_code, chunk_type)
+    if not knowledge:
+        raise HTTPException(status_code=404, detail=f"No knowledge base found for '{methodology_code}'")
+    total_chunks = sum(len(v) for v in knowledge.values())
+    return {
+        "methodology_code": methodology_code,
+        "total_chunks": total_chunks,
+        "chunk_types": {k: len(v) for k, v in knowledge.items()},
+        "chunks": knowledge,
+    }
+
+
+@router.get("/methodology-kb/{methodology_code}/structure")
+def get_methodology_structure_endpoint(methodology_code: str):
+    from carbongpt.repository.store import get_methodology_structure
+    from carbongpt.core.methodology_parser import get_methodology_sections
+
+    sections_data = get_methodology_sections(methodology_code)
+    if not sections_data:
+        raise HTTPException(status_code=404, detail=f"No methodology document found for '{methodology_code}'")
+
+    structure = get_methodology_structure(sections_data["doc_id"])
+    if not structure:
+        from carbongpt.core.methodology_kb import detect_document_structure
+        detected_format, section_map = detect_document_structure(sections_data["doc_id"], methodology_code)
+        return {
+            "methodology_code": methodology_code,
+            "document_id": sections_data["doc_id"],
+            "detected_format": detected_format,
+            "section_map": section_map,
+            "cached": False,
+        }
+
+    return {
+        "methodology_code": methodology_code,
+        "document_id": structure["document_id"],
+        "detected_format": structure["detected_format"],
+        "section_map": structure["section_map"],
+        "cached": True,
+    }
+
+
+@router.post("/methodology-kb/batch")
+def batch_build_kb(force: bool = False, limit: int = None):
+    import threading
+    from carbongpt.core.methodology_kb import batch_build_knowledge
+
+    def _run_batch():
+        try:
+            result = batch_build_knowledge(force=force, limit=limit)
+            logger.info("Batch KB build complete: %s", result)
+        except Exception as e:
+            logger.error("Batch KB build failed: %s", e)
+
+    thread = threading.Thread(target=_run_batch, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "Batch knowledge base build started in background."}

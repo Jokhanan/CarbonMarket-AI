@@ -1113,3 +1113,78 @@ def get_write_session(session_id):
     with get_cursor() as cur:
         cur.execute("SELECT * FROM project_write_sessions WHERE id = %s", (session_id,))
         return cur.fetchone()
+
+
+def save_knowledge_chunk(methodology_code, document_id, chunk_type, chunk_key, title,
+                         content, structured_data=None, source_section_ids=None,
+                         extraction_method="programmatic", confidence=1.0):
+    import json as _json
+    with get_cursor() as cur:
+        cur.execute("""
+            INSERT INTO methodology_knowledge
+                (methodology_code, document_id, chunk_type, chunk_key, title,
+                 content, structured_data, source_section_ids, extraction_method, confidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (methodology_code, chunk_type, chunk_key) DO UPDATE SET
+                document_id = EXCLUDED.document_id,
+                title = EXCLUDED.title,
+                content = EXCLUDED.content,
+                structured_data = EXCLUDED.structured_data,
+                source_section_ids = EXCLUDED.source_section_ids,
+                extraction_method = EXCLUDED.extraction_method,
+                confidence = EXCLUDED.confidence,
+                version = methodology_knowledge.version + 1,
+                updated_at = NOW()
+            RETURNING id
+        """, (
+            methodology_code, document_id, chunk_type, chunk_key, title,
+            content, _json.dumps(structured_data or {}),
+            source_section_ids, extraction_method, confidence
+        ))
+        return cur.fetchone()["id"]
+
+
+def get_knowledge_chunks(methodology_code, chunk_type=None):
+    with get_cursor() as cur:
+        if chunk_type:
+            cur.execute("""
+                SELECT * FROM methodology_knowledge
+                WHERE methodology_code = %s AND chunk_type = %s
+                ORDER BY chunk_type, chunk_key
+            """, (methodology_code, chunk_type))
+        else:
+            cur.execute("""
+                SELECT * FROM methodology_knowledge
+                WHERE methodology_code = %s
+                ORDER BY chunk_type, chunk_key
+            """, (methodology_code,))
+        return [dict(r) for r in cur.fetchall()]
+
+
+def delete_methodology_knowledge(methodology_code):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM methodology_knowledge WHERE methodology_code = %s", (methodology_code,))
+        cur.execute("DELETE FROM methodology_structure WHERE methodology_code = %s", (methodology_code,))
+
+
+def save_methodology_structure(document_id, methodology_code, detected_format, section_map):
+    import json as _json
+    with get_cursor() as cur:
+        cur.execute("""
+            INSERT INTO methodology_structure (document_id, methodology_code, detected_format, section_map)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (document_id) DO UPDATE SET
+                methodology_code = EXCLUDED.methodology_code,
+                detected_format = EXCLUDED.detected_format,
+                section_map = EXCLUDED.section_map
+            RETURNING id
+        """, (document_id, methodology_code,
+              _json.dumps(detected_format), _json.dumps(section_map)))
+        return cur.fetchone()["id"]
+
+
+def get_methodology_structure(document_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM methodology_structure WHERE document_id = %s", (document_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None

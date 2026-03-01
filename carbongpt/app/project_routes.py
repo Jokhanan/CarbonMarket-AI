@@ -457,21 +457,36 @@ def get_methodology_data_endpoint(project_id: int):
 @router.post("/{project_id}/parse-methodology")
 def parse_methodology_endpoint(project_id: int, data: ParseMethodologyRequest):
     from carbongpt.repository.store import get_user_project
-    from carbongpt.core.methodology_parser import parse_methodology_and_save
+    from carbongpt.core.methodology_parser import get_methodology_sections
 
     project = get_user_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
+    force = data.force if hasattr(data, 'force') else False
+
     try:
-        parsed = parse_methodology_and_save(data.methodology_code, force=data.force if hasattr(data, 'force') else False)
+        from carbongpt.core.methodology_kb import build_methodology_knowledge
+        sections_data = get_methodology_sections(data.methodology_code)
+        if not sections_data:
+            raise ValueError(f"No methodology document found for '{data.methodology_code}'")
+        result = build_methodology_knowledge(sections_data["doc_id"], data.methodology_code, force=force)
+        from carbongpt.core.methodology_kb import get_knowledge_as_parsed_format
+        parsed = get_knowledge_as_parsed_format(data.methodology_code)
+        if parsed:
+            return parsed
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Methodology parse failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to parse methodology: {e}")
-
-    return parsed
+        logger.error("Methodology KB build failed, falling back to legacy parser: %s", e)
+        from carbongpt.core.methodology_parser import parse_methodology_and_save
+        try:
+            parsed = parse_methodology_and_save(data.methodology_code, force=force)
+            return parsed
+        except Exception as e2:
+            logger.error("Legacy parse also failed: %s", e2)
+            raise HTTPException(status_code=500, detail=f"Failed to parse methodology: {e2}")
 
 
 @router.post("/{project_id}/calculate")

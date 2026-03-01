@@ -256,6 +256,43 @@ CREATE INDEX IF NOT EXISTS idx_compliance_rules_standard ON compliance_rules(sta
 CREATE INDEX IF NOT EXISTS idx_compliance_rules_type ON compliance_rules(rule_type);
 CREATE INDEX IF NOT EXISTS idx_compliance_rules_status ON compliance_rules(status);
 
+CREATE TABLE IF NOT EXISTS methodology_knowledge (
+    id SERIAL PRIMARY KEY,
+    methodology_code VARCHAR(100) NOT NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    chunk_type VARCHAR(50) NOT NULL CHECK (chunk_type IN (
+        'applicability', 'method_selection', 'equations', 'parameters',
+        'default_values', 'sampling', 'monitoring', 'safeguards',
+        'tools_referenced', 'definitions', 'leakage', 'quantification', 'general'
+    )),
+    chunk_key VARCHAR(200) NOT NULL,
+    title VARCHAR(500),
+    content TEXT NOT NULL,
+    structured_data JSONB DEFAULT '{}',
+    source_section_ids INTEGER[],
+    extraction_method VARCHAR(30) DEFAULT 'programmatic' CHECK (extraction_method IN ('programmatic', 'ai_assisted', 'manual')),
+    confidence REAL DEFAULT 1.0,
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(methodology_code, chunk_type, chunk_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mk_methodology_code ON methodology_knowledge(methodology_code);
+CREATE INDEX IF NOT EXISTS idx_mk_chunk_type ON methodology_knowledge(chunk_type);
+CREATE INDEX IF NOT EXISTS idx_mk_document_id ON methodology_knowledge(document_id);
+
+CREATE TABLE IF NOT EXISTS methodology_structure (
+    id SERIAL PRIMARY KEY,
+    document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE UNIQUE,
+    methodology_code VARCHAR(100),
+    detected_format JSONB NOT NULL DEFAULT '{}',
+    section_map JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ms_methodology_code ON methodology_structure(methodology_code);
+
 INSERT INTO standards (name, slug, description) VALUES
     ('Gold Standard', 'goldstandard', 'Gold Standard for the Global Goals - carbon credit certification'),
     ('Verra VCS', 'verra', 'Verified Carbon Standard by Verra - voluntary carbon market')
