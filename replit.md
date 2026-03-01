@@ -13,9 +13,11 @@ I want iterative development. Ask before making major changes. I prefer detailed
 CarbonGPT is built with Python 3.11, FastAPI for backend services, and Streamlit for the user interface.
 
 **UI/UX Decisions:**
-The application features two primary interfaces:
-- **My Projects + Compliance Analyzer + Document Repository + Carbon Intelligence (Streamlit UI):** This is the main user-facing application for project workspace, document analysis, repository management, and carbon project analytics.
-- **Admin App (Streamlit - separate port):** A standalone interface for administrative tasks, though primarily managed through the main UI's admin sections.
+The application features a streamlined two-section navigation:
+- **Workspace (Streamlit UI - main page):** Contains two tabs: "My Projects" (project workspace with documents, AI review, AI writing assistant) and "Carbon Intelligence" (dashboard with 8,900+ projects from Verra and Gold Standard registries). Premium CSS styling with dark sidebar, Inter font, gradient branding, and polished metric cards.
+- **Admin (Streamlit UI - second page):** Document repository management, compliance rules, knowledge base, methodology sync, and web intelligence tools.
+- **Admin App (Streamlit - separate port):** A standalone admin interface (legacy).
+- The standalone Compliance Analyzer was removed (its functionality is fully covered by the Review tab inside each project workspace, which provides better context-aware review with PDD-MR cross-referencing).
 
 **Technical Implementations:**
 

@@ -5,13 +5,200 @@ import streamlit as st
 
 API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
-st.set_page_config(page_title="CarbonGPT", layout="wide")
+st.set_page_config(page_title="CarbonGPT", layout="wide", page_icon="C")
 
-PAGES = ["My Projects", "Compliance Analyzer", "Document Repository", "Carbon Intelligence"]
+st.markdown("""
+<style>
+    /* Premium typography and spacing */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0c1821 0%, #162837 100%);
+        border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stMarkdown h1,
+    section[data-testid="stSidebar"] .stMarkdown h2,
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #e8edf2;
+    }
+    section[data-testid="stSidebar"] .stRadio label {
+        color: #c0cad8 !important;
+    }
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] hr {
+        border-color: rgba(255,255,255,0.08);
+    }
+
+    /* Brand header in sidebar */
+    .brand-header {
+        padding: 0.5rem 0 1.2rem 0;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        margin-bottom: 1rem;
+    }
+    .brand-header h2 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0;
+        background: linear-gradient(135deg, #4ecdc4, #45b7d1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .brand-tagline {
+        font-size: 0.72rem;
+        color: #7a8a9e;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+
+    /* Page header styling */
+    .page-header {
+        padding: 0 0 1.5rem 0;
+        margin-bottom: 0.5rem;
+    }
+    .page-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #1a1a2e;
+        margin-bottom: 0.25rem;
+    }
+    .page-subtitle {
+        font-size: 0.92rem;
+        color: #64748b;
+        line-height: 1.5;
+    }
+
+    /* Metric cards */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+    }
+    div[data-testid="stMetric"] label {
+        color: #64748b;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    /* Cards and containers */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 12px;
+        border-color: #e2e8f0;
+    }
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    /* Button styling */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #4ecdc4, #44a8b3);
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition: all 0.2s ease;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #44b8b0, #3d9aa5);
+        box-shadow: 0 2px 8px rgba(78,205,196,0.3);
+    }
+    .stButton > button[kind="secondary"] {
+        border-radius: 8px;
+        font-weight: 500;
+    }
+
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-weight: 500;
+        font-size: 0.88rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px 8px 0 0;
+        color: #64748b;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #1e293b !important;
+        border-bottom: 2px solid #4ecdc4 !important;
+    }
+
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    /* Data table styling */
+    .stDataFrame {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* Status badge styles */
+    .status-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+    }
+    .status-draft { background: #f1f5f9; color: #64748b; }
+    .status-active { background: #ecfdf5; color: #059669; }
+    .status-review { background: #eff6ff; color: #2563eb; }
+    .status-complete { background: #f0fdf4; color: #16a34a; }
+
+    /* Smooth transitions */
+    .stButton > button, .stSelectbox, .stTextInput input {
+        transition: all 0.15s ease;
+    }
+
+    /* Divider */
+    hr {
+        border-color: #e2e8f0 !important;
+        margin: 1rem 0 !important;
+    }
+
+    /* Hide fullscreen buttons on metrics */
+    div[data-testid="stMetric"] button[title="View fullscreen"] {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+PAGES = ["Workspace", "Admin"]
 
 with st.sidebar:
-    st.markdown("### CarbonGPT")
+    st.markdown("""
+    <div class="brand-header">
+        <h2>CarbonGPT</h2>
+        <div class="brand-tagline">AI Carbon Intelligence</div>
+    </div>
+    """, unsafe_allow_html=True)
     page = st.radio("Navigation", PAGES, key="nav_page", label_visibility="collapsed")
+    st.divider()
+    st.caption("CarbonGPT v1.0")
 
 
 def _render_ai_result(ai_result):
@@ -27,14 +214,13 @@ def _render_ai_result(ai_result):
         st.markdown("### Compliance Alerts")
         for alert in compliance_alerts:
             sev = alert.get("severity", "info")
-            icon = {"error": "🔴", "warning": "🟡", "info": "🔵"}.get(sev, "⚪")
             meth = f" (methodology: {alert['methodology']})" if alert.get("methodology") else ""
             if sev == "error":
-                st.error(f"{icon} **{alert['title']}**{meth}: {alert['description']}")
+                st.error(f"**{alert['title']}**{meth}: {alert['description']}")
             elif sev == "warning":
-                st.warning(f"{icon} **{alert['title']}**{meth}: {alert['description']}")
+                st.warning(f"**{alert['title']}**{meth}: {alert['description']}")
             else:
-                st.info(f"{icon} {alert['title']}{meth}: {alert['description']}")
+                st.info(f"{alert['title']}{meth}: {alert['description']}")
             if alert.get("source_url"):
                 st.markdown(f"  Source: [{alert.get('source_description', 'Link')}]({alert['source_url']})")
         st.divider()
@@ -63,13 +249,13 @@ def _render_ai_result(ai_result):
         sec_score = review["completeness_score"]
 
         if sec_score >= 80:
-            sec_icon = "🟢"
+            sec_label = "PASS"
         elif sec_score >= 50:
-            sec_icon = "🟡"
+            sec_label = "REVIEW"
         else:
-            sec_icon = "🔴"
+            sec_label = "FAIL"
 
-        with st.expander(f"{sec_icon} {sec_id}: {sec_title} — Score: {sec_score}/100"):
+        with st.expander(f"[{sec_label}] {sec_id}: {sec_title} -- Score: {sec_score}/100"):
             if review.get("issues"):
                 st.markdown("**Issues:**")
                 for issue in review["issues"]:
@@ -158,170 +344,13 @@ CATEGORY_LABELS = {
 CATEGORY_OPTIONS = list(CATEGORY_LABELS.keys())
 
 
-def render_analyzer():
-    st.title("CarbonGPT — Compliance Analyzer")
-    st.markdown(
-        "Upload a document and check it against Gold Standard or Verra VCS templates and rules. "
-        "Supports Gold Standard (MR, PDD, PoA-DD, VPA-DD) and Verra VCS "
-        "(Project Description, Monitoring Report, Joint Validation & Verification Report)."
-    )
-
-    STANDARDS = ["GoldStandard", "Verra"]
-    DOC_TYPES = {
-        "GoldStandard": ["MR", "PDD", "PoA-DD", "VPA-DD"],
-        "Verra": ["VCS-PD", "VCS-MR", "VCS-ValVer"],
-    }
-    VERSIONS = {
-        ("GoldStandard", "MR"): ["MR_v1_1"],
-        ("GoldStandard", "PDD"): ["PDD_v1_5"],
-        ("GoldStandard", "PoA-DD"): ["PoA-DD_v2_2"],
-        ("GoldStandard", "VPA-DD"): ["VPA-DD_v2_3"],
-        ("Verra", "VCS-PD"): ["VCS-PD_v4_4"],
-        ("Verra", "VCS-MR"): ["VCS-MR_v4_4"],
-        ("Verra", "VCS-ValVer"): ["VCS-ValVer_v4_4"],
-    }
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        standard = st.selectbox("Standard", STANDARDS, key="standard")
-    with col2:
-        doc_type = st.selectbox("Document Type", DOC_TYPES.get(standard, []), key="doc_type")
-    with col3:
-        version = st.selectbox("Version", VERSIONS.get((standard, doc_type), []), key="version")
-
-    ai_review_enabled = st.toggle("AI Review (beta)", value=False, key="ai_review_toggle")
-    uploaded_file = st.file_uploader("Upload your document (.docx)", type=["docx"])
-    analyze_btn = st.button("Analyze", type="primary", disabled=uploaded_file is None, key="analyze_btn")
-
-    if analyze_btn and uploaded_file is not None:
-        st.session_state.pop("ai_task_id", None)
-        st.session_state.pop("ai_task_start", None)
-        st.session_state.pop("ai_result", None)
-
-        with st.spinner("Uploading document..."):
-            upload_resp = requests.post(
-                f"{API_BASE}/upload-document",
-                files={"file": (uploaded_file.name, uploaded_file.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
-                timeout=30,
-            )
-
-        if upload_resp.status_code != 200:
-            st.error(f"Upload failed: {upload_resp.text}")
-            st.stop()
-
-        user_doc_path = upload_resp.json()["file_path"]
-        st.session_state["user_doc_path"] = user_doc_path
-
-        with st.spinner("Running compliance analysis..."):
-            analyze_resp = requests.post(
-                f"{API_BASE}/analyze-selected",
-                json={
-                    "standard": standard,
-                    "doc_type": doc_type,
-                    "version": version,
-                    "user_doc_path": user_doc_path,
-                },
-                timeout=60,
-            )
-
-        if analyze_resp.status_code != 200:
-            st.error(f"Analysis failed: {analyze_resp.text}")
-            st.stop()
-
-        st.session_state["analysis_result"] = analyze_resp.json()
-
-        if ai_review_enabled:
-            try:
-                start_resp = requests.post(
-                    f"{API_BASE}/ai-review",
-                    json={
-                        "standard": standard,
-                        "doc_type": doc_type,
-                        "version": version,
-                        "doc_path": user_doc_path,
-                    },
-                    timeout=10,
-                )
-                if start_resp.status_code == 200:
-                    task_id = start_resp.json().get("task_id")
-                    if task_id:
-                        st.session_state["ai_task_id"] = task_id
-                        st.session_state["ai_task_start"] = time.time()
-            except requests.exceptions.RequestException:
-                pass
-
-    if "analysis_result" in st.session_state:
-        result = st.session_state["analysis_result"]
-        st.divider()
-
-        score = result["compliance_score"]
-        status = result.get("status", "REVIEW")
-        status_label = result.get("status_label", "")
-
-        score_col, status_col = st.columns(2)
-        with score_col:
-            if score >= 80:
-                color = "green"
-            elif score >= 50:
-                color = "orange"
-            else:
-                color = "red"
-            st.markdown(f"### Compliance Score: :{color}[**{score}/100**]")
-        with status_col:
-            if status == "PASS":
-                st.success(status_label)
-            elif status == "REVIEW":
-                st.warning(status_label)
-            else:
-                st.error(status_label)
-
-        findings = result.get("findings", [])
-        if not findings:
-            st.info("No findings — the document is fully compliant.")
-        else:
-            errors = [f for f in findings if f["severity"] == "ERROR"]
-            warnings = [f for f in findings if f["severity"] == "WARNING"]
-            infos = [f for f in findings if f["severity"] == "INFO"]
-
-            if errors:
-                st.markdown("#### Errors")
-                for f in errors:
-                    st.markdown(f"- **[{f['rule_id']}]** {f['message']}")
-            if warnings:
-                st.markdown("#### Warnings")
-                for f in warnings:
-                    st.markdown(f"- **[{f['rule_id']}]** {f['message']}")
-            if infos:
-                st.markdown("#### Info")
-                for f in infos:
-                    st.markdown(f"- **[{f['rule_id']}]** {f['message']}")
-
-        with st.expander("Sections found in your document"):
-            for s in result.get("sections_found", []):
-                st.markdown(f"- {s}")
-        with st.expander("Template section matching"):
-            for m in result.get("section_matches", []):
-                expected = m["expected"]
-                matched = m["matched"]
-                if matched:
-                    st.markdown(f"- **{expected}** → {matched}")
-                else:
-                    st.markdown(f"- **{expected}** → _not found_")
-
-        if ai_review_enabled:
-            st.divider()
-            st.subheader("AI Review (beta)")
-            ai_result = st.session_state.get("ai_result")
-            if ai_result is not None:
-                _render_ai_result(ai_result)
-            elif st.session_state.get("ai_task_id"):
-                _poll_ai_review()
-            else:
-                st.info("AI Review was not started. Re-analyze with the AI Review toggle enabled.")
-
-
 def render_repository():
-    st.title("CarbonGPT — Document Repository")
+    st.markdown("""
+    <div class="page-header">
+        <h1>Admin</h1>
+        <div class="page-subtitle">Document repository, compliance rules, knowledge base, and sync tools</div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown(
         "Manage your carbon standards library. Upload standards, methodologies, guidance documents, "
         "templates, and example project documentation. Documents are automatically parsed, indexed, "
@@ -1163,8 +1192,6 @@ def _render_manage_standards():
 
 
 def render_intelligence():
-    st.title("Carbon Intelligence Dashboard")
-
     analytics = _fetch("/admin/projects/analytics")
     if not analytics or not analytics.get("summary"):
         st.warning("No project data available. Use the Sync tab to import projects from registries.")
@@ -1575,25 +1602,31 @@ STATUS_COLORS = {
 }
 
 
-def render_my_projects():
-    if "selected_project_id" not in st.session_state:
-        st.session_state.selected_project_id = None
+def _render_home():
+    st.markdown("""
+    <div class="page-header">
+        <h1>Workspace</h1>
+        <div class="page-subtitle">Manage your carbon projects and explore market intelligence</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if st.session_state.selected_project_id:
-        _render_project_workspace(st.session_state.selected_project_id)
-    else:
+    home_tabs = st.tabs(["My Projects", "Carbon Intelligence"])
+    with home_tabs[0]:
         _render_project_list()
+    with home_tabs[1]:
+        render_intelligence()
 
 
 def _render_project_list():
-    st.title("My Projects")
-    st.write("Create and manage your carbon projects. Upload documents, get AI-powered reviews, and draft sections with AI assistance.")
 
     projects = _fetch("/projects") or []
 
-    col_left, col_right = st.columns([3, 1])
+    col_left, col_right = st.columns([4, 1])
+    with col_left:
+        if projects:
+            st.caption(f"{len(projects)} project{'s' if len(projects) != 1 else ''}")
     with col_right:
-        with st.popover("New Project", use_container_width=True):
+        with st.popover("+ New Project", use_container_width=True):
             new_name = st.text_input("Project name", key="new_proj_name",
                                       placeholder="e.g., Ghana Improved Cookstoves")
             new_standard = st.selectbox("Standard", STANDARD_OPTIONS, key="new_proj_standard")
@@ -1619,7 +1652,12 @@ def _render_project_list():
                     st.warning("Please enter a project name.")
 
     if not projects:
-        st.info("No projects yet. Create your first project to get started.")
+        st.markdown("""
+        <div style="text-align: center; padding: 3rem 2rem; background: linear-gradient(135deg, #f8fafc, #f0f9ff); border-radius: 16px; border: 1px dashed #cbd5e1; margin: 1rem 0;">
+            <div style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">No projects yet</div>
+            <div style="font-size: 0.88rem; color: #64748b;">Create your first carbon project to start drafting PDDs, uploading documents, and getting AI-powered reviews.</div>
+        </div>
+        """, unsafe_allow_html=True)
         return
 
     for proj in projects:
@@ -1630,24 +1668,25 @@ def _render_project_list():
         doc_count = proj.get("doc_count", 0)
 
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([3, 1.5, 1, 1])
+            c1, c2, c3, c4 = st.columns([3.5, 1.2, 0.8, 0.8])
             with c1:
                 st.markdown(f"**{proj['name']}**")
                 details = []
                 if proj.get("standard"):
-                    details.append(proj["standard"])
+                    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(proj["standard"], proj["standard"])
+                    details.append(std_display)
                 if proj.get("methodology"):
                     details.append(proj["methodology"])
                 if proj.get("country"):
                     details.append(proj["country"])
                 if details:
-                    st.caption(" | ".join(details))
+                    st.caption(" / ".join(details))
             with c2:
                 st.markdown(f":{status_color}[{status_label}]")
             with c3:
-                st.caption(f"{doc_count} docs")
+                st.caption(f"{doc_count} doc{'s' if doc_count != 1 else ''}")
             with c4:
-                if st.button("Open", key=f"open_proj_{pid}", type="primary"):
+                if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
                     st.session_state.selected_project_id = pid
                     st.rerun()
 
@@ -1660,26 +1699,26 @@ def _render_project_workspace(project_id):
         st.rerun()
         return
 
-    col_back, col_title = st.columns([1, 5])
-    with col_back:
-        if st.button("Back to Projects", key="back_to_projects"):
-            st.session_state.selected_project_id = None
-            st.rerun()
-    with col_title:
-        status = project.get("status", "draft")
-        status_label = STATUS_LABELS.get(status, status)
-        status_color = STATUS_COLORS.get(status, "gray")
-        st.title(project["name"])
+    if st.button("< Back to Projects", key="back_to_projects"):
+        st.session_state.selected_project_id = None
+        st.rerun()
 
-    details = []
-    if project.get("standard"):
-        details.append(f"Standard: **{project['standard']}**")
-    if project.get("methodology"):
-        details.append(f"Methodology: **{project['methodology']}**")
-    if project.get("country"):
-        details.append(f"Country: **{project['country']}**")
-    details.append(f"Status: :{status_color}[**{status_label}**]")
-    st.write(" | ".join(details))
+    status = project.get("status", "draft")
+    status_label = STATUS_LABELS.get(status, status)
+    status_color = STATUS_COLORS.get(status, "gray")
+
+    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(project.get("standard", ""), project.get("standard", ""))
+
+    st.markdown(f"""
+    <div class="page-header">
+        <h1>{project['name']}</h1>
+        <div class="page-subtitle">
+            {std_display}
+            {(' / ' + project['methodology']) if project.get('methodology') else ''}
+            {(' / ' + project['country']) if project.get('country') else ''}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     if project.get("description"):
         st.caption(project["description"])
@@ -2047,11 +2086,13 @@ def _render_project_settings(project):
                 st.rerun()
 
 
-if page == "My Projects":
-    render_my_projects()
-elif page == "Compliance Analyzer":
-    render_analyzer()
-elif page == "Document Repository":
+if page == "Workspace":
+    if "selected_project_id" not in st.session_state:
+        st.session_state.selected_project_id = None
+
+    if st.session_state.selected_project_id:
+        _render_project_workspace(st.session_state.selected_project_id)
+    else:
+        _render_home()
+elif page == "Admin":
     render_repository()
-elif page == "Carbon Intelligence":
-    render_intelligence()
