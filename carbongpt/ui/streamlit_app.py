@@ -7,7 +7,7 @@ API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
 st.set_page_config(page_title="CarbonGPT", layout="wide")
 
-PAGES = ["Compliance Analyzer", "Document Repository", "Carbon Intelligence"]
+PAGES = ["My Projects", "Compliance Analyzer", "Document Repository", "Carbon Intelligence"]
 
 with st.sidebar:
     st.markdown("### CarbonGPT")
@@ -1455,7 +1455,491 @@ def _render_sync_controls(summary):
                 st.rerun()
 
 
-if page == "Compliance Analyzer":
+STANDARD_OPTIONS = ["GoldStandard", "Verra"]
+DOC_TYPES_FOR_STANDARD = {
+    "GoldStandard": {"pdd": "PDD", "mr": "Monitoring Report", "poa_dd": "PoA-DD", "vpa_dd": "VPA-DD"},
+    "Verra": {"pdd": "Project Description (VCS-PD)", "mr": "Monitoring Report (VCS-MR)", "valver": "Validation/Verification Report"},
+}
+PROJECT_DOC_TYPES = {
+    "pdd": "Project Description (PDD)",
+    "mr": "Monitoring Report (MR)",
+    "valver": "Validation/Verification Report",
+    "poa_dd": "PoA-DD",
+    "vpa_dd": "VPA-DD",
+    "reference": "Reference Document",
+    "research": "Research / Study",
+    "field_data": "Field Data / Test Results",
+    "template": "Template",
+    "other": "Other",
+}
+STATUS_LABELS = {
+    "draft": "Draft",
+    "in_progress": "In Progress",
+    "under_review": "Under Review",
+    "submitted": "Submitted",
+    "registered": "Registered",
+    "archived": "Archived",
+}
+STATUS_COLORS = {
+    "draft": "gray",
+    "in_progress": "blue",
+    "under_review": "orange",
+    "submitted": "violet",
+    "registered": "green",
+    "archived": "red",
+}
+
+
+def render_my_projects():
+    if "selected_project_id" not in st.session_state:
+        st.session_state.selected_project_id = None
+
+    if st.session_state.selected_project_id:
+        _render_project_workspace(st.session_state.selected_project_id)
+    else:
+        _render_project_list()
+
+
+def _render_project_list():
+    st.title("My Projects")
+    st.write("Create and manage your carbon projects. Upload documents, get AI-powered reviews, and draft sections with AI assistance.")
+
+    projects = _fetch("/projects") or []
+
+    col_left, col_right = st.columns([3, 1])
+    with col_right:
+        with st.popover("New Project", use_container_width=True):
+            new_name = st.text_input("Project name", key="new_proj_name",
+                                      placeholder="e.g., Ghana Improved Cookstoves")
+            new_standard = st.selectbox("Standard", STANDARD_OPTIONS, key="new_proj_standard")
+            new_methodology = st.text_input("Methodology (optional)", key="new_proj_meth",
+                                             placeholder="e.g., AMS-II.G")
+            new_country = st.text_input("Country", key="new_proj_country",
+                                         placeholder="e.g., Ghana")
+            new_desc = st.text_area("Description (optional)", key="new_proj_desc",
+                                     placeholder="Brief description of the project activity...")
+            if st.button("Create Project", key="create_proj_btn", type="primary"):
+                if new_name:
+                    result = _fetch("/projects", method="POST", json={
+                        "name": new_name,
+                        "standard": new_standard,
+                        "methodology": new_methodology or None,
+                        "country": new_country or None,
+                        "description": new_desc or None,
+                    })
+                    if result:
+                        st.success(f"Project created!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.warning("Please enter a project name.")
+
+    if not projects:
+        st.info("No projects yet. Create your first project to get started.")
+        return
+
+    for proj in projects:
+        pid = proj["id"]
+        status = proj.get("status", "draft")
+        status_label = STATUS_LABELS.get(status, status)
+        status_color = STATUS_COLORS.get(status, "gray")
+        doc_count = proj.get("doc_count", 0)
+
+        with st.container(border=True):
+            c1, c2, c3, c4 = st.columns([3, 1.5, 1, 1])
+            with c1:
+                st.markdown(f"**{proj['name']}**")
+                details = []
+                if proj.get("standard"):
+                    details.append(proj["standard"])
+                if proj.get("methodology"):
+                    details.append(proj["methodology"])
+                if proj.get("country"):
+                    details.append(proj["country"])
+                if details:
+                    st.caption(" | ".join(details))
+            with c2:
+                st.markdown(f":{status_color}[{status_label}]")
+            with c3:
+                st.caption(f"{doc_count} docs")
+            with c4:
+                if st.button("Open", key=f"open_proj_{pid}", type="primary"):
+                    st.session_state.selected_project_id = pid
+                    st.rerun()
+
+
+def _render_project_workspace(project_id):
+    project = _fetch(f"/projects/{project_id}")
+    if not project:
+        st.error("Project not found.")
+        st.session_state.selected_project_id = None
+        st.rerun()
+        return
+
+    col_back, col_title = st.columns([1, 5])
+    with col_back:
+        if st.button("Back to Projects", key="back_to_projects"):
+            st.session_state.selected_project_id = None
+            st.rerun()
+    with col_title:
+        status = project.get("status", "draft")
+        status_label = STATUS_LABELS.get(status, status)
+        status_color = STATUS_COLORS.get(status, "gray")
+        st.title(project["name"])
+
+    details = []
+    if project.get("standard"):
+        details.append(f"Standard: **{project['standard']}**")
+    if project.get("methodology"):
+        details.append(f"Methodology: **{project['methodology']}**")
+    if project.get("country"):
+        details.append(f"Country: **{project['country']}**")
+    details.append(f"Status: :{status_color}[**{status_label}**]")
+    st.write(" | ".join(details))
+
+    if project.get("description"):
+        st.caption(project["description"])
+
+    tabs = st.tabs(["Documents", "Review", "Write / Draft", "Project Settings"])
+
+    with tabs[0]:
+        _render_documents_tab(project)
+    with tabs[1]:
+        _render_review_tab(project)
+    with tabs[2]:
+        _render_write_tab(project)
+    with tabs[3]:
+        _render_project_settings(project)
+
+
+def _render_documents_tab(project):
+    project_id = project["id"]
+    st.subheader("Project Documents")
+    st.write("Upload your PDD, Monitoring Reports, reference documents, research papers, and field data.")
+
+    standard = project.get("standard", "GoldStandard")
+    available_doc_types = list(DOC_TYPES_FOR_STANDARD.get(standard, {}).keys())
+    upload_types = available_doc_types + ["reference", "research", "field_data", "other"]
+
+    with st.expander("Upload Document", expanded=not project.get("documents")):
+        upload_col1, upload_col2 = st.columns(2)
+        with upload_col1:
+            upload_file = st.file_uploader("Choose a file", type=["docx", "pdf"], key=f"upload_{project_id}")
+        with upload_col2:
+            doc_type = st.selectbox(
+                "Document type",
+                upload_types,
+                format_func=lambda x: PROJECT_DOC_TYPES.get(x, x),
+                key=f"upload_type_{project_id}",
+            )
+            upload_notes = st.text_input("Notes (optional)", key=f"upload_notes_{project_id}")
+
+        if st.button("Upload", key=f"upload_btn_{project_id}", type="primary", disabled=not upload_file):
+            if upload_file:
+                files = {"file": (upload_file.name, upload_file.getvalue())}
+                data = {"doc_type": doc_type}
+                if upload_notes:
+                    data["notes"] = upload_notes
+                result = _fetch(
+                    f"/projects/{project_id}/documents",
+                    method="POST",
+                    files=files,
+                    data=data,
+                )
+                if result:
+                    parsed = "parsed" if result.get("parsed") else "uploaded"
+                    st.success(f"Document uploaded and {parsed} successfully.")
+                    time.sleep(0.5)
+                    st.rerun()
+
+    documents = project.get("documents", [])
+    if documents:
+        for doc in documents:
+            doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
+            status_icon = "parsed" if doc.get("status") == "parsed" else ("reviewed" if doc.get("status") == "reviewed" else "uploaded")
+
+            with st.container(border=True):
+                dc1, dc2, dc3, dc4 = st.columns([3, 1.5, 1, 0.5])
+                with dc1:
+                    st.markdown(f"**{doc['file_name']}**")
+                    st.caption(f"{doc_type_label}")
+                with dc2:
+                    st.caption(f"Status: {status_icon}")
+                    if doc.get("notes"):
+                        st.caption(f"Notes: {doc['notes']}")
+                with dc3:
+                    size = doc.get("file_size_bytes", 0) or 0
+                    if size > 1024 * 1024:
+                        st.caption(f"{size / 1024 / 1024:.1f} MB")
+                    elif size > 1024:
+                        st.caption(f"{size / 1024:.0f} KB")
+                with dc4:
+                    if st.button("X", key=f"del_doc_{doc['id']}", help="Delete document"):
+                        _fetch(f"/projects/{project_id}/documents/{doc['id']}", method="DELETE")
+                        time.sleep(0.3)
+                        st.rerun()
+    else:
+        st.info("No documents uploaded yet. Upload your project documents above.")
+
+
+def _render_review_tab(project):
+    project_id = project["id"]
+    st.subheader("Review Documents")
+    st.write("Select a document to review. The AI will check it against the standard's requirements, the methodology, and your other project documents.")
+
+    documents = project.get("documents", [])
+    reviewable = [d for d in documents if d.get("status") in ("parsed", "reviewed") and d.get("doc_type") in ("pdd", "mr", "valver", "poa_dd", "vpa_dd")]
+
+    if not reviewable:
+        st.info("Upload a PDD, MR, or other reviewable document first (DOCX or PDF format).")
+        return
+
+    doc_options = {d["id"]: f"{d['file_name']} ({PROJECT_DOC_TYPES.get(d['doc_type'], d['doc_type'])})" for d in reviewable}
+    selected_doc_id = st.selectbox(
+        "Select document to review",
+        list(doc_options.keys()),
+        format_func=lambda x: doc_options[x],
+        key=f"review_doc_select_{project_id}",
+    )
+
+    selected_doc = next((d for d in reviewable if d["id"] == selected_doc_id), None)
+
+    if selected_doc and selected_doc.get("doc_type") == "mr":
+        pdd_docs = [d for d in documents if d["doc_type"] == "pdd" and d.get("parsed_text")]
+        if pdd_docs:
+            st.info(f"PDD found in project: {pdd_docs[0]['file_name']}. The AI will cross-reference your MR against the PDD for consistency.")
+        else:
+            st.warning("No PDD found in this project. For the best MR review, upload your PDD first so the AI can check consistency.")
+
+    if st.button("Start Review", key=f"review_btn_{project_id}", type="primary"):
+        with st.spinner("AI is reviewing your document... This may take a minute."):
+            result = _fetch(f"/projects/{project_id}/review/{selected_doc_id}", method="POST")
+            if result:
+                st.session_state[f"review_result_{selected_doc_id}"] = result
+                st.rerun()
+
+    result = st.session_state.get(f"review_result_{selected_doc_id}")
+    if not result:
+        if selected_doc and selected_doc.get("review_result"):
+            import json
+            try:
+                result = json.loads(selected_doc["review_result"]) if isinstance(selected_doc["review_result"], str) else selected_doc["review_result"]
+            except (json.JSONDecodeError, TypeError):
+                result = None
+
+    if result:
+        _render_review_result(result)
+
+
+def _render_review_result(result):
+    risk = result.get("overall_risk", "UNKNOWN")
+    risk_colors = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red"}
+    risk_color = risk_colors.get(risk, "red")
+    score = result.get("overall_score", "N/A")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Overall Risk", risk)
+    with col2:
+        st.metric("Overall Score", f"{score}/100" if isinstance(score, int) else score)
+
+    pdd_consistency = result.get("pdd_consistency", [])
+    if pdd_consistency:
+        st.warning("**PDD Consistency Issues:**")
+        for issue in pdd_consistency:
+            st.write(f"- {issue}")
+
+    priority = result.get("priority_actions", [])
+    if priority:
+        st.subheader("Priority Actions")
+        for i, action in enumerate(priority, 1):
+            st.write(f"{i}. {action}")
+
+    sections = result.get("sections", [])
+    if sections:
+        st.subheader("Section-by-Section Review")
+        for sec in sections:
+            sec_name = sec.get("section", "Unknown")
+            sec_score = sec.get("score", "N/A")
+            with st.expander(f"{sec_name} (Score: {sec_score}/100)"):
+                issues = sec.get("issues", [])
+                if issues:
+                    st.markdown("**Issues:**")
+                    for iss in issues:
+                        st.write(f"- {iss}")
+                fixes = sec.get("fixes", [])
+                if fixes:
+                    st.markdown("**Suggested Fixes:**")
+                    for fix in fixes:
+                        st.write(f"- {fix}")
+                questions = sec.get("questions", [])
+                if questions:
+                    st.markdown("**Questions for You:**")
+                    for q in questions:
+                        st.write(f"- {q}")
+
+    raw = result.get("raw_review")
+    if raw:
+        with st.expander("Full Review Text"):
+            st.write(raw)
+
+
+def _render_write_tab(project):
+    project_id = project["id"]
+    standard = project.get("standard", "GoldStandard")
+
+    st.subheader("AI Writing Assistant")
+    st.write("Select a document type and section. The AI will draft content based on the standard's requirements, your methodology, and any reference documents you've uploaded.")
+
+    available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
+    if not available_doc_types:
+        st.error("No document templates available for this standard.")
+        return
+
+    write_col1, write_col2 = st.columns(2)
+    with write_col1:
+        doc_type_keys = list(available_doc_types.keys())
+        selected_write_dt = st.selectbox(
+            "Document type",
+            doc_type_keys,
+            format_func=lambda x: available_doc_types[x],
+            key=f"write_dt_{project_id}",
+        )
+    with write_col2:
+        pass
+
+    sections = _fetch(f"/projects/{project_id}/sections?doc_type={selected_write_dt}")
+    if not sections:
+        st.warning("Could not load sections for this document type.")
+        return
+
+    current_parent = None
+    section_options = {}
+    for sec in sections:
+        parent = sec.get("parent_section", "")
+        section_options[sec["id"]] = f"{sec['id']}: {sec['title']}"
+
+    selected_section = st.selectbox(
+        "Select section to draft",
+        list(section_options.keys()),
+        format_func=lambda x: section_options[x],
+        key=f"write_section_{project_id}",
+    )
+
+    selected_sec_info = next((s for s in sections if s["id"] == selected_section), None)
+    if selected_sec_info:
+        with st.expander("Section requirements", expanded=False):
+            for req in selected_sec_info.get("must_include", []):
+                st.write(f"- {req}")
+
+    col_explain, col_write = st.columns(2)
+
+    with col_explain:
+        if st.button("Explain this section", key=f"explain_btn_{project_id}"):
+            with st.spinner("Getting explanation..."):
+                result = _fetch(
+                    f"/projects/{project_id}/explain?doc_type={selected_write_dt}",
+                    method="POST",
+                    json={"section_id": selected_section},
+                )
+                if result:
+                    st.session_state[f"explanation_{project_id}_{selected_section}"] = result.get("explanation", "")
+
+    explanation = st.session_state.get(f"explanation_{project_id}_{selected_section}")
+    if explanation:
+        with st.expander("AI Explanation", expanded=True):
+            st.write(explanation)
+
+    user_instructions = st.text_area(
+        "Additional instructions (optional)",
+        key=f"write_instr_{project_id}",
+        placeholder="e.g., 'Focus on cookstove distribution in rural areas', 'Use conservative emission factors', 'Include sampling plan details'...",
+        height=80,
+    )
+
+    with col_write:
+        if st.button("Generate Draft", key=f"generate_btn_{project_id}", type="primary"):
+            with st.spinner("AI is drafting this section... This may take a moment."):
+                result = _fetch(
+                    f"/projects/{project_id}/write?doc_type={selected_write_dt}",
+                    method="POST",
+                    json={
+                        "section_id": selected_section,
+                        "user_instructions": user_instructions or None,
+                    },
+                )
+                if result:
+                    st.session_state[f"draft_{project_id}_{selected_write_dt}_{selected_section}"] = result.get("generated_text", "")
+                    st.rerun()
+
+    draft = st.session_state.get(f"draft_{project_id}_{selected_write_dt}_{selected_section}")
+    if draft:
+        st.divider()
+        st.subheader(f"Generated Draft: {section_options.get(selected_section, selected_section)}")
+        st.write(draft)
+
+    existing_sessions = _fetch(f"/projects/{project_id}/write-sessions?doc_type={selected_write_dt}")
+    if existing_sessions:
+        st.divider()
+        st.subheader("Previously Generated Sections")
+        for sess in existing_sessions:
+            with st.expander(f"{sess['section_id']}: {sess.get('section_title', '')}"):
+                st.write(sess.get("generated_text", ""))
+
+
+def _render_project_settings(project):
+    project_id = project["id"]
+    st.subheader("Project Settings")
+
+    with st.form(key=f"settings_form_{project_id}"):
+        new_name = st.text_input("Project name", value=project.get("name", ""))
+        new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
+                                     index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
+                                     if project.get("standard") in STANDARD_OPTIONS else 0)
+        new_methodology = st.text_input("Methodology", value=project.get("methodology", "") or "")
+        new_country = st.text_input("Country", value=project.get("country", "") or "")
+        new_desc = st.text_area("Description", value=project.get("description", "") or "")
+        new_status = st.selectbox("Status", list(STATUS_LABELS.keys()),
+                                   format_func=lambda x: STATUS_LABELS[x],
+                                   index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
+                                   if project.get("status") in STATUS_LABELS else 0)
+
+        if st.form_submit_button("Save Changes", type="primary"):
+            _fetch(f"/projects/{project_id}", method="PATCH", json={
+                "name": new_name,
+                "standard": new_standard,
+                "methodology": new_methodology or None,
+                "country": new_country or None,
+                "description": new_desc or None,
+                "status": new_status,
+            })
+            st.success("Project updated.")
+            time.sleep(0.5)
+            st.rerun()
+
+    st.divider()
+    st.subheader("Danger Zone")
+    if st.button("Delete Project", key=f"delete_proj_{project_id}", type="secondary"):
+        st.session_state[f"confirm_delete_{project_id}"] = True
+
+    if st.session_state.get(f"confirm_delete_{project_id}"):
+        st.warning("Are you sure? This will delete the project and all its documents.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, delete", key=f"confirm_del_yes_{project_id}"):
+                _fetch(f"/projects/{project_id}", method="DELETE")
+                st.session_state.selected_project_id = None
+                st.session_state.pop(f"confirm_delete_{project_id}", None)
+                st.rerun()
+        with col2:
+            if st.button("Cancel", key=f"confirm_del_no_{project_id}"):
+                st.session_state.pop(f"confirm_delete_{project_id}", None)
+                st.rerun()
+
+
+if page == "My Projects":
+    render_my_projects()
+elif page == "Compliance Analyzer":
     render_analyzer()
 elif page == "Document Repository":
     render_repository()

@@ -39,6 +39,7 @@ from carbongpt.core.orchestrator import (
 from carbongpt.core.task_store import create_task, get_task
 from carbongpt.tools.parse_docx import debug_sections
 from carbongpt.app.admin_routes import router as admin_router
+from carbongpt.app.project_routes import router as project_router
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+app.include_router(project_router)
 
 
 @app.on_event("startup")

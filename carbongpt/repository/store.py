@@ -823,3 +823,161 @@ def search_carbon_projects(query_text, limit=50):
             (like_pattern, like_pattern, like_pattern, like_pattern, limit)
         )
         return cur.fetchall()
+
+
+def create_user_project(name, standard, doc_type=None, methodology=None, country=None, description=None):
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO user_projects (name, standard, doc_type, methodology, country, description) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (name, standard, doc_type, methodology, country, description)
+        )
+        row = cur.fetchone()
+        return row["id"]
+
+
+def get_user_project(project_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM user_projects WHERE id = %s", (project_id,))
+        proj = cur.fetchone()
+        if not proj:
+            return None
+        cur.execute(
+            "SELECT * FROM project_documents WHERE project_id = %s ORDER BY created_at DESC",
+            (project_id,)
+        )
+        docs = cur.fetchall()
+        result = dict(proj)
+        result["documents"] = [dict(d) for d in docs]
+        return result
+
+
+def list_user_projects(status=None):
+    with get_cursor() as cur:
+        if status:
+            cur.execute(
+                "SELECT p.*, "
+                "(SELECT COUNT(*) FROM project_documents pd WHERE pd.project_id = p.id) AS doc_count "
+                "FROM user_projects p WHERE p.status = %s ORDER BY p.updated_at DESC",
+                (status,)
+            )
+        else:
+            cur.execute(
+                "SELECT p.*, "
+                "(SELECT COUNT(*) FROM project_documents pd WHERE pd.project_id = p.id) AS doc_count "
+                "FROM user_projects p ORDER BY p.updated_at DESC"
+            )
+        return cur.fetchall()
+
+
+def update_user_project(project_id, **kwargs):
+    allowed = {"name", "standard", "doc_type", "methodology", "country", "description", "status"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    values = list(updates.values()) + [project_id]
+    with get_cursor() as cur:
+        cur.execute(
+            f"UPDATE user_projects SET {set_clause}, updated_at = NOW() WHERE id = %s",
+            values
+        )
+
+
+def delete_user_project(project_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM user_projects WHERE id = %s", (project_id,))
+
+
+def add_project_document(project_id, doc_type, file_name, file_path, file_type, file_size_bytes=None, notes=None):
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO project_documents (project_id, doc_type, file_name, file_path, file_type, file_size_bytes, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (project_id, doc_type, file_name, file_path, file_type, file_size_bytes, notes)
+        )
+        row = cur.fetchone()
+        cur.execute(
+            "UPDATE user_projects SET updated_at = NOW() WHERE id = %s",
+            (project_id,)
+        )
+        return row["id"]
+
+
+def get_project_document(doc_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM project_documents WHERE id = %s", (doc_id,))
+        return cur.fetchone()
+
+
+def update_project_document(doc_id, **kwargs):
+    allowed = {"parsed_text", "parsed_sections", "status", "review_result", "notes"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    values = list(updates.values()) + [doc_id]
+    with get_cursor() as cur:
+        cur.execute(
+            f"UPDATE project_documents SET {set_clause}, updated_at = NOW() WHERE id = %s",
+            values
+        )
+
+
+def delete_project_document(doc_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM project_documents WHERE id = %s", (doc_id,))
+
+
+def get_project_documents_by_type(project_id, doc_type):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM project_documents WHERE project_id = %s AND doc_type = %s ORDER BY created_at DESC",
+            (project_id, doc_type)
+        )
+        return cur.fetchall()
+
+
+def save_write_session(project_id, doc_type, section_id, section_title, generated_text, user_text=None, ai_context=None):
+    import json as _json
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id FROM project_write_sessions WHERE project_id = %s AND doc_type = %s AND section_id = %s",
+            (project_id, doc_type, section_id)
+        )
+        existing = cur.fetchone()
+        ctx = _json.dumps(ai_context) if ai_context else '{}'
+        if existing:
+            cur.execute(
+                "UPDATE project_write_sessions SET generated_text = %s, user_text = %s, "
+                "section_title = %s, ai_context = %s, updated_at = NOW() WHERE id = %s RETURNING id",
+                (generated_text, user_text, section_title, ctx, existing["id"])
+            )
+        else:
+            cur.execute(
+                "INSERT INTO project_write_sessions (project_id, doc_type, section_id, section_title, "
+                "generated_text, user_text, ai_context) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (project_id, doc_type, section_id, section_title, generated_text, user_text, ctx)
+            )
+        return cur.fetchone()["id"]
+
+
+def get_write_sessions(project_id, doc_type=None):
+    with get_cursor() as cur:
+        if doc_type:
+            cur.execute(
+                "SELECT * FROM project_write_sessions WHERE project_id = %s AND doc_type = %s ORDER BY section_id",
+                (project_id, doc_type)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM project_write_sessions WHERE project_id = %s ORDER BY doc_type, section_id",
+                (project_id,)
+            )
+        return cur.fetchall()
+
+
+def get_write_session(session_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM project_write_sessions WHERE id = %s", (session_id,))
+        return cur.fetchone()

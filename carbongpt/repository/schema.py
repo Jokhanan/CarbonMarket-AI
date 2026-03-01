@@ -140,6 +140,59 @@ CREATE INDEX IF NOT EXISTS idx_carbon_projects_region ON carbon_projects(region)
 CREATE INDEX IF NOT EXISTS idx_carbon_projects_status ON carbon_projects(status);
 CREATE INDEX IF NOT EXISTS idx_carbon_projects_project_type ON carbon_projects(project_type);
 
+CREATE TABLE IF NOT EXISTS user_projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(300) NOT NULL,
+    standard VARCHAR(50) NOT NULL,
+    doc_type VARCHAR(50),
+    methodology VARCHAR(300),
+    country VARCHAR(100),
+    description TEXT,
+    status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft', 'in_progress', 'under_review', 'submitted', 'registered', 'archived')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS project_documents (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    doc_type VARCHAR(50) NOT NULL CHECK (doc_type IN (
+        'pdd', 'mr', 'valver', 'poa_dd', 'vpa_dd',
+        'reference', 'research', 'field_data', 'template', 'other'
+    )),
+    file_name VARCHAR(500) NOT NULL,
+    file_path VARCHAR(1000) NOT NULL,
+    file_type VARCHAR(10) NOT NULL CHECK (file_type IN ('pdf', 'docx', 'xlsx', 'csv', 'other')),
+    file_size_bytes INTEGER,
+    parsed_text TEXT,
+    parsed_sections JSONB DEFAULT '[]',
+    status VARCHAR(20) DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'parsed', 'reviewed', 'draft_generated')),
+    review_result JSONB,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS project_write_sessions (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    doc_type VARCHAR(50) NOT NULL,
+    section_id VARCHAR(20) NOT NULL,
+    section_title VARCHAR(300),
+    generated_text TEXT,
+    user_text TEXT,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'needs_revision')),
+    ai_context JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_projects_standard ON user_projects(standard);
+CREATE INDEX IF NOT EXISTS idx_user_projects_status ON user_projects(status);
+CREATE INDEX IF NOT EXISTS idx_project_documents_project ON project_documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_documents_doc_type ON project_documents(doc_type);
+CREATE INDEX IF NOT EXISTS idx_project_write_sessions_project ON project_write_sessions(project_id);
+
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS search_vector tsvector;
 

@@ -14,7 +14,7 @@ CarbonGPT is built with Python 3.11, FastAPI for backend services, and Streamlit
 
 **UI/UX Decisions:**
 The application features two primary interfaces:
-- **Compliance Analyzer + Document Repository + Carbon Intelligence (Streamlit UI):** This is the main user-facing application for document analysis, repository management, and carbon project analytics.
+- **My Projects + Compliance Analyzer + Document Repository + Carbon Intelligence (Streamlit UI):** This is the main user-facing application for project workspace, document analysis, repository management, and carbon project analytics.
 - **Admin App (Streamlit - separate port):** A standalone interface for administrative tasks, though primarily managed through the main UI's admin sections.
 
 **Technical Implementations:**
@@ -25,6 +25,7 @@ The application features two primary interfaces:
 -   **Web Intelligence:** Integrates real-time web search (`Serper.dev API`) to verify methodology statuses, refresh knowledge, and propose new compliance rules.
 -   **Document Synchronization:** Automated downloading and ingestion of methodologies, program standards, guides, and project documents from public catalogs (Verra VCS, CDM/UNFCCC, Gold Standard).
 -   **Carbon Project Intelligence:** A dashboard providing analytics on carbon projects sourced directly from Verra VCS and Gold Standard registries, including project overview, country-specific details, and methodology analysis.
+-   **Project Workspace (My Projects):** User-facing project management with document upload, AI-powered review (with PDD-MR cross-referencing), and AI writing assistant for drafting PDD/MR sections. Supports reference document uploads for context-aware AI assistance. Database tables: `user_projects`, `project_documents`, `project_write_sessions`. API routes in `carbongpt/app/project_routes.py`. AI engine in `carbongpt/core/ai_writer.py`.
 -   **Search & AI Retrieval:** Implements a hybrid search mechanism combining semantic search (pgvector cosine distance) and keyword search (PostgreSQL `tsvector`) for efficient content retrieval.
 
 **Feature Specifications:**
