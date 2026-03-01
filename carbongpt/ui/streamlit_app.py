@@ -1339,7 +1339,7 @@ def _render_country_explorer(analytics):
                 import pandas as pd
                 df = pd.DataFrame(meths)
                 df = df.rename(columns={"methodology": "Methodology", "count": "Projects", "credits": "Est. Credits"})
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, width="stretch", hide_index=True)
 
         with col_right:
             st.subheader("Top Developers")
@@ -1348,7 +1348,7 @@ def _render_country_explorer(analytics):
                 import pandas as pd
                 df = pd.DataFrame(devs)
                 df = df.rename(columns={"proponent": "Developer", "count": "Projects"})
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, width="stretch", hide_index=True)
 
         statuses = detail.get("statuses", [])
         if statuses:
@@ -1367,7 +1367,7 @@ def _render_country_explorer(analytics):
             display_cols = [c for c in display_cols if c in df.columns]
             df_display = df[display_cols].copy()
             df_display.columns = [c.replace("_", " ").title() for c in display_cols]
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display, width="stretch", hide_index=True)
 
 
 def _render_methodology_analysis():
@@ -1385,7 +1385,7 @@ def _render_methodology_analysis():
         "total_credits": "Est. Annual Credits"
     })
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     st.subheader("Projects per Methodology")
     top_10 = df.head(15)
@@ -1434,7 +1434,7 @@ def _render_project_browser():
     display_cols = [c for c in display_cols if c in df.columns]
     df_display = df[display_cols].copy()
     df_display.columns = [c.replace("_", " ").title() for c in display_cols]
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width="stretch", hide_index=True)
 
 
 def _render_sync_controls(summary):
@@ -1626,7 +1626,7 @@ def _render_project_list():
         if projects:
             st.caption(f"{len(projects)} project{'s' if len(projects) != 1 else ''}")
     with col_right:
-        with st.popover("+ New Project", use_container_width=True):
+        with st.popover("+ New Project", width="stretch"):
             new_name = st.text_input("Project name", key="new_proj_name",
                                       placeholder="e.g., Ghana Improved Cookstoves")
             new_standard = st.selectbox("Standard", STANDARD_OPTIONS, key="new_proj_standard")
@@ -1686,7 +1686,7 @@ def _render_project_list():
             with c3:
                 st.caption(f"{doc_count} doc{'s' if doc_count != 1 else ''}")
             with c4:
-                if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
+                if st.button("Open", key=f"open_proj_{pid}", type="primary", width="stretch"):
                     st.session_state.selected_project_id = pid
                     st.rerun()
 
@@ -2037,7 +2037,7 @@ def _render_calc_results(project, calc_result):
         }
         available = [c for c in display_cols if c in df.columns]
         df_display = df[available].rename(columns=display_cols)
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        st.dataframe(df_display, width="stretch", hide_index=True)
 
         total = calc_result.get("total_emission_reductions_tco2e", 0)
         avg = calc_result.get("average_annual_reductions_tco2e", 0)
@@ -2058,7 +2058,7 @@ def _render_calc_results(project, calc_result):
     if calc_result.get("parameters_used"):
         with st.expander("Parameters Used"):
             params_df = pd.DataFrame(calc_result["parameters_used"])
-            st.dataframe(params_df, use_container_width=True, hide_index=True)
+            st.dataframe(params_df, width="stretch", hide_index=True)
 
     if calc_result.get("assumptions"):
         with st.expander("Assumptions"):
@@ -2068,7 +2068,7 @@ def _render_calc_results(project, calc_result):
     if calc_result.get("monitoring_parameters"):
         with st.expander("Monitoring Parameters"):
             mon_df = pd.DataFrame(calc_result["monitoring_parameters"])
-            st.dataframe(mon_df, use_container_width=True, hide_index=True)
+            st.dataframe(mon_df, width="stretch", hide_index=True)
 
     st.divider()
     if st.button("Download Calculation Spreadsheet (Excel)",
