@@ -1480,15 +1480,28 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     else:
         filtered = meths
 
-    if standard:
-        std_map = {"GoldStandard": "GoldStandard", "Verra": "Verra"}
-        mapped_std = std_map.get(standard)
-        if mapped_std:
-            std_filtered = [m for m in filtered if m.get("standard") in (mapped_std, "CDM/Verra", "Other", None)]
-            if std_filtered:
-                filtered = std_filtered
+    if standard and not search:
+        allowed_standards = {"CDM"}
+        if standard == "GoldStandard":
+            allowed_standards.add("GoldStandard")
+        elif standard == "Verra":
+            allowed_standards.add("Verra")
+        std_filtered = [m for m in filtered if m.get("standard") in allowed_standards]
+        if std_filtered:
+            filtered = std_filtered
 
-    shown = filtered[:50]
+    if standard and not search:
+        def _sort_key(m):
+            ms = m.get("standard", "")
+            if standard == "GoldStandard" and ms == "GoldStandard":
+                return (0, m.get("code", ""))
+            elif standard == "Verra" and ms == "Verra":
+                return (0, m.get("code", ""))
+            else:
+                return (1, m.get("code", ""))
+        filtered = sorted(filtered, key=_sort_key)
+
+    shown = filtered[:80]
     shown_codes = {m["code"] for m in shown}
     if current_value and current_value not in shown_codes:
         current_meth = next((m for m in meths if m["code"] == current_value), None)
@@ -1501,12 +1514,14 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     labels = {
         "(none)": "-- Select methodology --",
     }
+    std_short = {"CDM": "CDM", "Verra": "VCS", "GoldStandard": "GS"}
     for m in shown:
         name = m.get("name") or ""
         proj = m.get("project_count", 0)
-        label = f"{m['code']}"
+        ms = std_short.get(m.get("standard", ""), "")
+        label = f"[{ms}] {m['code']}" if ms else m["code"]
         if name:
-            label += f" - {name[:60]}"
+            label += f" - {name[:55]}"
         if proj:
             label += f" ({proj} projects)"
         labels[m["code"]] = label
