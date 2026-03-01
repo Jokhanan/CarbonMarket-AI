@@ -866,9 +866,9 @@ def list_methodologies(standard=None, category=None, status=None, search=None, l
             conditions.append("status = %s")
             params.append(status)
         if search:
-            conditions.append("(code ILIKE %s OR name ILIKE %s OR description ILIKE %s)")
+            conditions.append("(code ILIKE %s OR name ILIKE %s OR description ILIKE %s OR applicability ILIKE %s OR sector ILIKE %s)")
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like, like])
         where = " AND ".join(conditions) if conditions else "1=1"
         params.append(limit)
         cur.execute(
