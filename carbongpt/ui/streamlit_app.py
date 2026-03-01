@@ -7,7 +7,7 @@ API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
 st.set_page_config(page_title="CarbonGPT", layout="wide")
 
-PAGES = ["Compliance Analyzer", "Document Repository"]
+PAGES = ["Compliance Analyzer", "Document Repository", "Carbon Intelligence"]
 
 with st.sidebar:
     st.markdown("### CarbonGPT")
@@ -1162,7 +1162,287 @@ def _render_manage_standards():
             st.info("Create a standard first.")
 
 
+def render_intelligence():
+    st.title("Carbon Intelligence Dashboard")
+
+    analytics = _fetch("/admin/projects/analytics")
+    if not analytics or not analytics.get("summary"):
+        st.warning("No project data available. Use the Sync tab to import projects from registries.")
+        if st.button("Sync Projects Now", key="sync_empty_btn", type="primary"):
+            with st.spinner("Syncing projects from registries..."):
+                result = _fetch("/admin/sync-projects", method="POST")
+                if result:
+                    total = result.get("total_synced", 0)
+                    st.success(f"Synced {total:,} projects.")
+                    time.sleep(1)
+                    st.rerun()
+        return
+
+    summary = analytics["summary"]
+
+    tabs = st.tabs(["Global Overview", "Country Explorer", "Methodology Analysis",
+                     "Project Browser", "Sync"])
+
+    with tabs[0]:
+        _render_global_overview(analytics, summary)
+
+    with tabs[1]:
+        _render_country_explorer(analytics)
+
+    with tabs[2]:
+        _render_methodology_analysis()
+
+    with tabs[3]:
+        _render_project_browser()
+
+    with tabs[4]:
+        _render_sync_controls(summary)
+
+
+def _render_global_overview(analytics, summary):
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Projects", f"{summary['total_projects']:,}",
+                   help="Total carbon projects across all registries")
+    with col2:
+        credits = summary.get("total_estimated_credits", 0) or 0
+        if credits >= 1_000_000_000:
+            credits_str = f"{credits / 1_000_000_000:.1f}B"
+        elif credits >= 1_000_000:
+            credits_str = f"{credits / 1_000_000:.0f}M"
+        else:
+            credits_str = f"{credits:,}"
+        st.metric("Est. Annual Credits", credits_str,
+                   help="Total estimated annual emission reductions (tCO2e)")
+    with col3:
+        st.metric("Countries", f"{summary['total_countries']}")
+    with col4:
+        st.metric("Registries", f"{summary['total_registries']}")
+
+    st.divider()
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.subheader("Top 15 Countries by Project Count")
+        countries = analytics.get("by_country", [])[:15]
+        if countries:
+            import pandas as pd
+            df = pd.DataFrame(countries)
+            df = df.rename(columns={"country": "Country", "project_count": "Projects", "total_credits": "Est. Credits"})
+            st.bar_chart(df.set_index("Country")["Projects"])
+
+    with col_right:
+        st.subheader("Projects by Region")
+        regions = analytics.get("by_region", [])
+        if regions:
+            import pandas as pd
+            df = pd.DataFrame(regions)
+            df = df.rename(columns={"region": "Region", "project_count": "Projects", "total_credits": "Est. Credits"})
+            st.bar_chart(df.set_index("Region")["Projects"])
+
+    st.divider()
+
+    col_left2, col_right2 = st.columns(2)
+
+    with col_left2:
+        st.subheader("Project Status Distribution")
+        statuses = analytics.get("by_status", [])
+        if statuses:
+            import pandas as pd
+            df = pd.DataFrame(statuses)
+            df = df.rename(columns={"status": "Status", "project_count": "Projects"})
+            st.bar_chart(df.set_index("Status")["Projects"])
+
+    with col_right2:
+        st.subheader("Project Types")
+        types = analytics.get("by_project_type", [])[:10]
+        if types:
+            import pandas as pd
+            df = pd.DataFrame(types)
+            df["project_type"] = df["project_type"].str[:40]
+            df = df.rename(columns={"project_type": "Type", "project_count": "Projects", "total_credits": "Est. Credits"})
+            st.bar_chart(df.set_index("Type")["Projects"])
+
+    by_registry = analytics.get("by_registry", [])
+    if by_registry:
+        st.divider()
+        st.subheader("By Registry")
+        cols = st.columns(len(by_registry))
+        for i, reg in enumerate(by_registry):
+            with cols[i]:
+                label = "Verra VCS" if reg["registry"] == "verra" else "Gold Standard"
+                st.metric(label, f"{reg['project_count']:,} projects")
+
+
+def _render_country_explorer(analytics):
+    countries = analytics.get("by_country", [])
+    if not countries:
+        st.info("No country data available.")
+        return
+
+    country_names = [c["country"] for c in countries]
+    selected = st.selectbox("Select a country", country_names,
+                            key="country_select",
+                            help="Choose a country to explore its carbon projects")
+
+    if selected:
+        detail = _fetch(f"/admin/projects/country/{selected}")
+        if not detail:
+            st.warning("Could not load country details.")
+            return
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Projects", f"{detail['total']}")
+        with col2:
+            total_credits = sum(
+                (p.get("estimated_annual_credits") or 0) for p in detail.get("projects", [])
+            )
+            st.metric("Est. Annual Credits", f"{total_credits:,}")
+        with col3:
+            st.metric("Developers", f"{len(detail.get('developers', []))}")
+
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            st.subheader("Methodologies")
+            meths = detail.get("methodologies", [])
+            if meths:
+                import pandas as pd
+                df = pd.DataFrame(meths)
+                df = df.rename(columns={"methodology": "Methodology", "count": "Projects", "credits": "Est. Credits"})
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        with col_right:
+            st.subheader("Top Developers")
+            devs = detail.get("developers", [])
+            if devs:
+                import pandas as pd
+                df = pd.DataFrame(devs)
+                df = df.rename(columns={"proponent": "Developer", "count": "Projects"})
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        statuses = detail.get("statuses", [])
+        if statuses:
+            st.subheader("Status Breakdown")
+            import pandas as pd
+            df = pd.DataFrame(statuses)
+            df = df.rename(columns={"status": "Status", "count": "Projects"})
+            st.bar_chart(df.set_index("Status")["Projects"])
+
+        st.subheader(f"All Projects in {selected}")
+        projects = detail.get("projects", [])
+        if projects:
+            import pandas as pd
+            df = pd.DataFrame(projects)
+            display_cols = ["name", "status", "methodology", "proponent", "estimated_annual_credits", "registry"]
+            display_cols = [c for c in display_cols if c in df.columns]
+            df_display = df[display_cols].copy()
+            df_display.columns = [c.replace("_", " ").title() for c in display_cols]
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+
+def _render_methodology_analysis():
+    st.subheader("Top Methodologies")
+    meths = _fetch("/admin/projects/methodologies?limit=30")
+    if not meths:
+        st.info("No methodology data available.")
+        return
+
+    import pandas as pd
+    df = pd.DataFrame(meths)
+    df = df.rename(columns={
+        "methodology": "Methodology",
+        "project_count": "Projects",
+        "total_credits": "Est. Annual Credits"
+    })
+
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    st.subheader("Projects per Methodology")
+    top_10 = df.head(15)
+    st.bar_chart(top_10.set_index("Methodology")["Projects"])
+
+    st.subheader("Credits per Methodology")
+    top_credits = df.sort_values("Est. Annual Credits", ascending=False).head(15)
+    st.bar_chart(top_credits.set_index("Methodology")["Est. Annual Credits"])
+
+
+def _render_project_browser():
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        search_q = st.text_input("Search projects", key="proj_search",
+                                  placeholder="Project name, country, methodology...")
+    with col2:
+        registry_filter = st.selectbox("Registry", ["All", "verra", "goldstandard"],
+                                        key="proj_registry")
+    with col3:
+        status_filter = st.selectbox("Status", ["All", "Registered", "Under development",
+                                                  "Under validation", "Late to verify"],
+                                      key="proj_status")
+
+    if search_q:
+        projects = _fetch(f"/admin/projects/search?q={search_q}&limit=100")
+    else:
+        params = []
+        if registry_filter != "All":
+            params.append(f"registry={registry_filter}")
+        if status_filter != "All":
+            params.append(f"status={status_filter}")
+        params.append("limit=100")
+        query_str = "&".join(params)
+        projects = _fetch(f"/admin/projects?{query_str}")
+
+    if not projects:
+        st.info("No projects found matching your criteria.")
+        return
+
+    st.write(f"Showing {len(projects)} projects")
+
+    import pandas as pd
+    df = pd.DataFrame(projects)
+    display_cols = ["registry_id", "name", "country", "status", "methodology",
+                    "project_type", "proponent", "estimated_annual_credits"]
+    display_cols = [c for c in display_cols if c in df.columns]
+    df_display = df[display_cols].copy()
+    df_display.columns = [c.replace("_", " ").title() for c in display_cols]
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+
+def _render_sync_controls(summary):
+    st.subheader("Project Data Sync")
+
+    last_sync = summary.get("last_sync")
+    if last_sync:
+        st.write(f"Last sync: {last_sync}")
+    else:
+        st.write("No sync has been performed yet.")
+
+    st.write(f"Total projects in database: {summary.get('total_projects', 0):,}")
+    st.write(f"Countries covered: {summary.get('total_countries', 0)}")
+
+    st.divider()
+
+    if st.button("Sync All Projects", key="sync_all_btn", type="primary",
+                  help="Fetch latest project data from Verra and Gold Standard registries"):
+        with st.spinner("Syncing projects from registries (this may take a minute)..."):
+            result = _fetch("/admin/sync-projects", method="POST")
+            if result:
+                verra = result.get("verra", {})
+                gs = result.get("goldstandard", {})
+                st.success(
+                    f"Sync complete. "
+                    f"Verra: {verra.get('synced', 0):,} projects. "
+                    f"Gold Standard: {gs.get('synced', 0):,} projects."
+                )
+                time.sleep(1)
+                st.rerun()
+
+
 if page == "Compliance Analyzer":
     render_analyzer()
 elif page == "Document Repository":
     render_repository()
+elif page == "Carbon Intelligence":
+    render_intelligence()

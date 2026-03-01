@@ -108,6 +108,38 @@ CREATE TABLE IF NOT EXISTS compliance_rules (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS carbon_projects (
+    id SERIAL PRIMARY KEY,
+    registry VARCHAR(20) NOT NULL,
+    registry_id VARCHAR(50) NOT NULL,
+    name VARCHAR(500) NOT NULL,
+    status VARCHAR(100),
+    country VARCHAR(100),
+    region VARCHAR(100),
+    proponent VARCHAR(300),
+    methodology VARCHAR(300),
+    project_type VARCHAR(200),
+    project_subtype VARCHAR(300),
+    estimated_annual_credits INTEGER,
+    crediting_period_start DATE,
+    crediting_period_end DATE,
+    registration_date DATE,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    description TEXT,
+    sdgs TEXT,
+    extra_data JSONB DEFAULT '{}',
+    synced_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(registry, registry_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_registry ON carbon_projects(registry);
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_country ON carbon_projects(country);
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_region ON carbon_projects(region);
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_status ON carbon_projects(status);
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_project_type ON carbon_projects(project_type);
+
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS search_vector tsvector;
 

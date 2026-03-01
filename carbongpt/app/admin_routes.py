@@ -609,3 +609,53 @@ def get_sync_status():
         "by_category": by_category,
         "sync_interval_hours": int(os.getenv("CARBONGPT_SYNC_INTERVAL_HOURS", "168")),
     }
+
+
+@router.post("/sync-projects")
+def sync_projects(max_verra: int = None, max_gs: int = None):
+    from carbongpt.repository.project_sync import sync_all_projects
+    result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
+    return result
+
+
+@router.get("/projects")
+def get_projects(registry: str = None, country: str = None, status: str = None,
+                 project_type: str = None, methodology: str = None,
+                 limit: int = 100, offset: int = 0):
+    from carbongpt.repository.store import list_carbon_projects
+    return list_carbon_projects(
+        registry=registry, country=country, status=status,
+        project_type=project_type, methodology=methodology,
+        limit=limit, offset=offset
+    )
+
+
+@router.get("/projects/analytics")
+def get_project_analytics_endpoint():
+    from carbongpt.repository.store import get_project_analytics
+    return get_project_analytics()
+
+
+@router.get("/projects/countries")
+def get_project_countries():
+    from carbongpt.repository.store import get_project_analytics
+    analytics = get_project_analytics()
+    return analytics.get("by_country", [])
+
+
+@router.get("/projects/methodologies")
+def get_project_methodologies(limit: int = 30):
+    from carbongpt.repository.store import get_top_methodologies
+    return get_top_methodologies(limit=limit)
+
+
+@router.get("/projects/country/{country}")
+def get_country_detail(country: str):
+    from carbongpt.repository.store import get_country_details
+    return get_country_details(country)
+
+
+@router.get("/projects/search")
+def search_projects(q: str, limit: int = 50):
+    from carbongpt.repository.store import search_carbon_projects
+    return search_carbon_projects(q, limit=limit)

@@ -1,244 +1,48 @@
 # CarbonGPT — MVP
 
-Modular carbon compliance analysis tool built with **Python 3.11 + FastAPI + Streamlit**.
+## Overview
 
-## Architecture
+CarbonGPT is a modular compliance analysis tool designed to streamline and automate carbon credit project development and verification. It provides a comprehensive platform for managing, analyzing, and ensuring compliance of carbon projects against various international standards such as Gold Standard and Verra VCS. The project aims to reduce the manual effort involved in navigating complex regulatory frameworks, minimize errors, and accelerate the validation and verification process. By leveraging AI, web intelligence, and a robust document repository, CarbonGPT enhances efficiency, accuracy, and transparency in the carbon market, ultimately contributing to faster climate action and improved project quality.
 
-```
-carbongpt/
-├── app/
-│   ├── main.py            FastAPI: analysis + admin endpoints, DB init on startup
-│   ├── admin_routes.py    Admin API: document CRUD, ingestion, semantic search
-│   └── config.py          Centralised paths & env settings
-├── core/
-│   ├── models.py          Pydantic request/response types (incl. compliance_score)
-│   ├── orchestrator.py    Pipeline coordinator (docx → rules → response)
-│   ├── ai_review.py       AI review logic (prompt building, OpenAI calls)
-│   ├── ai_review_worker.py  Subprocess worker for async AI review
-│   ├── knowledge_retrieval.py  RAG: retrieves methodology/standard context from repo for AI review
-│   ├── compliance_checker.py   Compliance rules engine: methodology checks, regulatory alerts
-│   ├── web_intelligence.py    Web search integration for methodology verification & knowledge refresh
-│   └── task_store.py      File-backed task store (/tmp/carbongpt_tasks/)
-├── repository/
-│   ├── db.py              PostgreSQL connection manager (psycopg2)
-│   ├── methodology_sync.py  Automated methodology download from Verra/CDM/Gold Standard catalogs
-│   ├── schema.py          DDL schema + seed data, auto-runs on startup
-│   ├── store.py           CRUD operations for standards, documents, chunks, search
-│   └── ingestion.py       Document parsing (PDF/DOCX), chunking, embeddings, auto-detect
-├── guides/
-│   ├── __init__.py        Guide registry: (standard, doc_type) → module loader
-│   ├── gs_mr_perfcert_v1_2.py   Gold Standard MR guide (22 subsections)
-│   ├── gs_pdd_v1_5.py          Gold Standard PDD guide (26 subsections)
-│   ├── gs_poa_dd_v2_2.py       Gold Standard PoA-DD guide (16 subsections)
-│   ├── gs_vpa_dd_v2_3.py       Gold Standard VPA-DD guide (27 subsections)
-│   ├── vcs_pd_v4_4.py          Verra VCS-PD guide (36 subsections)
-│   ├── vcs_mr_v4_4.py          Verra VCS-MR guide (28 subsections)
-│   └── vcs_valver_v4_4.py      Verra VCS-ValVer guide (21 subsections)
-├── tools/
-│   ├── parse_docx.py      Two-pass section extractor (heading styles + heuristic fallback)
-│   ├── section_mapper.py  Fuzzy heading normaliser & matcher (rapidfuzz)
-│   ├── rule_engine.py     YAML rule loader; 5 rule types supported
-│   └── regex_utils.py     Compiled regex utils: pattern matching, date validation
-├── templates/
-│   ├── registry.yaml      Maps (standard, doc_type, version) → template + rules paths
-│   ├── registry.py        Python loader for registry.yaml
-│   └── goldstandard/
-│       └── MR_v1_1.docx   Gold Standard MR template v1.1
-├── rules/
-│   └── goldstandard_mr_v1.yaml  GoldStandard MR rules
-├── ui/
-│   ├── streamlit_app.py   Main Streamlit UI: Compliance Analyzer + Document Repository
-│   └── admin_app.py       Standalone admin app (available on port 5001 if needed)
-└── tests/
-    ├── test_section_mapper.py   17 tests
-    ├── test_required_field.py   31 tests
-    ├── test_registry.py         10 tests
-    └── test_parse_docx.py       17 tests
-```
+## User Preferences
 
-## Running
+I want iterative development. Ask before making major changes. I prefer detailed explanations. Do not make changes to the folder `carbongpt/tests/`. Do not make changes to the file `carbongpt/ui/admin_app.py`.
 
-```bash
-bash start_carbongpt.sh   # Starts FastAPI (port 3000) + Streamlit UI (port 5000)
-python -m pytest carbongpt/tests/ -v  # Tests
-```
+## System Architecture
 
-## Endpoints
+CarbonGPT is built with Python 3.11, FastAPI for backend services, and Streamlit for the user interface.
 
-### Analysis Endpoints
+**UI/UX Decisions:**
+The application features two primary interfaces:
+- **Compliance Analyzer + Document Repository + Carbon Intelligence (Streamlit UI):** This is the main user-facing application for document analysis, repository management, and carbon project analytics.
+- **Admin App (Streamlit - separate port):** A standalone interface for administrative tasks, though primarily managed through the main UI's admin sections.
 
-| Method | Path                     | Description                                            |
-|--------|--------------------------|--------------------------------------------------------|
-| GET    | /health                  | Liveness probe                                         |
-| POST   | /upload-document         | Upload a .docx file, receive saved path                |
-| POST   | /analyze                 | Analyse file against YAML rules                        |
-| POST   | /analyze-with-template   | Compare file against a user-supplied template           |
-| POST   | /analyze-selected        | Analyse using internally registered template + rules   |
-| POST   | /ai-review               | Start async AI review task                             |
-| GET    | /ai-review/{task_id}     | Poll AI review task status and results                 |
-| GET    | /debug/sections?path=... | Diagnose section detection                             |
+**Technical Implementations:**
 
-### Admin / Document Repository Endpoints
+-   **Document Processing:** Utilizes `pdfplumber` for PDF parsing and `python-docx` for DOCX files. Documents undergo section extraction, AI-driven auto-detection of standards and categories, chunking (`tiktoken`), and embedding (`OpenAI text-embedding-3-small`).
+-   **AI Review System (beta):** An asynchronous process (`ai_review_worker.py`) for in-depth AI-powered document review using `gpt-4o-mini`. It supports knowledge-augmented review (RAG) by retrieving relevant context from the document repository.
+-   **Compliance Rules Engine:** A database-driven system for defining and applying compliance rules (e.g., methodology status, crediting period, eligibility). Rules are managed via the admin UI and can be AI-proposed.
+-   **Web Intelligence:** Integrates real-time web search (`Serper.dev API`) to verify methodology statuses, refresh knowledge, and propose new compliance rules.
+-   **Document Synchronization:** Automated downloading and ingestion of methodologies, program standards, guides, and project documents from public catalogs (Verra VCS, CDM/UNFCCC, Gold Standard).
+-   **Carbon Project Intelligence:** A dashboard providing analytics on carbon projects sourced directly from Verra VCS and Gold Standard registries, including project overview, country-specific details, and methodology analysis.
+-   **Search & AI Retrieval:** Implements a hybrid search mechanism combining semantic search (pgvector cosine distance) and keyword search (PostgreSQL `tsvector`) for efficient content retrieval.
 
-| Method | Path                                | Description                                       |
-|--------|-------------------------------------|---------------------------------------------------|
-| GET    | /admin/standards                    | List all standards                                |
-| POST   | /admin/standards                    | Create a new standard                             |
-| GET    | /admin/standard-versions            | List standard versions (optional filter)          |
-| POST   | /admin/standard-versions            | Create a new standard version                     |
-| POST   | /admin/documents/upload             | Upload document to repository (auto-ingest)       |
-| GET    | /admin/documents                    | List documents (filter by category, version)      |
-| GET    | /admin/documents/{id}               | Get document details                              |
-| PATCH  | /admin/documents/{id}               | Update document metadata                          |
-| DELETE | /admin/documents/{id}               | Delete document                                   |
-| POST   | /admin/documents/{id}/reingest      | Re-run ingestion for a document                   |
-| GET    | /admin/stats                        | Repository statistics                             |
-| GET    | /admin/search?q=...&limit=N        | Semantic search across all embedded content       |
-| GET    | /admin/compliance-rules             | List compliance rules (filter by standard, type)  |
-| GET    | /admin/compliance-rules/{id}        | Get compliance rule details                       |
-| POST   | /admin/compliance-rules             | Create a compliance rule                          |
-| PATCH  | /admin/compliance-rules/{id}        | Update a compliance rule                          |
-| DELETE | /admin/compliance-rules/{id}        | Delete a compliance rule                          |
-| POST   | /admin/compliance-rules/check       | Check methodology against compliance rules        |
-| POST   | /admin/web-intelligence/verify-methodology | Verify methodology status via web search + AI |
-| POST   | /admin/web-intelligence/propose-rule       | Propose compliance rule from web research     |
-| POST   | /admin/web-intelligence/knowledge-refresh  | Research standard updates, propose rules      |
-| POST   | /admin/methodology-sync                    | Download methodologies from public catalogs   |
-| GET    | /admin/methodology-sync/status             | Sync status and methodology counts by source  |
+**Feature Specifications:**
 
-## Document Repository
+-   **Analysis Endpoints:** Provide functionality for uploading documents, analyzing them against YAML rules or templates, and initiating/monitoring asynchronous AI reviews.
+-   **Admin/Document Repository Endpoints:** Enable CRUD operations for standards, documents, compliance rules, and facilitate semantic search across embedded content. Includes features for re-ingestion, repository statistics, and web intelligence tasks.
+-   **Document Categories:** Supports a wide range of document types including `standard_text`, `methodology`, `guidance`, `template`, and various `example` documents.
+-   **Template Registry:** Manages internal document templates defined in `registry.yaml` for specific standards and document types.
 
-PostgreSQL-backed document knowledge base with pgvector for semantic search.
+## External Dependencies
 
-### Database Schema
-- **standards**: Carbon credit standards (Gold Standard, Verra VCS, etc.)
-- **standard_versions**: Versioned standard releases (v4.4, v1.x, etc.)
-- **documents**: Uploaded files with metadata, auto-detection results, ingestion status
-- **document_sections**: Extracted sections from parsed documents
-- **document_chunks**: Text chunks with 1536-dim vector embeddings (text-embedding-3-small)
-- **document_references**: Cross-document links
-- **compliance_rules**: Database-driven compliance intelligence rules (methodology status, transitions, regulatory changes, etc.)
-
-### Document Categories
-standard_text, methodology, guidance, tool, template, example_pdd, example_mr, example_fvr, example_valver, example_other, rule_update, other
-
-### Ingestion Pipeline
-1. Upload PDF/DOCX → saved to `document_repository/`
-2. Parse → extract text + sections (pdfplumber for PDF, python-docx for DOCX)
-3. Auto-detect → AI identifies standard, version, category, applicability (gpt-4o-mini)
-4. Chunk → 500-token chunks with 50-token overlap (tiktoken cl100k_base)
-5. Embed → OpenAI text-embedding-3-small (1536 dimensions)
-6. Store → sections + chunks + embeddings in PostgreSQL
-7. Search → cosine distance via pgvector `<=>` operator
-
-## Template Registry
-
-Templates are stored internally and selected by Standard + Document Type + Version.
-Registry defined in `carbongpt/templates/registry.yaml`.
-
-## AI Review (beta)
-
-- Async task pattern: `POST /ai-review` → `GET /ai-review/{task_id}`
-- Runs in separate subprocess (`ai_review_worker.py`)
-- Task state persisted to `/tmp/carbongpt_tasks/`
-- Uses OpenAI gpt-4o-mini (override with `CARBONGPT_AI_MODEL` env var)
-- Standard-aware prompts (Gold Standard vs Verra VCS)
-- Supported: Gold Standard (MR, PDD, PoA-DD, VPA-DD) + Verra (VCS-PD, VCS-MR, VCS-ValVer)
-
-### Knowledge-Augmented Review (RAG)
-
-When the document repository has embedded content, AI review automatically retrieves
-relevant methodology and standard text from the repository for each section being reviewed.
-This means the AI checks documents against BOTH template requirements AND methodology-specific
-requirements (eligibility criteria, calculation methods, monitoring parameters, baseline
-approach). The retrieval uses semantic search (cosine similarity) with a relevance threshold
-of 0.55 cosine distance, pulling up to 8 candidates per section, filtered by standard,
-capped at ~2000 tokens of context per section.
-
-### Compliance Rules Engine
-
-Database-driven compliance intelligence that checks documents against verified rules:
-- **Rule types**: methodology_status, methodology_transition, crediting_period, eligibility,
-  regulatory, default_value, fee_structure, general
-- **Methodology matching**: Extracts methodology references from document text (AMS, ACM, VM,
-  VMR, M series) and checks against rules database using fuzzy matching
-- **Integration**: Compliance alerts are injected into methodology-related AI review sections
-  and displayed prominently in the review results
-- **Evolutive**: Rules are stored in PostgreSQL, managed via admin UI — no code changes needed
-- **AI-discoverable**: Rules can be marked as "proposed" (by AI) and approved by admin
-- Seeded with 4 initial rules (AMS-II.G deprecation, VMR0006→M0174 transition, CDM methodology
-  VCS approval requirement, VCS crediting period limits)
-
-### Web Intelligence
-
-Real-time web search integration for discovering compliance-relevant information:
-- **Methodology verification**: Look up any methodology's current status (approved, deprecated,
-  transitioning) using web search + AI analysis
-- **Knowledge refresh**: Batch search for regulatory updates across a standard, auto-propose
-  compliance rules from findings
-- **Review integration**: When `CARBONGPT_WEB_SEARCH=true`, the compliance checker automatically
-  searches the web for methodology references not found in the rules database during AI review
-- **Search provider**: Uses Serper.dev API (`SERPER_API_KEY` env var) for Google search results.
-  Falls back to AI knowledge only if no search key is set.
-- **Conservative by design**: Web-discovered findings are saved as "proposed" rules requiring
-  admin approval; low-confidence findings are discarded
-- **UI**: "Web Intelligence" tab in Document Repository page with methodology verification
-  and knowledge refresh controls
-
-### Document Sync (expanded)
-
-Automated download of methodologies, program standards, guides, templates, and project
-documents from public standard body catalogs and registries:
-
-**Verra VCS** (~30+ documents + registry projects):
-- Methodology PDFs via WordPress REST API (VM/VMR series, all active + in-revision)
-- VCS Standard v4.7 (standard_text)
-- VCS Program Guide, Registration & Issuance Process, Methodology Requirements (guidance)
-- AFOLU Non-Permanence Risk Tool (tool)
-- Registry project docs via Verra JSON API (`/uiapi/resource/resourceSummary/{id}` for documents,
-  `POST /uiapi/resource/resource/search` for project discovery) — PDs, MRs, validation/verification
-  reports with direct download URLs (~30-80 docs per project)
-
-**CDM/UNFCCC** (~12+ documents):
-- CDM Methodology Booklet (all approved methodologies)
-- CDM Methodological Tools (additionality, baseline, emission factors, etc.)
-- Project documents: NOT available (Incapsula bot protection blocks all automated access)
-
-**Gold Standard** (~23+ documents + project metadata):
-- Sector methodologies (cooking, A/R, mangroves, SOC, WASH, etc.)
-- Principles & Requirements v2.0 (standard_text)
-- Safeguarding, Stakeholder Consultation, GHG Outcomes, SDG Impact, VVB, PoA, Activity
-  Requirements, Crediting Period (guidance)
-- MR Guide, PDD Guide, Validation/Verification Report Guides (template)
-- Project metadata via public API (`https://public-api.goldstandard.org/projects`) — name, status,
-  methodology, SDGs, developer, country, description. Document files on assurance platform require auth.
-
-**Features:**
-- WordPress API integration for Verra methodologies (bypasses JavaScript pagination)
-- Verra registry JSON API for project documents (replaces broken HTML scraping of SPA)
-- Verra project discovery via `POST /uiapi/resource/resource/search` (instant, returns all 4800+ VCS projects)
-- Gold Standard project discovery via `GET https://public-api.goldstandard.org/projects` (paginated REST API)
-- Deduplication via reference_id (e.g., `verra_VM0001`, `goldstandard_GS_PRINCIPLES_REQUIREMENTS`)
-- Auto-ingestion: downloaded PDFs are parsed, chunked, and embedded if OpenAI key is set
-- Rate limiting: 2-second delay between requests
-- Weekly scheduler: `CARBONGPT_AUTO_SYNC=true` (interval: `CARBONGPT_SYNC_INTERVAL_HOURS`, default 168)
-- UI: "Document Sync" tab with dry-run preview, source selection, program/registry toggles
-
-## Search & AI Retrieval
-
-- **Hybrid search** (default): combines semantic (pgvector cosine distance, 70% weight) + keyword (PostgreSQL tsvector/tsquery, 30% weight) for best results
-- **Keyword search**: full-text search on chunk content via `to_tsvector('english', content)` — finds exact terms like methodology codes (VM0007, AMS-II.G)
-- **Document-level FTS**: weighted search vector on documents table (`title` A-weight, `summary` B-weight, `reference_id` A-weight, `applicability` C-weight)
-- **Chunk metadata enrichment**: every chunk stores `document_title`, `document_category`, `standard_name`, `reference_id`, `section_number`, `section_title` in JSONB metadata
-- **Section-chunk linkage**: chunks are mapped to their parent document_sections via token-boundary overlap matching
-- **Document summaries**: AI-generated 2-3 sentence summaries stored per document (generated during ingestion when OpenAI key available)
-- **Admin endpoints**: `GET /admin/search?q=...&mode=hybrid|keyword|semantic`, `GET /admin/search-documents?q=...` (document-level FTS), `POST /admin/backfill-metadata` (enriches existing chunks)
-
-## Tech Stack
-
-- Python 3.11, FastAPI, Uvicorn, Streamlit
-- PostgreSQL + pgvector (semantic search) + tsvector (full-text search)
-- psycopg2-binary, pdfplumber, tiktoken
-- python-docx, PyYAML, rapidfuzz
-- OpenAI API (AI review + embeddings + auto-detection + document summaries)
-- pytest
+-   **PostgreSQL:** Primary database for storing all application data, including document metadata, sections, chunks, compliance rules, carbon project data, and configurations.
+-   **pgvector:** PostgreSQL extension used for efficient semantic search by storing and querying vector embeddings.
+-   **OpenAI API:** Utilized for AI review (`gpt-4o-mini`), generating text embeddings (`text-embedding-3-small`), AI-driven auto-detection of document attributes, and generating document summaries.
+-   **Serper.dev API:** Integrated for performing real-time web searches as part of the Web Intelligence features.
+-   **Verra APIs:**
+    -   WordPress REST API: For downloading Verra methodology PDFs.
+    -   Verra JSON API: For discovering and retrieving project documents and metadata from the Verra registry.
+-   **Gold Standard Public API:** For retrieving project metadata and document templates.
+-   **UNFCCC (CDM) resources:** For downloading CDM methodology booklets and tools.
+-   **Python Libraries:** `FastAPI`, `Streamlit`, `Uvicorn`, `psycopg2-binary`, `pdfplumber`, `tiktoken`, `python-docx`, `PyYAML`, `rapidfuzz`, `pytest`.

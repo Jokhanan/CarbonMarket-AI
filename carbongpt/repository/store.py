@@ -599,3 +599,227 @@ def check_methodology_rules(methodology_name, standard_slug):
         elif any(k in meth_lower for k in keywords):
             matches.append(rule)
     return matches
+
+
+def upsert_carbon_project(data):
+    import json
+    with get_cursor() as cur:
+        cur.execute(
+            """INSERT INTO carbon_projects
+            (registry, registry_id, name, status, country, region, proponent,
+             methodology, project_type, project_subtype, estimated_annual_credits,
+             crediting_period_start, crediting_period_end, registration_date,
+             latitude, longitude, description, sdgs, extra_data, synced_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (registry, registry_id) DO UPDATE SET
+             name = EXCLUDED.name,
+             status = EXCLUDED.status,
+             country = EXCLUDED.country,
+             region = EXCLUDED.region,
+             proponent = EXCLUDED.proponent,
+             methodology = EXCLUDED.methodology,
+             project_type = EXCLUDED.project_type,
+             project_subtype = EXCLUDED.project_subtype,
+             estimated_annual_credits = EXCLUDED.estimated_annual_credits,
+             crediting_period_start = EXCLUDED.crediting_period_start,
+             crediting_period_end = EXCLUDED.crediting_period_end,
+             registration_date = EXCLUDED.registration_date,
+             latitude = EXCLUDED.latitude,
+             longitude = EXCLUDED.longitude,
+             description = EXCLUDED.description,
+             sdgs = EXCLUDED.sdgs,
+             extra_data = EXCLUDED.extra_data,
+             synced_at = NOW()
+            RETURNING id""",
+            (
+                data["registry"], data["registry_id"], data["name"],
+                data.get("status"), data.get("country"), data.get("region"),
+                data.get("proponent"), data.get("methodology"),
+                data.get("project_type"), data.get("project_subtype"),
+                data.get("estimated_annual_credits"),
+                data.get("crediting_period_start"), data.get("crediting_period_end"),
+                data.get("registration_date"),
+                data.get("latitude"), data.get("longitude"),
+                data.get("description"), data.get("sdgs"),
+                json.dumps(data.get("extra_data") or {}),
+            )
+        )
+        return cur.fetchone()["id"]
+
+
+def list_carbon_projects(registry=None, country=None, status=None,
+                         project_type=None, methodology=None,
+                         limit=100, offset=0):
+    with get_cursor() as cur:
+        conditions = []
+        params = []
+        if registry:
+            conditions.append("registry = %s")
+            params.append(registry)
+        if country:
+            conditions.append("country = %s")
+            params.append(country)
+        if status:
+            conditions.append("status = %s")
+            params.append(status)
+        if project_type:
+            conditions.append("project_type = %s")
+            params.append(project_type)
+        if methodology:
+            conditions.append("methodology ILIKE %s")
+            params.append(f"%{methodology}%")
+        where = ""
+        if conditions:
+            where = "WHERE " + " AND ".join(conditions)
+        params.extend([limit, offset])
+        cur.execute(
+            f"SELECT * FROM carbon_projects {where} "
+            f"ORDER BY estimated_annual_credits DESC NULLS LAST, name "
+            f"LIMIT %s OFFSET %s",
+            params
+        )
+        return cur.fetchall()
+
+
+def get_project_count(registry=None):
+    with get_cursor() as cur:
+        if registry:
+            cur.execute("SELECT COUNT(*) as count FROM carbon_projects WHERE registry = %s", (registry,))
+        else:
+            cur.execute("SELECT COUNT(*) as count FROM carbon_projects")
+        return cur.fetchone()["count"]
+
+
+def get_project_analytics():
+    with get_cursor() as cur:
+        result = {}
+
+        cur.execute("""
+            SELECT country, COUNT(*) as project_count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+            FROM carbon_projects
+            WHERE country IS NOT NULL AND country != ''
+            GROUP BY country
+            ORDER BY project_count DESC
+        """)
+        result["by_country"] = cur.fetchall()
+
+        cur.execute("""
+            SELECT region, COUNT(*) as project_count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+            FROM carbon_projects
+            WHERE region IS NOT NULL AND region != ''
+            GROUP BY region
+            ORDER BY project_count DESC
+        """)
+        result["by_region"] = cur.fetchall()
+
+        cur.execute("""
+            SELECT status, COUNT(*) as project_count
+            FROM carbon_projects
+            WHERE status IS NOT NULL
+            GROUP BY status
+            ORDER BY project_count DESC
+        """)
+        result["by_status"] = cur.fetchall()
+
+        cur.execute("""
+            SELECT project_type, COUNT(*) as project_count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+            FROM carbon_projects
+            WHERE project_type IS NOT NULL AND project_type != ''
+            GROUP BY project_type
+            ORDER BY project_count DESC
+        """)
+        result["by_project_type"] = cur.fetchall()
+
+        cur.execute("""
+            SELECT registry, COUNT(*) as project_count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+            FROM carbon_projects
+            GROUP BY registry
+            ORDER BY project_count DESC
+        """)
+        result["by_registry"] = cur.fetchall()
+
+        cur.execute("""
+            SELECT COUNT(*) as total_projects,
+                   COUNT(DISTINCT country) as total_countries,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_estimated_credits,
+                   COUNT(DISTINCT registry) as total_registries,
+                   MAX(synced_at) as last_sync
+            FROM carbon_projects
+        """)
+        result["summary"] = cur.fetchone()
+
+        return result
+
+
+def get_top_methodologies(limit=20):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT methodology, COUNT(*) as project_count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+            FROM carbon_projects
+            WHERE methodology IS NOT NULL AND methodology != ''
+            GROUP BY methodology
+            ORDER BY project_count DESC
+            LIMIT %s
+        """, (limit,))
+        return cur.fetchall()
+
+
+def get_country_details(country):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT * FROM carbon_projects
+            WHERE country = %s
+            ORDER BY estimated_annual_credits DESC NULLS LAST
+        """, (country,))
+        projects = cur.fetchall()
+
+        cur.execute("""
+            SELECT methodology, COUNT(*) as count,
+                   COALESCE(SUM(estimated_annual_credits), 0) as credits
+            FROM carbon_projects
+            WHERE country = %s AND methodology IS NOT NULL
+            GROUP BY methodology ORDER BY count DESC
+        """, (country,))
+        methodologies = cur.fetchall()
+
+        cur.execute("""
+            SELECT proponent, COUNT(*) as count
+            FROM carbon_projects
+            WHERE country = %s AND proponent IS NOT NULL
+            GROUP BY proponent ORDER BY count DESC LIMIT 20
+        """, (country,))
+        developers = cur.fetchall()
+
+        cur.execute("""
+            SELECT status, COUNT(*) as count
+            FROM carbon_projects
+            WHERE country = %s
+            GROUP BY status ORDER BY count DESC
+        """, (country,))
+        statuses = cur.fetchall()
+
+        return {
+            "projects": projects,
+            "methodologies": methodologies,
+            "developers": developers,
+            "statuses": statuses,
+            "total": len(projects),
+        }
+
+
+def search_carbon_projects(query_text, limit=50):
+    with get_cursor() as cur:
+        like_pattern = f"%{query_text}%"
+        cur.execute(
+            "SELECT * FROM carbon_projects "
+            "WHERE name ILIKE %s OR proponent ILIKE %s OR methodology ILIKE %s OR country ILIKE %s "
+            "ORDER BY estimated_annual_credits DESC NULLS LAST "
+            "LIMIT %s",
+            (like_pattern, like_pattern, like_pattern, like_pattern, limit)
+        )
+        return cur.fetchall()
