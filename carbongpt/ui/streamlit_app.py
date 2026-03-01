@@ -1833,7 +1833,6 @@ def _render_calculations_tab(project):
                 value=default_val if default_val else "",
                 key=f"param_{project_id}_{param['parameter_id']}",
                 help=help_text,
-                data_testid=f"input-param-{param['parameter_id']}",
             )
             if val:
                 user_inputs[param["symbol"]] = val
