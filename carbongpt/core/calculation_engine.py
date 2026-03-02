@@ -116,18 +116,20 @@ CALC_SCHEMA = {
 CALC_SYSTEM_PROMPT = """You are an expert carbon credit calculation engine. You must calculate emission reductions using the EXACT equations and parameters from the methodology.
 
 CRITICAL RULES:
-1. APPLY THE METHODOLOGY'S EQUATIONS EXACTLY as specified — do not simplify or substitute different formulas.
+1. APPLY THE METHODOLOGY'S EQUATIONS EXACTLY as specified — do not simplify or substitute different formulas. Use every term in the equation; do not drop multipliers like NCV, fNRB, or unit conversion factors.
 2. Use the exact parameter symbols and values provided. Where a user provides a value, use it. Where a methodology default exists, use it.
 3. Show ALL calculation steps with actual numbers substituted into the exact equations.
 4. Be conservative in all assumptions (as required by carbon standards).
 5. If a required parameter value is missing and no default exists, state this clearly and use the most conservative reasonable assumption.
 6. Calculate for EACH YEAR of the crediting period.
-7. For leakage: use the methodology's specified approach (e.g., 5% default discount factor means multiply ER by 0.95, or calculate specific leakage if data is provided).
+7. For leakage: use the methodology's specified approach (e.g., 5% default discount factor means ER_net = ER_gross * 0.95).
 8. All results must be in tCO2e.
-9. When converting units, show the conversion explicitly.
-10. Cross-check: the ratio of baseline to project emissions should be consistent with the efficiency improvement ratio.
+9. UNIT CONVERSION: If the equations compute per-day values, convert to annual by multiplying by 365 (or the actual days in the monitoring period). Show this conversion explicitly.
+10. CALCULATED PARAMETERS: Some parameters are computed from other parameters (e.g. SFS = P_b - P_p, SE = P * EF * NCV). Compute these from their input values rather than expecting them as direct inputs.
+11. Cross-check: the ratio of baseline to project emissions should be consistent with the efficiency improvement ratio.
+12. AGING/DEGRADATION: If the methodology specifies a cumulative usage rate that decreases with technology age, apply this per-year adjustment when computing annual totals.
 
-IMPORTANT: Your calculation steps should be detailed enough that a carbon auditor can verify each number."""
+IMPORTANT: Your calculation steps should be detailed enough that a carbon auditor can verify each number. Show the complete chain from raw inputs to final ER_y."""
 
 
 def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_years=7, project_info=None):
@@ -154,12 +156,23 @@ def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_y
             user_prompt += f"Applicability: {method['applicability']}\n"
         if method.get("scale_restrictions"):
             user_prompt += f"Scale: {method['scale_restrictions']}\n"
+        if method.get("sub_variants"):
+            user_prompt += "Sub-variants:\n"
+            for sv in method["sub_variants"]:
+                user_prompt += f"  - {sv.get('variant_name', '')}: {sv.get('condition', '')}\n"
         user_prompt += "\n### EQUATIONS TO APPLY (use these EXACTLY):\n"
         for eq in method.get("equations", []):
             user_prompt += f"\n{eq.get('equation_id', '')}"
             if eq.get("equation_label"):
                 user_prompt += f" — {eq['equation_label']}"
             user_prompt += f":\n  {eq.get('formula_text', '')}\n"
+            if eq.get("output_symbol"):
+                user_prompt += f"  Computes: {eq['output_symbol']}"
+                if eq.get("output_unit"):
+                    user_prompt += f" ({eq['output_unit']})"
+                user_prompt += "\n"
+            if eq.get("is_per_unit"):
+                user_prompt += f"  Per-unit basis: {eq['is_per_unit']}\n"
             if eq.get("formula_description"):
                 user_prompt += f"  Description: {eq['formula_description']}\n"
             if eq.get("variables"):
@@ -170,11 +183,16 @@ def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_y
 
     user_prompt += "### ALL PARAMETERS FROM METHODOLOGY:\n"
     for p in parsed_methodology.get("parameters", []):
-        line = f"- {p['symbol']} [{p.get('parameter_id', '')}] ({p['name']}): {p['unit']}"
+        sym = p.get('symbol') or p.get('parameter_id') or '?'
+        line = f"- {sym} [{p.get('parameter_id', '')}] ({p.get('name', '')}): {p.get('unit', '')}"
         if p.get("default_value"):
             line += f" [Default: {p['default_value']}]"
         if p.get("source"):
             line += f" [Source: {p['source']}]"
+        if p.get("category") == "calculated" and p.get("calculation_formula"):
+            line += f" [CALCULATED: {p['calculation_formula']}]"
+        if p.get("depends_on"):
+            line += f" [Depends on: {', '.join(p['depends_on'])}]"
         if p.get("description"):
             line += f" — {p['description']}"
         user_prompt += line + "\n"
@@ -187,6 +205,12 @@ def run_calculation(parsed_methodology, user_inputs, method_id=None, crediting_y
 
     if parsed_methodology.get("leakage_approach"):
         user_prompt += f"\n### LEAKAGE APPROACH:\n{parsed_methodology['leakage_approach']}\n"
+
+    if parsed_methodology.get("temporal_granularity"):
+        user_prompt += f"\n### TEMPORAL GRANULARITY:\n{parsed_methodology['temporal_granularity']}\n"
+
+    if parsed_methodology.get("aging_or_degradation"):
+        user_prompt += f"\n### AGING/DEGRADATION:\n{parsed_methodology['aging_or_degradation']}\n"
 
     user_prompt += f"\n### CREDITING PERIOD: {crediting_years} years\n"
 

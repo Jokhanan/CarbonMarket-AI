@@ -426,6 +426,7 @@ Methodologies typically define multiple calculation methods based on the relatio
 - Methods distinguished by whether baseline and project fuels are the same or different
 - Methods distinguished by whether emission factors are the same or different
 - Scale-based options (micro, small, large)
+- SUB-VARIANTS within a method (e.g. Method 3 may have fossil fuel vs non-fossil fuel cases with different formulas)
 
 Return a JSON object (valid json) with:
 {
@@ -438,47 +439,71 @@ Return a JSON object (valid json) with:
       "description": "brief description of when this method applies",
       "applicability": "specific conditions (e.g. baseline and project fuels are identical)",
       "scale_restrictions": "e.g. micro or small-scale only",
-      "equation_ids": ["Eq. 1", "Eq. 2"]
+      "equation_ids": ["Eq. 1", "Eq. 2"],
+      "sub_variants": [
+        {
+          "variant_id": "e.g. method_3_ff",
+          "variant_name": "e.g. Method 3 - Fossil Fuel case",
+          "condition": "when this variant applies",
+          "equation_differences": "how the equations differ from the base method"
+        }
+      ]
     }
   ],
-  "leakage_approach": "description of leakage handling",
-  "monitoring_requirements_summary": "brief summary"
+  "leakage_approach": "description including specific default values (e.g. '5% discount factor' or 'Option 1: 5% default, Option 2: project-specific calculation')",
+  "monitoring_requirements_summary": "brief summary",
+  "temporal_granularity": "how the methodology handles time (e.g. 'per-day calculation scaled to annual', 'annual', 'monthly batches with aging')",
+  "aging_or_degradation": "description of any aging, degradation, or usage rate decay over the technology lifetime (e.g. 'cumulative usage rate decreases from 0.9 in year 1 to 0.5 in year 5')"
 }
 
-CRITICAL: Extract ALL distinct calculation methods/options. Copy method names VERBATIM. If a method is described as 'Method 1: Baseline and project fuel(s) are identical', capture that exactly. Do NOT merge methods into one."""
+CRITICAL: Extract ALL distinct calculation methods/options. Copy method names VERBATIM. If a method is described as 'Method 1: Baseline and project fuel(s) are identical', capture that exactly. Do NOT merge methods into one. If a method has sub-variants (e.g. fossil vs non-fossil fuel), list them in sub_variants."""
 
 
-EQUATION_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract ALL equations needed to perform a complete emission reduction calculation from this methodology text. Return the result as valid json.
+EQUATION_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract ALL equations needed to perform a complete, step-by-step emission reduction calculation from this methodology text. Return the result as valid json.
 
-You must extract:
-1. Top-level equations (ER_y = BE_y - PE_y, etc.)
-2. Sub-equations that compute intermediate values (e.g. baseline emissions per device, project emissions per source)
-3. Equations implied by parameter definitions (e.g. if a parameter is "calculated as SFC_b x NCV x EF", that is an equation)
-4. Aging/degradation formulas
-5. Leakage equations
+WHAT TO EXTRACT — the complete calculation chain for each method:
 
-For cookstove methodologies, you MUST include equations for:
-- How baseline emissions (BE) are computed from specific fuel consumption (SFC), net calorific value (NCV), emission factors (EF), and number of devices (N)
-- How project emissions (PE) are computed similarly
-- How specific emissions (SE) are computed per device
+1. MAIN EQUATION per method: The top-level formula that computes ER_y (emission reductions per year). Each method will have its OWN main equation with different terms. Extract each one separately with its correct method_id.
+
+2. INTERMEDIATE EQUATIONS: Sub-equations that compute values used by the main equation. Examples:
+   - Baseline emissions: BE_y = N x U x SE_b,CO2 x fNRB + SE_b,nonCO2 (or using SFC and NCV depending on method)
+   - Project emissions: PE_y = N x U x SE_p,CO2 x fNRB + SE_p,nonCO2
+   - Specific emissions: SE_b,CO2 = P_b x EF_b,CO2 x NCV_b
+   - Fuel savings: SFS = P_b - P_p (baseline consumption minus project consumption)
+
+3. LEAKAGE EQUATION: How leakage is computed (e.g. LE_y = ER_y_before_leakage x (1 - leakage_discount_factor), where default discount factor = 0.95 for 5% leakage)
+
+4. CALCULATED PARAMETERS: When a parameter's value is defined by a formula (e.g. "SFS is calculated as the difference between baseline and project fuel consumption"), that IS an equation. Extract it.
+
+5. UNIT CONVERSION: If the methodology calculates per-day and converts to annual (x 365) or monthly (x 30.42), capture those conversion steps.
+
+6. AGING/DEGRADATION: Any formula that adjusts values based on technology age (e.g. cumulative usage rate decay, SFC degradation over time).
 
 Return:
 {
   "equations": [
     {
       "equation_id": "Exact ID from doc if available, otherwise 'derived_N'",
-      "equation_label": "What this equation calculates (e.g. 'Baseline emissions per device')",
-      "formula_text": "Mathematical formula. Use x for multiplication. Use SUM_i(...) for summations. Preserve subscripts.",
-      "formula_description": "When and how this equation is used",
-      "method_id": "which method uses this (method_1, method_2, method_3, or 'all')",
+      "equation_label": "What this equation calculates (e.g. 'Emission reductions per day - Method 1')",
+      "formula_text": "Mathematical formula preserving ALL terms. Use * for multiplication. Use SUM_b,p(...) for summations. Preserve exact subscripts from document. Do NOT simplify or omit terms.",
+      "formula_description": "When this equation is used, which method it belongs to, and what it computes",
+      "method_id": "which method uses this (method_1, method_2, method_3, or 'all'). IMPORTANT: each method's main equation must have its OWN method_id, not 'all'",
+      "output_symbol": "the symbol this equation computes (e.g. 'ER_y', 'BE_y', 'SFS_b,p,y')",
+      "output_unit": "unit of the result (e.g. 'tCO2e/day', 'kg/technology/day')",
       "variables": [
         {"symbol": "exact symbol with subscripts", "name": "full name", "unit": "unit"}
-      ]
+      ],
+      "is_per_unit": "what the equation calculates per (e.g. 'per day per technology', 'per year total')"
     }
   ]
 }
 
-CRITICAL: Extract EVERY equation needed for a complete calculation chain from raw inputs to final ER_y. Do NOT stop at just the top-level aggregation formulas. Include sub-equations even if they are described in prose rather than explicit formulas."""
+CRITICAL RULES:
+- Extract the COMPLETE formula for each method's main equation with ALL multiplicative terms. Do not drop terms like NCV or fNRB.
+- Each method gets its OWN main equation with method_id = "method_1", "method_2", etc. Only use "all" for equations genuinely shared across all methods.
+- Include leakage equations — they are part of the calculation chain.
+- If a method has sub-variants (e.g. fossil fuel vs non-fossil fuel), extract equations for each variant.
+- Verify: can you trace from raw inputs (EF, NCV, SFC, N, U, fNRB) to final ER_y using ONLY the equations you extracted? If not, you are missing equations."""
 
 
 PARAMETER_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract structured parameter data from this parameter block and return as valid json.
@@ -496,7 +521,7 @@ Return a JSON object:
       "default_value": "raw text of default if specified",
       "default_numeric": null,
       "defaults_by_context": [
-        {"context_key": "e.g. wood", "value": 0.0156, "unit": "TJ/ton", "source": "Methodology default", "notes": ""}
+        {"context_key": "e.g. wood", "value": 0.0156, "unit": "TJ/ton", "source": "IPCC 2006 Guidelines Table 1.2", "notes": ""}
       ],
       "monitoring_frequency": "how often monitored",
       "category": "one of: methodology_default, monitored, calculated, project_input, qualitative",
@@ -505,16 +530,24 @@ Return a JSON object:
       "is_user_input": false,
       "is_calculated": false,
       "is_default_available": true,
-      "applicable_methods": ["method_1"]
+      "applicable_methods": ["method_1"],
+      "calculation_formula": "if category is 'calculated', the formula used to compute this parameter (e.g. 'SFS_b,p,y = P_b,y - P_p,y'). null if not calculated.",
+      "depends_on": ["list of parameter symbols this parameter depends on, e.g. ['P_b,y', 'P_p,y'] for SFS"]
     }
   ]
 }
 
 CRITICAL RULES:
 - Copy parameter IDs, symbols, and names EXACTLY from the document
-- Set category correctly: methodology_default for values from IPCC/methodology with defaults, monitored for field survey values, calculated for derived values, project_input for developer-specified values
-- Extract ALL default values with their context keys
-- Do NOT hallucinate parameters not in the text"""
+- Set category correctly:
+  * methodology_default: values from IPCC/methodology tables with known defaults (EF, NCV, GWP values)
+  * monitored: values obtained from field surveys/testing (SFC, fuel consumption from KPT/WBT)
+  * calculated: values computed from OTHER parameters using a formula (SFS = P_b - P_p, SE = P * EF * NCV). Set calculation_formula and depends_on for these.
+  * project_input: values specified by the project developer (N, crediting period, stove type)
+  * qualitative: non-numeric descriptive parameters
+- For CALCULATED parameters: always provide the calculation_formula showing how it is computed from other parameters. This is essential for the calculation engine.
+- Extract ALL default values with context keys. Use ONLY context values explicitly stated in the document (e.g. specific fuel types: wood, charcoal, LPG). Do not invent context keys.
+- Do NOT hallucinate parameters or default values not in the text"""
 
 
 CONTEXT_EXTRACTION_PROMPT = """You are a carbon methodology expert. From the following methodology text, extract all context dimensions — choices that affect which default values or calculation paths apply. Return as valid json.
@@ -532,13 +565,19 @@ Return:
   ]
 }
 
-Look for:
-- Fuel type options (wood, charcoal, LPG, etc.)
-- GWP version options (AR4, AR5, AR6)
+Look for context dimensions EXPLICITLY mentioned in the text:
+- Fuel type options (wood, charcoal, LPG, etc.) — only include fuel types actually listed
+- GWP version options (AR4, AR5, AR6) — only if the document references multiple AR versions
 - Method/approach selection options
-- Scale classifications (micro, small, large)
-- Leakage calculation options
-- Regional default options"""
+- Scale classifications — only if the methodology distinguishes them
+- Leakage calculation options — only if multiple options are described
+- Stove type or technology type options — only if default values vary by type
+
+CRITICAL RULES:
+- ONLY extract dimensions that are EXPLICITLY described in the provided text with specific named options
+- Do NOT invent dimensions like "regional_defaults" unless the document actually lists specific regions with different default values
+- Each option must be a value ACTUALLY found in the document text, not a generic placeholder
+- If you are unsure whether a dimension exists, do NOT include it"""
 
 
 def extract_structured_data(chunks, methodology_code, detected_format):
@@ -576,9 +615,21 @@ def extract_structured_data(chunks, methodology_code, detected_format):
     eq_source_chunks.extend(calc_param_chunks[:10])
     method_chunks = [c for c in chunks if c["chunk_type"] == "method_selection"]
     eq_source_chunks.extend(method_chunks)
+    eq_bearing_chunks = [c for c in chunks
+                         if c["chunk_type"] not in ("equations", "quantification", "parameters", "method_selection")
+                         and re.search(r'(?:Eq\.|Equation)\s*[\(\[]?\s*\d', c.get("content", ""))]
+    eq_source_chunks.extend(eq_bearing_chunks)
+
+    def _eq_chunk_priority(c):
+        content = c.get("content", "")
+        eq_matches = len(re.findall(r'(?:Eq\.|Equation)\s*[\(\[]?\s*\d', content))
+        where_matches = len(re.findall(r'(?m)Where:\s*$', content))
+        return -(eq_matches * 10 + where_matches * 5)
+
+    eq_source_chunks.sort(key=_eq_chunk_priority)
 
     if eq_source_chunks:
-        eq_text = "\n\n---\n\n".join(c["content"][:8000] for c in eq_source_chunks)[:30000]
+        eq_text = "\n\n---\n\n".join(c["content"][:8000] for c in eq_source_chunks)[:40000]
         try:
             result = _call_openai(
                 EQUATION_EXTRACTION_PROMPT,
@@ -594,24 +645,48 @@ def extract_structured_data(chunks, methodology_code, detected_format):
             logger.error("Pass 2 failed for %s: %s", methodology_code, e)
 
     all_parameters = []
+    param_batches = []
+    current_batch = []
+    current_batch_size = 0
+    BATCH_CHAR_LIMIT = 10000
+
     for pc in parameter_chunks:
+        pc_len = len(pc.get("content", ""))
+        if current_batch and (current_batch_size + pc_len > BATCH_CHAR_LIMIT):
+            param_batches.append(current_batch)
+            current_batch = [pc]
+            current_batch_size = pc_len
+        else:
+            current_batch.append(pc)
+            current_batch_size += pc_len
+    if current_batch:
+        param_batches.append(current_batch)
+
+    logger.info("Pass 3 (params): Processing %d parameter chunks in %d batches",
+                len(parameter_chunks), len(param_batches))
+
+    for batch_idx, batch in enumerate(param_batches):
+        combined_content = "\n\n---NEXT PARAMETER---\n\n".join(
+            pc["content"][:6000] for pc in batch
+        )
         try:
             result = _call_openai(
                 PARAMETER_EXTRACTION_PROMPT,
-                f"Methodology code: {methodology_code}\n\n{pc['content'][:12000]}",
+                f"Methodology code: {methodology_code}\n\n{combined_content}",
                 response_format={"type": "json_object"},
-                max_tokens=4000,
+                max_tokens=6000,
                 model=PARSE_MODEL,
             )
             param_data = json.loads(result)
             params = param_data.get("parameters", [])
             all_parameters.extend(params)
 
-            pc["structured_data"] = param_data
-            logger.info("Pass 3 (params): Extracted %d parameters from chunk '%s'",
-                        len(params), pc.get("chunk_key", "?"))
+            for pc in batch:
+                pc["structured_data"] = param_data
+            logger.info("Pass 3 (params): Batch %d/%d extracted %d parameters from %d chunks",
+                        batch_idx + 1, len(param_batches), len(params), len(batch))
         except Exception as e:
-            logger.error("Pass 3 failed for chunk '%s': %s", pc.get("chunk_key", "?"), e)
+            logger.error("Pass 3 batch %d failed: %s", batch_idx + 1, e)
 
     context_data = {"context_dimensions": []}
     context_text_parts = []
@@ -660,6 +735,81 @@ def extract_structured_data(chunks, methodology_code, detected_format):
     }
 
 
+def _verify_extraction_completeness(extracted):
+    issues = []
+    methods = (extracted.get("methods") or {}).get("calculation_methods", [])
+    equations = (extracted.get("equations") or {}).get("equations", [])
+    parameters = extracted.get("parameters", [])
+
+    if not methods:
+        issues.append("NO_METHODS: No calculation methods extracted")
+    if not equations:
+        issues.append("NO_EQUATIONS: No equations extracted")
+
+    for method in methods:
+        mid = method.get("method_id", "?")
+        method_eqs = [e for e in equations if e.get("method_id") == mid]
+        shared_eqs = [e for e in equations if e.get("method_id") in ("all", "shared", "")]
+        total_eqs = len(method_eqs) + len(shared_eqs)
+        if total_eqs == 0:
+            issues.append(f"METHOD_NO_EQUATIONS: {mid} has no equations assigned")
+
+        has_main_eq = any(
+            "ER" in (e.get("output_symbol") or e.get("equation_label") or "")
+            for e in method_eqs + shared_eqs
+        )
+        if not has_main_eq:
+            issues.append(f"METHOD_NO_MAIN_EQ: {mid} has no main ER equation")
+
+    has_leakage = any(
+        "leakage" in (e.get("equation_label") or "").lower()
+        or "LE" in (e.get("output_symbol") or "")
+        for e in equations
+    )
+    if not has_leakage:
+        issues.append("NO_LEAKAGE_EQ: No leakage equation found")
+
+    calculated_params = [p for p in parameters if p.get("category") == "calculated"]
+    for p in calculated_params:
+        if not p.get("calculation_formula"):
+            issues.append(f"CALC_NO_FORMULA: Calculated param {p.get('parameter_id', '?')} ({p.get('symbol', '?')}) has no formula")
+
+    eq_output_symbols = set()
+    for e in equations:
+        sym = e.get("output_symbol")
+        if sym:
+            eq_output_symbols.add(sym)
+
+    eq_input_symbols = set()
+    for e in equations:
+        for v in e.get("variables", []):
+            sym = v.get("symbol")
+            if sym:
+                eq_input_symbols.add(sym)
+
+    param_symbols = {p.get("symbol") for p in parameters if p.get("symbol")}
+
+    undefined_inputs = eq_input_symbols - eq_output_symbols - param_symbols
+    undefined_filtered = {s for s in undefined_inputs if s and len(s) > 1 and not s.startswith("SUM")}
+    if undefined_filtered:
+        issues.append(f"UNDEFINED_INPUTS: Equation variables not matched to parameters or other equations: {sorted(undefined_filtered)[:10]}")
+
+    for issue in issues:
+        logger.warning("Verification: %s", issue)
+
+    return {
+        "issues": issues,
+        "summary": {
+            "methods": len(methods),
+            "equations": len(equations),
+            "parameters": len(parameters),
+            "calculated_params": len(calculated_params),
+            "has_leakage_eq": has_leakage,
+            "undefined_inputs": len(undefined_filtered),
+        },
+    }
+
+
 def build_methodology_knowledge(document_id, methodology_code, force=False):
     from carbongpt.repository.store import (
         save_knowledge_chunk, delete_methodology_knowledge, get_knowledge_chunks
@@ -685,6 +835,10 @@ def build_methodology_knowledge(document_id, methodology_code, force=False):
         raise ValueError(f"No chunks extracted from document {document_id}")
 
     extracted = extract_structured_data(chunks, methodology_code, detected_format)
+
+    verification = _verify_extraction_completeness(extracted)
+    logger.info("Verification for %s: %d issues, summary=%s",
+                methodology_code, len(verification["issues"]), verification["summary"])
 
     saved_count = 0
     for chunk in chunks:
@@ -721,6 +875,7 @@ def build_methodology_knowledge(document_id, methodology_code, force=False):
         "methods_found": len(extracted.get("methods", {}).get("calculation_methods", [])),
         "context_dimensions": len(extracted.get("context_dimensions", [])),
         "detected_format": detected_format,
+        "verification": verification,
     }
 
 
@@ -787,6 +942,8 @@ def _save_backward_compatible(methodology_code, document_id, extracted):
         "context_dimensions": context_dims,
         "leakage_approach": methods_data.get("leakage_approach", ""),
         "monitoring_requirements_summary": methods_data.get("monitoring_requirements_summary", ""),
+        "temporal_granularity": methods_data.get("temporal_granularity", ""),
+        "aging_or_degradation": methods_data.get("aging_or_degradation", ""),
         "_source": "methodology_knowledge_base",
     }
 
