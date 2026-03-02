@@ -1848,7 +1848,9 @@ def _render_calculations_tab(project):
     if selected_method:
         for eq in selected_method.get("equations", []):
             for var in eq.get("variables", []):
-                eq_var_symbols.add(var.get("symbol", ""))
+                s = var.get("symbol") or ""
+                if s:
+                    eq_var_symbols.add(s)
 
     def _param_relevant(p):
         cat = p.get("category", "")
@@ -1857,9 +1859,9 @@ def _render_calculations_tab(project):
         role = p.get("equation_role", "")
         if role == "output":
             return False
-        sym = p.get("symbol", "")
-        sym_base = sym.split("_")[0] if "_" in sym else sym
-        if sym in eq_var_symbols or sym_base in {s.split("_")[0] for s in eq_var_symbols}:
+        sym = p.get("symbol") or ""
+        sym_base = sym.split("_")[0] if sym and "_" in sym else sym
+        if sym and (sym in eq_var_symbols or sym_base in {s.split("_")[0] for s in eq_var_symbols if s}):
             return True
         applicable = p.get("applicable_methods", [])
         if not applicable or "all" in applicable:
@@ -1943,10 +1945,11 @@ def _render_calculations_tab(project):
 
         for i, param in enumerate(grp_params):
             default_resolved = _resolve_default(param)
-            sym = param.get("symbol", "")
-            unit = param.get("unit", "")
+            sym = param.get("symbol") or ""
+            unit = param.get("unit") or ""
+            param_name = param.get("name") or param.get("parameter_id") or f"Parameter {i+1}"
 
-            label = f"{sym} - {param['name']}"
+            label = f"{sym} - {param_name}" if sym else param_name
             if unit and unit != "NA":
                 label += f" [{unit}]"
 

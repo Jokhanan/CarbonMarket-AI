@@ -708,6 +708,17 @@ def _save_backward_compatible(methodology_code, document_id, extracted):
     calc_methods = methods_data.get("calculation_methods", [])
     equations_list = equations_data.get("equations", [])
 
+    seen_eq_ids = set()
+    unique_equations = []
+    for e in equations_list:
+        eq_id = e.get("equation_id", "")
+        if eq_id and eq_id not in seen_eq_ids:
+            seen_eq_ids.add(eq_id)
+            unique_equations.append(e)
+        elif not eq_id:
+            unique_equations.append(e)
+    equations_list = unique_equations
+
     for method in calc_methods:
         method_id = method.get("method_id", "")
         method_eqs = [e for e in equations_list if e.get("method_id") == method_id]
@@ -715,6 +726,21 @@ def _save_backward_compatible(methodology_code, document_id, extracted):
             method_eqs = [e for e in equations_list
                           if method_id in str(e.get("method_id", ""))]
         method["equations"] = method_eqs
+
+    unmatched_eqs = [e for e in equations_list
+                     if not any(e in m.get("equations", []) for m in calc_methods)]
+    if unmatched_eqs:
+        empty_methods = [m for m in calc_methods if not m.get("equations")]
+        if empty_methods:
+            empty_methods[0]["equations"] = unmatched_eqs
+        elif not calc_methods:
+            calc_methods = [{
+                "method_id": "method_1",
+                "method_name": "Default calculation method",
+                "description": "",
+                "applicability": "",
+                "equations": unmatched_eqs,
+            }]
 
     if not calc_methods and equations_list:
         calc_methods = [{

@@ -879,8 +879,19 @@ def list_methodologies(standard=None, category=None, status=None, search=None, l
 
 
 def get_methodology(code):
+    import re as _re
     with get_cursor() as cur:
         cur.execute("SELECT * FROM methodologies WHERE code = %s", (code,))
+        row = cur.fetchone()
+        if row:
+            return row
+        normalized = code.strip()
+        normalized = _re.sub(r'\s+[Vv]?\d+(\.\d+)?$', '', normalized)
+        cur.execute("SELECT * FROM methodologies WHERE code = %s", (normalized,))
+        row = cur.fetchone()
+        if row:
+            return row
+        cur.execute("SELECT * FROM methodologies WHERE code ILIKE %s LIMIT 1", (f"%{normalized}%",))
         return cur.fetchone()
 
 
@@ -907,7 +918,7 @@ def get_parsed_methodology(methodology_code):
     import re
     with get_cursor() as cur:
         cur.execute(
-            "SELECT * FROM methodology_parsed WHERE methodology_code = %s AND parse_status = 'completed'",
+            "SELECT * FROM methodology_parsed WHERE methodology_code = %s AND parse_status = 'completed' ORDER BY parsed_at DESC LIMIT 1",
             (methodology_code,)
         )
         row = cur.fetchone()
@@ -918,7 +929,7 @@ def get_parsed_methodology(methodology_code):
         normalized = re.sub(r'\s+[Vv]?\d+(\.\d+)?$', '', normalized)
         normalized = normalized.replace("GS-", "").replace("gs-", "")
         cur.execute(
-            "SELECT * FROM methodology_parsed WHERE methodology_code ILIKE %s AND parse_status = 'completed' LIMIT 1",
+            "SELECT * FROM methodology_parsed WHERE methodology_code ILIKE %s AND parse_status = 'completed' ORDER BY parsed_at DESC LIMIT 1",
             (f"%{normalized}%",)
         )
         return cur.fetchone()
