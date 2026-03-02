@@ -45,6 +45,10 @@ class WriteSectionRequest(BaseModel):
     user_instructions: str | None = None
 
 
+class WriteAllRequest(BaseModel):
+    user_instructions: str | None = None
+
+
 class ExplainSectionRequest(BaseModel):
     section_id: str
 
@@ -335,6 +339,72 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
         "section_id": data.section_id,
         "section_title": section_title,
         "generated_text": generated,
+    }
+
+
+@router.post("/{project_id}/write-all")
+def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "pdd"):
+    from carbongpt.repository.store import (
+        get_user_project, get_project_documents_by_type,
+        save_write_session
+    )
+    from carbongpt.core.ai_writer import generate_full_document
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    project_info = {
+        "name": project["name"],
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
+    }
+
+    pdd_text = None
+    if doc_type == "mr":
+        pdd_docs = get_project_documents_by_type(project_id, "pdd")
+        if pdd_docs:
+            pdd_text = pdd_docs[0].get("parsed_text", "")
+
+    ref_texts = []
+    for ref_type in ["reference", "research", "field_data"]:
+        ref_docs = get_project_documents_by_type(project_id, ref_type)
+        for rd in ref_docs:
+            if rd.get("parsed_text"):
+                ref_texts.append(rd["parsed_text"][:2000])
+    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+
+    try:
+        results = generate_full_document(
+            standard=project["standard"],
+            project_doc_type=doc_type,
+            project_info=project_info,
+            existing_pdd_text=pdd_text,
+            reference_docs_text=reference_text,
+            user_instructions=data.user_instructions,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("AI full document generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"AI full document generation failed: {e}")
+
+    for r in results:
+        if r["status"] == "success" and r["generated_text"]:
+            save_write_session(
+                project_id=project_id,
+                doc_type=doc_type,
+                section_id=r["section_id"],
+                section_title=r["section_title"],
+                generated_text=r["generated_text"],
+            )
+
+    return {
+        "sections": results,
+        "total": len(results),
+        "success_count": sum(1 for r in results if r["status"] == "success"),
     }
 
 

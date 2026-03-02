@@ -305,17 +305,17 @@ def _poll_ai_review():
         pass
 
 
-def _fetch(endpoint, method="GET", **kwargs):
+def _fetch(endpoint, method="GET", timeout=None, **kwargs):
     url = f"{API_BASE}{endpoint}"
     try:
         if method == "GET":
-            resp = requests.get(url, timeout=10, **kwargs)
+            resp = requests.get(url, timeout=timeout or 10, **kwargs)
         elif method == "POST":
-            resp = requests.post(url, timeout=120, **kwargs)
+            resp = requests.post(url, timeout=timeout or 120, **kwargs)
         elif method == "PATCH":
-            resp = requests.patch(url, timeout=10, **kwargs)
+            resp = requests.patch(url, timeout=timeout or 10, **kwargs)
         elif method == "DELETE":
-            resp = requests.delete(url, timeout=10, **kwargs)
+            resp = requests.delete(url, timeout=timeout or 10, **kwargs)
         else:
             return None
         if resp.status_code >= 400:
@@ -2391,15 +2391,15 @@ def _render_write_tab(project):
     standard = project.get("standard", "GoldStandard")
 
     st.subheader("AI Writing Assistant")
-    st.write("Select a document type and section. The AI will draft content based on the standard's requirements, your methodology, and any reference documents you've uploaded.")
+    st.write("Draft your document section by section or generate the full document at once. Content appears in the template below.")
 
     available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
     if not available_doc_types:
         st.error("No document templates available for this standard.")
         return
 
-    write_col1, write_col2 = st.columns(2)
-    with write_col1:
+    col_dt, col_actions = st.columns([1, 2])
+    with col_dt:
         doc_type_keys = list(available_doc_types.keys())
         selected_write_dt = st.selectbox(
             "Document type",
@@ -2407,86 +2407,138 @@ def _render_write_tab(project):
             format_func=lambda x: available_doc_types[x],
             key=f"write_dt_{project_id}",
         )
-    with write_col2:
-        pass
 
     sections = _fetch(f"/projects/{project_id}/sections?doc_type={selected_write_dt}")
     if not sections:
         st.warning("Could not load sections for this document type.")
         return
 
-    current_parent = None
-    section_options = {}
-    for sec in sections:
-        parent = sec.get("parent_section", "")
-        section_options[sec["id"]] = f"{sec['id']}: {sec['title']}"
+    existing_sessions = _fetch(f"/projects/{project_id}/write-sessions?doc_type={selected_write_dt}")
+    session_map = {}
+    if existing_sessions:
+        for sess in existing_sessions:
+            session_map[sess["section_id"]] = sess
 
-    selected_section = st.selectbox(
-        "Select section to draft",
-        list(section_options.keys()),
-        format_func=lambda x: section_options[x],
-        key=f"write_section_{project_id}",
-    )
+    drafted_count = sum(1 for s in sections if s["id"] in session_map)
+    total_count = len(sections)
 
-    selected_sec_info = next((s for s in sections if s["id"] == selected_section), None)
-    if selected_sec_info:
-        with st.expander("Section requirements", expanded=False):
-            for req in selected_sec_info.get("must_include", []):
-                st.write(f"- {req}")
-
-    col_explain, col_write = st.columns(2)
-
-    with col_explain:
-        if st.button("Explain this section", key=f"explain_btn_{project_id}"):
-            with st.spinner("Getting explanation..."):
-                result = _fetch(
-                    f"/projects/{project_id}/explain?doc_type={selected_write_dt}",
-                    method="POST",
-                    json={"section_id": selected_section},
-                )
-                if result:
-                    st.session_state[f"explanation_{project_id}_{selected_section}"] = result.get("explanation", "")
-
-    explanation = st.session_state.get(f"explanation_{project_id}_{selected_section}")
-    if explanation:
-        with st.expander("AI Explanation", expanded=True):
-            st.write(explanation)
+    with col_actions:
+        st.caption(f"{drafted_count} of {total_count} sections drafted")
+        if drafted_count > 0:
+            st.progress(drafted_count / total_count)
 
     user_instructions = st.text_area(
-        "Additional instructions (optional)",
+        "Instructions for the AI (applies to all generation)",
         key=f"write_instr_{project_id}",
-        placeholder="e.g., 'Focus on cookstove distribution in rural areas', 'Use conservative emission factors', 'Include sampling plan details'...",
-        height=80,
+        placeholder="e.g., 'Focus on cookstove distribution in rural areas', 'Use conservative emission factors'...",
+        height=60,
     )
 
-    with col_write:
-        if st.button("Generate Draft", key=f"generate_btn_{project_id}", type="primary"):
-            with st.spinner("AI is drafting this section... This may take a moment."):
-                result = _fetch(
-                    f"/projects/{project_id}/write?doc_type={selected_write_dt}",
-                    method="POST",
-                    json={
-                        "section_id": selected_section,
-                        "user_instructions": user_instructions or None,
-                    },
-                )
-                if result:
-                    st.session_state[f"draft_{project_id}_{selected_write_dt}_{selected_section}"] = result.get("generated_text", "")
-                    st.rerun()
+    gen_col1, gen_col2, gen_col3 = st.columns([1, 1, 1])
+    with gen_col1:
+        generate_all = st.button(
+            "Generate Full Document",
+            key=f"generate_all_btn_{project_id}",
+            type="primary",
+            help="Generate all sections at once. This may take several minutes.",
+        )
+    with gen_col2:
+        if drafted_count > 0:
+            regenerate_all = st.button(
+                "Regenerate All",
+                key=f"regenerate_all_btn_{project_id}",
+                help="Regenerate all sections, replacing existing drafts.",
+            )
+        else:
+            regenerate_all = False
 
-    draft = st.session_state.get(f"draft_{project_id}_{selected_write_dt}_{selected_section}")
-    if draft:
-        st.divider()
-        st.subheader(f"Generated Draft: {section_options.get(selected_section, selected_section)}")
-        st.write(draft)
+    if generate_all or regenerate_all:
+        progress_bar = st.progress(0, text="Starting full document generation...")
+        status_text = st.empty()
 
-    existing_sessions = _fetch(f"/projects/{project_id}/write-sessions?doc_type={selected_write_dt}")
-    if existing_sessions:
-        st.divider()
-        st.subheader("Previously Generated Sections")
-        for sess in existing_sessions:
-            with st.expander(f"{sess['section_id']}: {sess.get('section_title', '')}"):
-                st.write(sess.get("generated_text", ""))
+        result = None
+        with st.spinner(""):
+            import time as _time
+            progress_bar.progress(0.02, text=f"Generating {total_count} sections...")
+            result = _fetch(
+                f"/projects/{project_id}/write-all?doc_type={selected_write_dt}",
+                method="POST",
+                json={"user_instructions": user_instructions or None},
+                timeout=600,
+            )
+
+        if result:
+            success_count = result.get("success_count", 0)
+            total = result.get("total", 0)
+            progress_bar.progress(1.0, text=f"Done: {success_count}/{total} sections generated")
+            st.success(f"Generated {success_count} of {total} sections successfully.")
+            _time.sleep(1)
+            st.rerun()
+        else:
+            progress_bar.empty()
+            st.error("Full document generation failed. Try generating sections individually.")
+
+    st.divider()
+
+    std_label = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(standard, standard)
+    doc_label = available_doc_types.get(selected_write_dt, selected_write_dt)
+    st.markdown(f"### {doc_label} - {std_label}")
+    st.caption(f"Project: {project.get('name', '')}")
+
+    current_parent = None
+    for sec in sections:
+        sec_id = sec["id"]
+        sec_title = sec["title"]
+        parent = sec.get("parent_section", "")
+
+        if parent and parent != current_parent:
+            current_parent = parent
+            st.markdown(f"---\n#### {parent}")
+
+        has_draft = sec_id in session_map
+        draft_text = session_map[sec_id].get("generated_text", "") if has_draft else ""
+
+        with st.container(border=True):
+            header_col, action_col = st.columns([3, 1])
+            with header_col:
+                status_marker = "[Drafted]" if has_draft else "[Not drafted]"
+                st.markdown(f"**{sec_id} {sec_title}** &nbsp; `{status_marker}`")
+            with action_col:
+                btn_label = "Regenerate" if has_draft else "Generate"
+                if st.button(btn_label, key=f"gen_sec_{project_id}_{selected_write_dt}_{sec_id}", use_container_width=True):
+                    with st.spinner(f"Generating {sec_id}..."):
+                        result = _fetch(
+                            f"/projects/{project_id}/write?doc_type={selected_write_dt}",
+                            method="POST",
+                            json={
+                                "section_id": sec_id,
+                                "user_instructions": user_instructions or None,
+                            },
+                        )
+                        if result:
+                            st.rerun()
+
+            if has_draft and draft_text:
+                st.markdown(draft_text)
+            elif not has_draft:
+                st.caption("This section has not been drafted yet. Click Generate to create content.")
+
+            with st.expander("Section requirements", expanded=False):
+                for req in sec.get("must_include", []):
+                    st.write(f"- {req}")
+                explain_key = f"explain_{project_id}_{selected_write_dt}_{sec_id}"
+                if st.button("Explain this section", key=f"explain_btn_{project_id}_{selected_write_dt}_{sec_id}"):
+                    with st.spinner("Getting explanation..."):
+                        result = _fetch(
+                            f"/projects/{project_id}/explain?doc_type={selected_write_dt}",
+                            method="POST",
+                            json={"section_id": sec_id},
+                        )
+                        if result:
+                            st.session_state[explain_key] = result.get("explanation", "")
+                explanation = st.session_state.get(explain_key)
+                if explanation:
+                    st.info(explanation)
 
 
 def _render_project_settings(project):

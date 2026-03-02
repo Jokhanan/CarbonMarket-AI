@@ -359,6 +359,61 @@ def generate_section_draft(
     return result
 
 
+def generate_full_document(
+    standard,
+    project_doc_type,
+    project_info,
+    existing_pdd_text=None,
+    reference_docs_text=None,
+    user_instructions=None,
+    progress_callback=None,
+):
+    guide_dt = get_guide_doc_type(standard, project_doc_type)
+    if not guide_dt:
+        raise ValueError(f"No guide mapping for {standard}/{project_doc_type}")
+
+    guide = load_guide(standard, guide_dt)
+    subsections = guide.SUBSECTIONS
+    section_ids = list(subsections.keys())
+    total = len(section_ids)
+    results = []
+
+    for idx, section_id in enumerate(section_ids):
+        if progress_callback:
+            progress_callback(idx, total, section_id, subsections[section_id].get("title", ""))
+
+        try:
+            text = generate_section_draft(
+                standard=standard,
+                project_doc_type=project_doc_type,
+                section_id=section_id,
+                project_info=project_info,
+                existing_pdd_text=existing_pdd_text,
+                reference_docs_text=reference_docs_text,
+                user_instructions=user_instructions,
+            )
+            results.append({
+                "section_id": section_id,
+                "section_title": subsections[section_id].get("title", ""),
+                "generated_text": text,
+                "status": "success",
+            })
+        except Exception as e:
+            logger.error("Failed to generate section %s: %s", section_id, e)
+            results.append({
+                "section_id": section_id,
+                "section_title": subsections[section_id].get("title", ""),
+                "generated_text": "",
+                "status": "error",
+                "error": str(e),
+            })
+
+    if progress_callback:
+        progress_callback(total, total, "", "Complete")
+
+    return results
+
+
 def explain_section(standard, project_doc_type, section_id):
     guide_dt = get_guide_doc_type(standard, project_doc_type)
     if not guide_dt:
