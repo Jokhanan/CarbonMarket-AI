@@ -1723,20 +1723,16 @@ def _render_project_workspace(project_id):
     if project.get("description"):
         st.caption(project["description"])
 
-    tabs = st.tabs(["Documents", "Review", "Write / Draft", "Calculations", "Export", "Project Settings"])
+    tabs = st.tabs(["Project Setup", "Write / Draft", "Review", "Export"])
 
     with tabs[0]:
-        _render_documents_tab(project)
-    with tabs[1]:
-        _render_review_tab(project)
-    with tabs[2]:
-        _render_write_tab(project)
-    with tabs[3]:
-        _render_calculations_tab(project)
-    with tabs[4]:
-        _render_export_tab(project)
-    with tabs[5]:
         _render_project_settings(project)
+    with tabs[1]:
+        _render_write_tab(project)
+    with tabs[2]:
+        _render_review_tab(project)
+    with tabs[3]:
+        _render_export_tab(project)
 
 
 def _render_calculations_tab(project):
@@ -2201,7 +2197,7 @@ def _render_export_tab(project):
                 else:
                     st.error("Failed to generate spreadsheet.")
     else:
-        st.info("No calculations available yet. Use the Calculations tab to run emission reduction calculations first.")
+        st.info("No calculations available yet. Emission reduction calculations will be available in a future update.")
 
     st.divider()
     st.markdown("### Methodology Reference")
@@ -2494,6 +2490,422 @@ def _render_write_tab(project):
 
 
 def _render_project_settings(project):
+    project_id = project["id"]
+    intake = project.get("project_intake") or {}
+    if isinstance(intake, str):
+        import json as _json
+        intake = _json.loads(intake)
+
+    st.subheader("Project Setup")
+    st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
+
+    po = intake.get("project_overview", {})
+    tech = intake.get("technology", {})
+    loc = intake.get("location", {})
+    ba = intake.get("baseline_additionality", {})
+    mon = intake.get("monitoring", {})
+    er = intake.get("emission_reductions", {})
+    sdgs_data = intake.get("sdgs", {})
+    stk = intake.get("stakeholders", {})
+    safeg = intake.get("safeguards", {})
+
+    with st.container(border=True):
+        st.markdown("#### About Your Project")
+        new_name = st.text_input("Project name", value=project.get("name", ""),
+                                  key=f"setup_name_{project_id}")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
+                                         index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
+                                         if project.get("standard") in STANDARD_OPTIONS else 0,
+                                         key=f"setup_standard_{project_id}")
+        with c2:
+            new_country = st.text_input("Country", value=project.get("country", "") or "",
+                                         key=f"setup_country_{project_id}")
+        new_methodology = _methodology_selector(
+            f"setup_{project_id}", standard=new_standard,
+            current_value=project.get("methodology"))
+
+        meth_detail = None
+        if new_methodology:
+            meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
+        if meth_detail:
+            with st.container(border=True):
+                st.caption("Selected methodology")
+                st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
+                mc1, mc2, mc3 = st.columns(3)
+                with mc1:
+                    st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
+                with mc2:
+                    st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
+                with mc3:
+                    st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
+                if meth_detail.get("applicability"):
+                    st.markdown(f"Applicability: {meth_detail['applicability']}")
+                if meth_detail.get("status") == "deprecated":
+                    st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
+
+        new_desc = st.text_area("Project description / objective", value=project.get("description", "") or "",
+                                 key=f"setup_desc_{project_id}",
+                                 placeholder="Briefly describe the project activity and its objective...")
+        po_objective = st.text_area("Detailed objective", value=po.get("objective", ""),
+                                     key=f"setup_po_objective_{project_id}",
+                                     placeholder="What is the primary goal of this project?",
+                                     height=80)
+        po_summary = st.text_area("Project summary", value=po.get("summary", ""),
+                                   key=f"setup_po_summary_{project_id}",
+                                   placeholder="Provide a short summary suitable for a PDD introduction...",
+                                   height=80)
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
+            po_start_date = st.text_input("Project start date", value=po.get("start_date", ""),
+                                           key=f"setup_po_start_{project_id}",
+                                           placeholder="YYYY-MM-DD")
+        with pc2:
+            po_scale = st.text_input("Project scale", value=po.get("scale", ""),
+                                      key=f"setup_po_scale_{project_id}",
+                                      placeholder="e.g., Small-scale, Large-scale")
+        with pc3:
+            po_num_units = st.text_input("Number of units", value=po.get("num_units", ""),
+                                          key=f"setup_po_num_units_{project_id}",
+                                          placeholder="e.g., 50,000 stoves")
+
+        new_status = st.selectbox("Project status", list(STATUS_LABELS.keys()),
+                                   format_func=lambda x: STATUS_LABELS[x],
+                                   index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
+                                   if project.get("status") in STATUS_LABELS else 0,
+                                   key=f"setup_status_{project_id}")
+
+    with st.container(border=True):
+        st.markdown("#### Technology & Approach")
+        tech_desc = st.text_area("Technology description", value=tech.get("description", ""),
+                                  key=f"setup_tech_desc_{project_id}",
+                                  placeholder="Describe the technology or approach used...",
+                                  height=80)
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            tech_manufacturer = st.text_input("Manufacturer", value=tech.get("manufacturer", ""),
+                                               key=f"setup_tech_mfr_{project_id}")
+            tech_fuel_baseline = st.text_input("Baseline fuel", value=tech.get("fuel_baseline", ""),
+                                                key=f"setup_tech_fuel_bl_{project_id}",
+                                                placeholder="e.g., Wood, Charcoal")
+        with tc2:
+            tech_model = st.text_input("Model", value=tech.get("model", ""),
+                                        key=f"setup_tech_model_{project_id}")
+            tech_fuel_project = st.text_input("Project fuel", value=tech.get("fuel_project", ""),
+                                               key=f"setup_tech_fuel_pj_{project_id}",
+                                               placeholder="e.g., LPG, Pellets, Same")
+        tech_distribution = st.text_input("Distribution method", value=tech.get("distribution_method", ""),
+                                           key=f"setup_tech_dist_{project_id}",
+                                           placeholder="e.g., Direct sales, NGO distribution, Subsidy program")
+
+    with st.container(border=True):
+        st.markdown("#### Location & Beneficiaries")
+        loc_regions = st.text_input("Regions / provinces", value=loc.get("regions", ""),
+                                     key=f"setup_loc_regions_{project_id}",
+                                     placeholder="e.g., Northern Region, Ashanti Region")
+        loc_coords = st.text_input("Coordinates (lat, lon)", value=loc.get("coordinates", ""),
+                                    key=f"setup_loc_coords_{project_id}",
+                                    placeholder="e.g., 7.9465, -1.0232")
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
+                                        key=f"setup_loc_target_{project_id}",
+                                        placeholder="e.g., Rural households")
+        with lc2:
+            loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
+                                               key=f"setup_loc_bene_{project_id}",
+                                               placeholder="e.g., 250,000 people")
+
+    with st.container(border=True):
+        st.markdown("#### Baseline & Additionality")
+        ba_baseline = st.text_area("Baseline scenario", value=ba.get("baseline_scenario", ""),
+                                    key=f"setup_ba_baseline_{project_id}",
+                                    placeholder="Describe what would happen without the project...",
+                                    height=80)
+        ba_additionality = st.text_area("Additionality justification", value=ba.get("additionality_justification", ""),
+                                         key=f"setup_ba_add_{project_id}",
+                                         placeholder="Why would this project not happen without carbon finance?",
+                                         height=80)
+        ba_barriers = st.text_area("Barriers", value=ba.get("barriers", ""),
+                                    key=f"setup_ba_barriers_{project_id}",
+                                    placeholder="Investment barriers, technological barriers, institutional barriers...",
+                                    height=80)
+        ba_common = st.text_area("Common practice analysis", value=ba.get("common_practice", ""),
+                                  key=f"setup_ba_common_{project_id}",
+                                  placeholder="Is this technology/practice common in the region?",
+                                  height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Monitoring Plan")
+        mon_approach = st.text_area("Monitoring approach", value=mon.get("monitoring_approach", ""),
+                                     key=f"setup_mon_approach_{project_id}",
+                                     placeholder="Describe how the project will be monitored...",
+                                     height=80)
+        mon_params = st.text_area("Key parameters to monitor", value=mon.get("key_parameters", ""),
+                                   key=f"setup_mon_params_{project_id}",
+                                   placeholder="List the key monitoring parameters...",
+                                   height=80)
+        mon_sampling = st.text_area("Sampling approach", value=mon.get("sampling_approach", ""),
+                                     key=f"setup_mon_sampling_{project_id}",
+                                     placeholder="Describe the sampling methodology if applicable...",
+                                     height=80)
+        mon_qaqc = st.text_area("QA/QC procedures", value=mon.get("qa_qc", ""),
+                                  key=f"setup_mon_qaqc_{project_id}",
+                                  placeholder="Describe quality assurance / quality control procedures...",
+                                  height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Emission Reductions")
+        ec1, ec2 = st.columns(2)
+        with ec1:
+            er_annual = st.text_input("Annual ER estimate (tCO2e)", value=er.get("annual_er_estimate", ""),
+                                       key=f"setup_er_annual_{project_id}",
+                                       placeholder="e.g., 150,000")
+        with ec2:
+            er_total = st.text_input("Total ER estimate (tCO2e)", value=er.get("total_er_estimate", ""),
+                                      key=f"setup_er_total_{project_id}",
+                                      placeholder="e.g., 1,050,000")
+        er_calc_approach = st.text_area("Calculation approach", value=er.get("calculation_approach", ""),
+                                         key=f"setup_er_calc_{project_id}",
+                                         placeholder="Describe how emission reductions are calculated...",
+                                         height=80)
+        er_summary = st.text_area("ER summary", value=er.get("er_summary", ""),
+                                   key=f"setup_er_summary_{project_id}",
+                                   placeholder="Brief summary of the emission reduction claim...",
+                                   height=80)
+
+    with st.container(border=True):
+        st.markdown("#### SDGs & Co-benefits")
+        st.caption("Select the Sustainable Development Goals this project contributes to.")
+        existing_sdgs = sdgs_data.get("selected_sdgs", [])
+        sdg_list = []
+        sdg_goals = [
+            "1 - No Poverty", "2 - Zero Hunger", "3 - Good Health and Well-being",
+            "4 - Quality Education", "5 - Gender Equality", "6 - Clean Water and Sanitation",
+            "7 - Affordable and Clean Energy", "8 - Decent Work and Economic Growth",
+            "9 - Industry, Innovation and Infrastructure", "10 - Reduced Inequalities",
+            "11 - Sustainable Cities and Communities", "12 - Responsible Consumption and Production",
+            "13 - Climate Action", "14 - Life Below Water", "15 - Life on Land",
+            "16 - Peace, Justice and Strong Institutions", "17 - Partnerships for the Goals",
+        ]
+        existing_map = {str(s.get("goal_number", "")): s.get("contribution_description", "") for s in existing_sdgs}
+        for goal in sdg_goals:
+            goal_num = goal.split(" - ")[0].strip()
+            is_selected = st.checkbox(goal, value=goal_num in existing_map,
+                                       key=f"setup_sdg_{project_id}_{goal_num}")
+            if is_selected:
+                contrib = st.text_input(
+                    f"SDG {goal_num} contribution",
+                    value=existing_map.get(goal_num, ""),
+                    key=f"setup_sdg_contrib_{project_id}_{goal_num}",
+                    placeholder=f"How does the project contribute to SDG {goal_num}?",
+                )
+                sdg_list.append({"goal_number": goal_num, "contribution_description": contrib})
+
+    with st.container(border=True):
+        st.markdown("#### Stakeholder Engagement")
+        stk_consultation = st.text_area("Consultation summary", value=stk.get("consultation_summary", ""),
+                                         key=f"setup_stk_consult_{project_id}",
+                                         placeholder="Describe the stakeholder consultation process and outcomes...",
+                                         height=80)
+        stk_grievance = st.text_area("Grievance mechanism", value=stk.get("grievance_mechanism", ""),
+                                      key=f"setup_stk_grievance_{project_id}",
+                                      placeholder="Describe the grievance redress mechanism...",
+                                      height=80)
+        stk_gender = st.text_area("Gender assessment", value=stk.get("gender_assessment", ""),
+                                   key=f"setup_stk_gender_{project_id}",
+                                   placeholder="Describe gender considerations and impact...",
+                                   height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Safeguards")
+        safeg_env = st.text_area("Environmental safeguards", value=safeg.get("environmental_safeguards", ""),
+                                  key=f"setup_safeg_env_{project_id}",
+                                  placeholder="Describe environmental safeguards and mitigation measures...",
+                                  height=80)
+        safeg_social = st.text_area("Social safeguards", value=safeg.get("social_safeguards", ""),
+                                     key=f"setup_safeg_social_{project_id}",
+                                     placeholder="Describe social safeguards...",
+                                     height=80)
+        safeg_dnh = st.text_area("Do no harm assessment", value=safeg.get("do_no_harm", ""),
+                                  key=f"setup_safeg_dnh_{project_id}",
+                                  placeholder="Describe the do-no-harm assessment...",
+                                  height=80)
+
+    st.divider()
+    st.subheader("Crediting Period")
+
+    from datetime import date as _date
+
+    cp_start_raw = project.get("crediting_period_start")
+    cp_start_val = None
+    if cp_start_raw:
+        try:
+            if isinstance(cp_start_raw, str):
+                cp_start_val = _date.fromisoformat(cp_start_raw[:10])
+            else:
+                cp_start_val = cp_start_raw
+        except Exception:
+            pass
+    cp_start = st.date_input(
+        "Crediting period start date",
+        value=cp_start_val,
+        key=f"setup_cp_start_{project_id}",
+    )
+    cp_years = st.number_input(
+        "Crediting period (years)",
+        min_value=1, max_value=30,
+        value=project.get("crediting_period_years") or 7,
+        key=f"setup_cp_years_{project_id}",
+    )
+    if cp_start:
+        from datetime import timedelta
+        cp_end = _date(cp_start.year + cp_years, cp_start.month, cp_start.day) if cp_start else None
+        if cp_end:
+            st.caption(f"Crediting period: {cp_start.isoformat()} to {cp_end.isoformat()} ({cp_years} years)")
+            vintages = [str(cp_start.year + i) for i in range(cp_years)]
+            st.caption(f"Vintages: {', '.join(vintages)}")
+
+    existing_settings = project.get("project_settings") or {}
+
+    meth_parsed = None
+    methodology = project.get("methodology")
+    if methodology:
+        meth_data = _fetch(f"/projects/{project_id}/methodology-data")
+        if meth_data and meth_data.get("status") == "ready":
+            meth_parsed = meth_data.get("parsed")
+
+    new_settings = dict(existing_settings)
+    context_dims = []
+    if meth_parsed:
+        context_dims = meth_parsed.get("context_dimensions", [])
+
+    if context_dims:
+        st.divider()
+        st.subheader("Methodology Parameters")
+        st.caption("These settings determine which default values are used in calculations.")
+
+        for dim in context_dims:
+            dim_key = dim["dimension_key"]
+            options = dim["options"]
+            current_val = existing_settings.get(dim_key, "")
+            idx = 0
+            if current_val in options:
+                idx = options.index(current_val)
+            selected = st.selectbox(
+                dim["label"],
+                options,
+                index=idx,
+                key=f"setup_dim_{project_id}_{dim_key}",
+                help=dim.get("description", ""),
+            )
+            new_settings[dim_key] = selected
+
+    st.divider()
+
+    with st.container(border=True):
+        st.markdown("#### Documents")
+        st.caption("Upload project documents such as PDDs, Monitoring Reports, and reference materials.")
+        _render_documents_tab(project)
+
+    st.divider()
+
+    if st.button("Save All Changes", key=f"save_setup_{project_id}", type="primary"):
+        new_intake = {
+            "project_overview": {
+                "objective": po_objective,
+                "summary": po_summary,
+                "start_date": po_start_date,
+                "scale": po_scale,
+                "num_units": po_num_units,
+            },
+            "technology": {
+                "description": tech_desc,
+                "manufacturer": tech_manufacturer,
+                "model": tech_model,
+                "fuel_baseline": tech_fuel_baseline,
+                "fuel_project": tech_fuel_project,
+                "distribution_method": tech_distribution,
+            },
+            "location": {
+                "regions": loc_regions,
+                "coordinates": loc_coords,
+                "target_population": loc_target,
+                "beneficiaries": loc_beneficiaries,
+            },
+            "baseline_additionality": {
+                "baseline_scenario": ba_baseline,
+                "additionality_justification": ba_additionality,
+                "barriers": ba_barriers,
+                "common_practice": ba_common,
+            },
+            "monitoring": {
+                "monitoring_approach": mon_approach,
+                "key_parameters": mon_params,
+                "sampling_approach": mon_sampling,
+                "qa_qc": mon_qaqc,
+            },
+            "emission_reductions": {
+                "annual_er_estimate": er_annual,
+                "total_er_estimate": er_total,
+                "calculation_approach": er_calc_approach,
+                "er_summary": er_summary,
+            },
+            "sdgs": {
+                "selected_sdgs": sdg_list,
+            },
+            "stakeholders": {
+                "consultation_summary": stk_consultation,
+                "grievance_mechanism": stk_grievance,
+                "gender_assessment": stk_gender,
+            },
+            "safeguards": {
+                "environmental_safeguards": safeg_env,
+                "social_safeguards": safeg_social,
+                "do_no_harm": safeg_dnh,
+            },
+        }
+
+        update_payload = {
+            "name": new_name,
+            "standard": new_standard,
+            "methodology": new_methodology,
+            "country": new_country or None,
+            "description": new_desc or None,
+            "status": new_status,
+            "crediting_period_years": cp_years,
+            "project_settings": new_settings,
+            "project_intake": new_intake,
+        }
+        if cp_start:
+            update_payload["crediting_period_start"] = cp_start.isoformat()
+        _fetch(f"/projects/{project_id}", method="PATCH", json=update_payload)
+        st.success("Project updated.")
+        time.sleep(0.5)
+        st.rerun()
+
+    st.divider()
+    st.subheader("Danger Zone")
+    if st.button("Delete Project", key=f"delete_proj_{project_id}", type="secondary"):
+        st.session_state[f"confirm_delete_{project_id}"] = True
+
+    if st.session_state.get(f"confirm_delete_{project_id}"):
+        st.warning("Are you sure? This will delete the project and all its documents.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, delete", key=f"confirm_del_yes_{project_id}"):
+                _fetch(f"/projects/{project_id}", method="DELETE")
+                st.session_state.selected_project_id = None
+                st.session_state.pop(f"confirm_delete_{project_id}", None)
+                st.rerun()
+        with col2:
+            if st.button("Cancel", key=f"confirm_del_no_{project_id}"):
+                st.session_state.pop(f"confirm_delete_{project_id}", None)
+                st.rerun()
+
+
+def _render_project_settings_legacy(project):
     project_id = project["id"]
     st.subheader("Project Settings")
 

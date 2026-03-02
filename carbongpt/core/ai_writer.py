@@ -17,6 +17,129 @@ STANDARD_LABELS = {
     "Verra": "Verra VCS",
 }
 
+SECTION_INTAKE_MAP = {
+    "A": ["project_overview", "technology", "location"],
+    "B": ["baseline_additionality", "emission_reductions", "monitoring"],
+    "B.6": ["sdgs"],
+    "C": ["project_overview"],
+    "D": ["safeguards"],
+    "E": ["stakeholders"],
+}
+
+
+def _format_project_context(project_info):
+    intake = project_info.get("project_intake") or {}
+    if not intake:
+        return ""
+
+    parts = []
+
+    card_formatters = {
+        "project_overview": ("Project Overview", [
+            ("objective", "Project Objective"),
+            ("summary", "Project Summary"),
+            ("start_date", "Start Date"),
+            ("scale", "Project Scale"),
+            ("num_units", "Number of Units"),
+        ]),
+        "technology": ("Technology & Approach", [
+            ("description", "Technology Description"),
+            ("manufacturer", "Manufacturer"),
+            ("model", "Model"),
+            ("fuel_baseline", "Baseline Fuel"),
+            ("fuel_project", "Project Fuel"),
+            ("distribution_method", "Distribution Method"),
+        ]),
+        "location": ("Location & Beneficiaries", [
+            ("regions", "Regions"),
+            ("coordinates", "Coordinates"),
+            ("target_population", "Target Population"),
+            ("beneficiaries", "Beneficiaries"),
+        ]),
+        "baseline_additionality": ("Baseline & Additionality", [
+            ("baseline_scenario", "Baseline Scenario"),
+            ("additionality_justification", "Additionality Justification"),
+            ("barriers", "Barriers"),
+            ("common_practice", "Common Practice Analysis"),
+        ]),
+        "monitoring": ("Monitoring Plan", [
+            ("monitoring_approach", "Monitoring Approach"),
+            ("key_parameters", "Key Parameters"),
+            ("sampling_approach", "Sampling Approach"),
+            ("qa_qc", "QA/QC Procedures"),
+        ]),
+        "emission_reductions": ("Emission Reductions", [
+            ("annual_er_estimate", "Annual ER Estimate"),
+            ("total_er_estimate", "Total ER Estimate"),
+            ("calculation_approach", "Calculation Approach"),
+            ("er_summary", "ER Summary"),
+        ]),
+        "sdgs": ("SDGs & Co-benefits", [
+            ("selected_sdgs", "Selected SDGs"),
+        ]),
+        "stakeholders": ("Stakeholder Engagement", [
+            ("consultation_summary", "Consultation Summary"),
+            ("grievance_mechanism", "Grievance Mechanism"),
+            ("gender_assessment", "Gender Assessment"),
+        ]),
+        "safeguards": ("Safeguards", [
+            ("environmental_safeguards", "Environmental Safeguards"),
+            ("social_safeguards", "Social Safeguards"),
+            ("do_no_harm", "Do No Harm Assessment"),
+        ]),
+    }
+
+    for card_key, (card_title, fields) in card_formatters.items():
+        card_data = intake.get(card_key)
+        if not card_data or not isinstance(card_data, dict):
+            continue
+        card_lines = []
+        for field_key, field_label in fields:
+            val = card_data.get(field_key)
+            if not val:
+                continue
+            if isinstance(val, list):
+                if val and isinstance(val[0], dict):
+                    items = []
+                    for item in val:
+                        item_parts = [f"{k}: {v}" for k, v in item.items() if v]
+                        if item_parts:
+                            items.append(", ".join(item_parts))
+                    val = "; ".join(items)
+                else:
+                    val = ", ".join(str(v) for v in val)
+            card_lines.append(f"  - {field_label}: {val}")
+        if card_lines:
+            parts.append(f"**{card_title}:**\n" + "\n".join(card_lines))
+
+    if not parts:
+        return ""
+    return "### Detailed Project Data (from intake form):\n" + "\n\n".join(parts) + "\n"
+
+
+def _get_relevant_intake_cards(section_id):
+    for prefix in sorted(SECTION_INTAKE_MAP.keys(), key=len, reverse=True):
+        if section_id == prefix or section_id.startswith(prefix + "."):
+            return SECTION_INTAKE_MAP[prefix]
+    first_letter = section_id.split(".")[0] if section_id else ""
+    if first_letter in SECTION_INTAKE_MAP:
+        return SECTION_INTAKE_MAP[first_letter]
+    return list(SECTION_INTAKE_MAP.get("A", []) + SECTION_INTAKE_MAP.get("B", []))
+
+
+def _format_filtered_project_context(project_info, section_id):
+    intake = project_info.get("project_intake") or {}
+    if not intake:
+        return ""
+    relevant_cards = _get_relevant_intake_cards(section_id)
+    filtered_intake = {k: v for k, v in intake.items() if k in relevant_cards}
+    if not filtered_intake:
+        return _format_project_context(project_info)
+    filtered_info = dict(project_info)
+    filtered_info["project_intake"] = filtered_intake
+    return _format_project_context(filtered_info)
+
+
 STANDARD_DOC_TYPE_MAP = {
     "GoldStandard": {
         "pdd": "PDD",
@@ -193,6 +316,10 @@ def generate_section_draft(
         user_prompt += f"- Project description: {project_info['description']}\n"
     user_prompt += "\n"
 
+    intake_context = _format_filtered_project_context(project_info, section_id)
+    if intake_context:
+        user_prompt += intake_context + "\n"
+
     if existing_pdd_text:
         pdd_excerpt = existing_pdd_text[:6000]
         user_prompt += (
@@ -307,6 +434,10 @@ def review_with_context(
     user_prompt += f"- Standard: {std_label}\n"
     user_prompt += f"- Methodology: {project_info.get('methodology', 'Not specified')}\n"
     user_prompt += f"- Country: {project_info.get('country', 'Not specified')}\n\n"
+
+    intake_context = _format_project_context(project_info)
+    if intake_context:
+        user_prompt += intake_context + "\n"
 
     methodology_context = _get_methodology_context(project_info.get("methodology"))
     if methodology_context:

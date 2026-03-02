@@ -37,6 +37,7 @@ class ProjectUpdate(BaseModel):
     crediting_period_start: str | None = None
     crediting_period_years: int | None = None
     project_settings: dict | None = None
+    project_intake: dict | None = None
 
 
 class WriteSectionRequest(BaseModel):
@@ -280,6 +281,7 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
         "methodology": project.get("methodology"),
         "country": project.get("country"),
         "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
     }
 
     pdd_text = None
@@ -384,6 +386,7 @@ def review_document(project_id: int, doc_id: int):
         "methodology": project.get("methodology"),
         "country": project.get("country"),
         "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
     }
 
     pdd_text = None
