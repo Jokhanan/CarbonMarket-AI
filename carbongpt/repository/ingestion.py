@@ -166,21 +166,38 @@ def create_embeddings(texts: list[str], api_key: str) -> list[list[float]]:
     return all_embeddings
 
 
-def detect_document_metadata(text_preview: str, api_key: str) -> dict:
+def detect_document_metadata(text_preview: str, api_key: str, filename: str = "") -> dict:
     import requests
     import json
 
     prompt = (
-        "Analyze the following document text and detect:\n"
+        "Analyze the following carbon credit document and detect:\n"
         "1. Which carbon credit standard it belongs to (e.g., 'Gold Standard', 'Verra VCS', 'CDM', 'Plan Vivo', etc.)\n"
         "2. The version of the standard or document (e.g., 'v4.4', 'v1.2')\n"
-        "3. The document category: one of 'standard_text', 'methodology', 'guidance', 'tool', "
-        "'template', 'example_pdd', 'example_mr', 'example_fvr', 'example_valver', 'example_other', 'rule_update', 'other'\n"
-        "4. Applicability conditions (what project types, sectors, or methodologies this applies to)\n\n"
-        "Return JSON with keys: standard, version, category, applicability\n"
+        "3. The document category — choose the MOST SPECIFIC match:\n"
+        "   - 'example_pdd' = A filled-out Project Design Document, VPA Design Document, POA Design Document, "
+        "Joint PD-MR, or any project description for a SPECIFIC real project (has project name, location, "
+        "technology details, stakeholder info)\n"
+        "   - 'example_mr' = A filled-out Monitoring Report for a SPECIFIC real project (has monitoring period, "
+        "actual measured data, ex-post calculations, issuance request)\n"
+        "   - 'template' = A BLANK template with placeholder text like [insert here], <<project name>>, not filled in\n"
+        "   - 'methodology' = A methodology document (calculation rules, equations, applicability criteria — not a project)\n"
+        "   - 'guidance' = A guide or manual explaining how to fill documents or apply rules\n"
+        "   - 'tool' = A calculation tool or spreadsheet reference\n"
+        "   - 'standard_text' = The standard text itself (program rules, requirements framework)\n"
+        "   - 'example_fvr' = A Final Verification Report\n"
+        "   - 'example_valver' = A Validation or Verification Report\n"
+        "   - 'other' = None of the above\n"
+        "4. Applicability conditions (what project types, sectors, or methodologies this applies to)\n"
+        "5. The methodology code used (e.g., 'TPDDTEC', 'VM0006', 'AMS-II.G') if identifiable\n\n"
+        "IMPORTANT: If the document describes a SPECIFIC real project with real details (project name, country, "
+        "coordinates, technology vendor, stakeholder names), it is 'example_pdd' or 'example_mr', NOT 'standard_text'.\n\n"
+        "Return JSON with keys: standard, version, category, applicability, methodology_code\n"
         "If you cannot determine a field, use null.\n\n"
-        f"Document text (first ~2000 words):\n{text_preview[:8000]}"
     )
+    if filename:
+        prompt += f"Filename: {filename}\n\n"
+    prompt += f"Document text (first ~2000 words):\n{text_preview[:8000]}"
 
     resp = requests.post(
         "https://api.openai.com/v1/chat/completions",
@@ -321,9 +338,22 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
 
         section_ids = store.save_sections(doc_id, sections)
 
+        doc_info_pre = store.get_document(doc_id)
+        doc_title = doc_info_pre.get("title", "") if doc_info_pre else ""
+        filename_cat = classify_by_filename(doc_title)
+        content_cat = classify_by_content(full_text[:5000])
+        pre_category = filename_cat or content_cat
+
+        if pre_category:
+            current_cat = doc_info_pre.get("category", "") if doc_info_pre else ""
+            if current_cat in ("other", None, "standard_text"):
+                store.update_document_metadata(doc_id, category=pre_category)
+                logger.info("Pre-classified doc %s as '%s' (filename=%s, content=%s)",
+                            doc_id, pre_category, filename_cat, content_cat)
+
         if api_key:
             try:
-                detection = detect_document_metadata(full_text[:8000], api_key)
+                detection = detect_document_metadata(full_text[:8000], api_key, filename=doc_title)
                 store.update_document_detection(
                     doc_id,
                     auto_standard=detection.get("standard"),
@@ -381,6 +411,96 @@ VALID_CATEGORIES = {
 }
 
 
+def classify_by_filename(filename: str) -> str | None:
+    fn_base = Path(filename).stem.upper()
+    fn_base = re.sub(r'[_\-]+', ' ', fn_base)
+
+    mr_patterns = [
+        r'\bMR\b', r'MONITOR(?:ING)?\s*REPORT', r'\bMR ', r' MR\b',
+        r'MONITORING.*REPORT',
+    ]
+    for pat in mr_patterns:
+        if re.search(pat, fn_base):
+            if not re.search(r'\bPD\s*MR\b|\bJPDMR\b|\bJOINT.*PD.*MR\b', fn_base):
+                return "example_mr"
+
+    jpdmr_patterns = [r'\bJPDMR\b', r'\bJOINT.*PD.*MR\b', r'\bPD\s*MR\b']
+    for pat in jpdmr_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    vpa_patterns = [
+        r'\bVPA\s*DD\b', r'\bVPA\s*DESIGN\b', r'VPA.*DESIGN.*DOC',
+        r'\bVPADD\b', r'\bVPA\b.*\bDD\b', r'VPA\s*\d+.*DD',
+    ]
+    for pat in vpa_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    poa_patterns = [r'\bPOA\s*DD\b', r'\bPOA\s*DESIGN\b', r'POA.*DESIGN.*DOC']
+    for pat in poa_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    pdd_patterns = [
+        r'\bPDD\b', r'\bPROJECT\s*DESC', r'\bPROJECT\s*DESIGN',
+        r'\bVCS\s*PD\b', r'\bVCS\s*PROJECT',
+        r'\bDESIGN\s*DOC', r'\bDESIGN\s*CERT',
+        r'\bDD\s+OF\b', r'\bDD\s+V\d',
+    ]
+    for pat in pdd_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    gs_pdd_patterns = [
+        r'^GS\d+.*PDD', r'^GS\d+.*PD\b', r'^GS\d+.*DESIGN',
+        r'^GS\d+.*DD\b', r'^GS\d+.*PROJECT',
+    ]
+    for pat in gs_pdd_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    vcs_pdd_patterns = [
+        r'\bVCS\s*\d+.*PD\b', r'\bVCS\s*PROJ\s*DESC',
+        r'PD\s*VCS\d+', r'\bPD\s+V\d',
+    ]
+    for pat in vcs_pdd_patterns:
+        if re.search(pat, fn_base):
+            return "example_pdd"
+
+    meth_patterns = [r'^VM\d{4}', r'^AMS[\s\-]', r'^ACM\d{4}', r'^AM\d{4}', r'\bMETHODOLOGY\b']
+    for pat in meth_patterns:
+        if re.search(pat, fn_base):
+            return "methodology"
+
+    return None
+
+
+def classify_by_content(text_preview: str) -> str | None:
+    text_upper = text_preview[:5000].upper()
+
+    mr_indicators = [
+        "MONITORING PERIOD", "MONITORING REPORT", "VERIFICATION PERIOD",
+        "CREDITING PERIOD", "EX-POST", "ISSUANCE REQUEST",
+    ]
+    pdd_indicators = [
+        "PROJECT DESIGN DOCUMENT", "PROJECT DESCRIPTION",
+        "VPA DESIGN DOCUMENT", "VPA-DD", "POA DESIGN DOCUMENT",
+        "BASELINE SCENARIO", "ADDITIONALITY", "PROJECT BOUNDARY",
+        "STAKEHOLDER CONSULTATION", "ELIGIBILITY CRITERIA",
+    ]
+
+    mr_score = sum(1 for ind in mr_indicators if ind in text_upper)
+    pdd_score = sum(1 for ind in pdd_indicators if ind in text_upper)
+
+    if mr_score >= 2 and mr_score > pdd_score:
+        return "example_mr"
+    if pdd_score >= 2 and pdd_score > mr_score:
+        return "example_pdd"
+
+    return None
+
+
 def _auto_apply_detection(doc_id: int, detection: dict):
     from carbongpt.repository import store
 
@@ -390,19 +510,24 @@ def _auto_apply_detection(doc_id: int, detection: dict):
 
     updates = {}
 
+    filename = doc.get("title", "") or Path(doc.get("file_path", "")).stem
+    filename_cat = classify_by_filename(filename)
+
     detected_cat = detection.get("category")
     if detected_cat and detected_cat in VALID_CATEGORIES:
         user_cat = doc.get("category")
         if user_cat in ("other", None) or user_cat == "standard_text":
-            updates["category"] = detected_cat
-            logger.info("Auto-applied category '%s' for doc %s", detected_cat, doc_id)
+            final_cat = filename_cat or detected_cat
+            updates["category"] = final_cat
+            logger.info("Auto-applied category '%s' for doc %s (filename=%s, ai=%s)",
+                        final_cat, doc_id, filename_cat, detected_cat)
 
     if not doc.get("standard_version_id"):
         detected_std = detection.get("standard")
         detected_ver = detection.get("version")
         if not detected_ver:
-            filename = doc.get("file_path", "")
-            ver_match = re.search(r'v(\d+\.\d+)', filename, re.IGNORECASE)
+            filepath = doc.get("file_path", "")
+            ver_match = re.search(r'v(\d+\.\d+)', filepath, re.IGNORECASE)
             if ver_match:
                 detected_ver = ver_match.group(1)
                 logger.info("Extracted version '%s' from filename for doc %s", detected_ver, doc_id)

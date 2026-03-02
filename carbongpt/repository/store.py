@@ -174,7 +174,9 @@ def list_documents(standard_version_id=None, category=None, ingestion_status=Non
             "d.ingestion_status, d.page_count, d.word_count, "
             "d.auto_detected_standard, d.auto_detected_version, "
             "d.auto_detected_category, d.auto_detected_applicability, "
-            "d.created_at, sv.version as standard_version, s.name as standard_name "
+            "d.created_at, sv.version as standard_version, s.name as standard_name, "
+            "(SELECT COUNT(*) FROM document_sections ds WHERE ds.document_id = d.id) as section_count, "
+            "(SELECT COUNT(*) FROM document_chunks dc WHERE dc.document_id = d.id) as chunk_count "
             "FROM documents d "
             "LEFT JOIN standard_versions sv ON d.standard_version_id = sv.id "
             "LEFT JOIN standards s ON sv.standard_id = s.id "
@@ -245,6 +247,16 @@ def save_sections(doc_id, sections):
             row = cur.fetchone()
             section_ids.append(row["id"] if row else None)
         return section_ids
+
+
+def get_document_sections(doc_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, document_id, section_number, title, content, section_order, word_count "
+            "FROM document_sections WHERE document_id = %s ORDER BY section_order",
+            (doc_id,)
+        )
+        return cur.fetchall()
 
 
 def save_chunks(doc_id, chunks):

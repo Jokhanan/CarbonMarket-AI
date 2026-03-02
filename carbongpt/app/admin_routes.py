@@ -278,6 +278,137 @@ def reingest_document(doc_id: int):
     return {"message": "Re-ingestion started."}
 
 
+@router.post("/documents/batch-reingest")
+def batch_reingest_documents():
+    from carbongpt.repository.store import list_documents
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY not set.")
+
+    all_docs = list_documents()
+    needs_ingestion = []
+    for doc in all_docs:
+        if doc["file_type"] not in ("pdf", "docx"):
+            continue
+        if not doc.get("file_path") or not Path(doc["file_path"]).exists():
+            continue
+        has_sections = doc.get("section_count", 0) or 0
+        has_chunks = doc.get("chunk_count", 0) or 0
+        status = doc.get("ingestion_status", "")
+        if has_sections == 0 or has_chunks == 0 or status in ("failed", "processing", None, ""):
+            needs_ingestion.append(doc)
+
+    if not needs_ingestion:
+        return {"status": "ok", "message": "All documents are fully ingested.", "count": 0}
+
+    import time as _time
+
+    def _run_batch():
+        succeeded = 0
+        failed = 0
+        for doc in needs_ingestion:
+            try:
+                from carbongpt.repository.ingestion import ingest_document
+                logger.info("Batch re-ingesting doc %s: %s", doc["id"], doc["title"])
+                ingest_document(doc["id"], doc["file_path"], api_key)
+                succeeded += 1
+                _time.sleep(0.5)
+            except Exception as e:
+                logger.error("Batch re-ingest failed for doc %s: %s", doc["id"], e)
+                failed += 1
+        logger.info("Batch re-ingest complete: %d succeeded, %d failed out of %d",
+                     succeeded, failed, len(needs_ingestion))
+
+    thread = threading.Thread(target=_run_batch, daemon=True)
+    thread.start()
+
+    return {
+        "status": "started",
+        "message": f"Batch re-ingestion started for {len(needs_ingestion)} documents.",
+        "count": len(needs_ingestion),
+        "doc_ids": [d["id"] for d in needs_ingestion],
+    }
+
+
+@router.post("/documents/reclassify")
+def reclassify_documents():
+    from carbongpt.repository.store import list_documents, update_document_metadata
+    from carbongpt.repository.ingestion import classify_by_filename, classify_by_content, VALID_CATEGORIES
+
+    all_docs = list_documents()
+    reclassified = []
+
+    for doc in all_docs:
+        current_cat = doc.get("category", "")
+        if current_cat not in ("other", "standard_text", None, ""):
+            continue
+
+        title = doc.get("title", "")
+        filename_cat = classify_by_filename(title)
+
+        content_cat = None
+        if not filename_cat:
+            from carbongpt.repository.store import get_document_sections
+            sections = get_document_sections(doc["id"])
+            if sections:
+                preview = "\n".join(s.get("content", "")[:500] for s in sections[:5])
+                from carbongpt.repository.ingestion import classify_by_content
+                content_cat = classify_by_content(preview)
+
+        new_cat = filename_cat or content_cat
+        if new_cat and new_cat in VALID_CATEGORIES:
+            update_document_metadata(doc["id"], category=new_cat)
+            reclassified.append({
+                "id": doc["id"],
+                "title": title,
+                "old": current_cat,
+                "new": new_cat,
+                "method": "filename" if filename_cat else "content",
+            })
+
+    return {
+        "status": "ok",
+        "reclassified": len(reclassified),
+        "details": reclassified,
+    }
+
+
+@router.post("/documents/deduplicate")
+def deduplicate_documents():
+    from carbongpt.repository.store import list_documents, delete_document
+
+    all_docs = list_documents()
+    by_title: dict[str, list] = {}
+    for doc in all_docs:
+        title = doc.get("title", "")
+        by_title.setdefault(title, []).append(doc)
+
+    removed = []
+    for title, docs in by_title.items():
+        if len(docs) <= 1:
+            continue
+        docs_sorted = sorted(docs, key=lambda d: (
+            -(d.get("chunk_count", 0) or 0),
+            -(d.get("section_count", 0) or 0),
+            -d.get("id", 0),
+        ))
+        keep = docs_sorted[0]
+        for dup in docs_sorted[1:]:
+            logger.info("Removing duplicate doc %s (keeping %s): %s", dup["id"], keep["id"], title)
+            fp = dup.get("file_path")
+            if fp and Path(fp).exists():
+                Path(fp).unlink(missing_ok=True)
+            delete_document(dup["id"])
+            removed.append({"id": dup["id"], "title": title, "kept_id": keep["id"]})
+
+    return {
+        "status": "ok",
+        "removed": len(removed),
+        "details": removed,
+    }
+
+
 @router.get("/stats")
 def get_stats():
     from carbongpt.repository.store import get_document_stats, get_chunk_count
