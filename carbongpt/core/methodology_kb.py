@@ -421,6 +421,12 @@ def split_into_knowledge_chunks(document_id, detected_format, section_map):
 
 STRUCTURE_EXTRACTION_PROMPT = """You are a carbon methodology expert. Analyze the following methodology text chunks and extract the calculation structure.
 
+Methodologies typically define multiple calculation methods based on the relationship between baseline and project fuels/technologies. Look for:
+- "Method 1", "Method 2", "Method 3" or similar numbered options
+- Methods distinguished by whether baseline and project fuels are the same or different
+- Methods distinguished by whether emission factors are the same or different
+- Scale-based options (micro, small, large)
+
 Return a JSON object (valid json) with:
 {
   "methodology_code": "string",
@@ -428,9 +434,9 @@ Return a JSON object (valid json) with:
   "calculation_methods": [
     {
       "method_id": "method_1",
-      "method_name": "EXACT name from document",
-      "description": "brief description",
-      "applicability": "when to use this method",
+      "method_name": "EXACT name or description from document including the distinguishing condition",
+      "description": "brief description of when this method applies",
+      "applicability": "specific conditions (e.g. baseline and project fuels are identical)",
       "scale_restrictions": "e.g. micro or small-scale only",
       "equation_ids": ["Eq. 1", "Eq. 2"]
     }
@@ -439,28 +445,40 @@ Return a JSON object (valid json) with:
   "monitoring_requirements_summary": "brief summary"
 }
 
-CRITICAL: Copy method names VERBATIM from the document. Do NOT paraphrase."""
+CRITICAL: Extract ALL distinct calculation methods/options. Copy method names VERBATIM. If a method is described as 'Method 1: Baseline and project fuel(s) are identical', capture that exactly. Do NOT merge methods into one."""
 
 
-EQUATION_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract all equations from this methodology text and return the result as valid json.
+EQUATION_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract ALL equations needed to perform a complete emission reduction calculation from this methodology text. Return the result as valid json.
 
-For each equation, provide:
+You must extract:
+1. Top-level equations (ER_y = BE_y - PE_y, etc.)
+2. Sub-equations that compute intermediate values (e.g. baseline emissions per device, project emissions per source)
+3. Equations implied by parameter definitions (e.g. if a parameter is "calculated as SFC_b x NCV x EF", that is an equation)
+4. Aging/degradation formulas
+5. Leakage equations
+
+For cookstove methodologies, you MUST include equations for:
+- How baseline emissions (BE) are computed from specific fuel consumption (SFC), net calorific value (NCV), emission factors (EF), and number of devices (N)
+- How project emissions (PE) are computed similarly
+- How specific emissions (SE) are computed per device
+
+Return:
 {
   "equations": [
     {
-      "equation_id": "Exact ID from doc (e.g. 'Eq. 1')",
-      "equation_label": "What this equation calculates (e.g. 'Emission Reductions ER_y')",
-      "formula_text": "EXACT formula using document notation. Use SUM_x(...) for summations. Preserve ALL subscripts.",
-      "formula_description": "brief explanation",
-      "method_id": "which method uses this equation (e.g. 'method_1')",
+      "equation_id": "Exact ID from doc if available, otherwise 'derived_N'",
+      "equation_label": "What this equation calculates (e.g. 'Baseline emissions per device')",
+      "formula_text": "Mathematical formula. Use x for multiplication. Use SUM_i(...) for summations. Preserve subscripts.",
+      "formula_description": "When and how this equation is used",
+      "method_id": "which method uses this (method_1, method_2, method_3, or 'all')",
       "variables": [
-        {"symbol": "exact symbol", "name": "full name", "unit": "unit"}
+        {"symbol": "exact symbol with subscripts", "name": "full name", "unit": "unit"}
       ]
     }
   ]
 }
 
-CRITICAL: Copy formulas EXACTLY as they appear. Use x for multiplication. Preserve all subscripts."""
+CRITICAL: Extract EVERY equation needed for a complete calculation chain from raw inputs to final ER_y. Do NOT stop at just the top-level aggregation formulas. Include sub-equations even if they are described in prose rather than explicit formulas."""
 
 
 PARAMETER_EXTRACTION_PROMPT = """You are a carbon methodology expert. Extract structured parameter data from this parameter block and return as valid json.
@@ -550,14 +568,23 @@ def extract_structured_data(chunks, methodology_code, detected_format):
             methods_data = {}
 
     equations_data = {"equations": []}
-    if equation_chunks:
-        eq_text = "\n\n---\n\n".join(c["content"][:10000] for c in equation_chunks)[:25000]
+    eq_source_chunks = equation_chunks[:]
+    calc_param_chunks = [c for c in parameter_chunks if any(
+        kw in c.get("content", "").lower()
+        for kw in ["calculated", "equation", "formula", "=", "where:", "computed"]
+    )]
+    eq_source_chunks.extend(calc_param_chunks[:10])
+    method_chunks = [c for c in chunks if c["chunk_type"] == "method_selection"]
+    eq_source_chunks.extend(method_chunks)
+
+    if eq_source_chunks:
+        eq_text = "\n\n---\n\n".join(c["content"][:8000] for c in eq_source_chunks)[:30000]
         try:
             result = _call_openai(
                 EQUATION_EXTRACTION_PROMPT,
                 f"Methodology code: {methodology_code}\n\n{eq_text}",
                 response_format={"type": "json_object"},
-                max_tokens=6000,
+                max_tokens=8000,
                 model=PARSE_MODEL,
             )
             equations_data = json.loads(result)
@@ -719,28 +746,29 @@ def _save_backward_compatible(methodology_code, document_id, extracted):
             unique_equations.append(e)
     equations_list = unique_equations
 
+    shared_eqs = [e for e in equations_list if e.get("method_id") in ("all", "shared", "")]
+
     for method in calc_methods:
         method_id = method.get("method_id", "")
-        method_eqs = [e for e in equations_list if e.get("method_id") == method_id]
+        method_eqs = [e for e in equations_list
+                      if e.get("method_id") == method_id
+                      and e.get("method_id") not in ("all", "shared", "")]
         if not method_eqs:
             method_eqs = [e for e in equations_list
-                          if method_id in str(e.get("method_id", ""))]
+                          if e.get("method_id") not in ("all", "shared", "")
+                          and method_id in str(e.get("method_id", ""))]
+        method_eqs = method_eqs + [e for e in shared_eqs if e not in method_eqs]
         method["equations"] = method_eqs
 
     unmatched_eqs = [e for e in equations_list
-                     if not any(e in m.get("equations", []) for m in calc_methods)]
+                     if e.get("method_id") not in ("all", "shared", "")
+                     and not any(e in m.get("equations", []) for m in calc_methods)]
     if unmatched_eqs:
-        empty_methods = [m for m in calc_methods if not m.get("equations")]
+        empty_methods = [m for m in calc_methods if len(m.get("equations", [])) <= len(shared_eqs)]
         if empty_methods:
-            empty_methods[0]["equations"] = unmatched_eqs
-        elif not calc_methods:
-            calc_methods = [{
-                "method_id": "method_1",
-                "method_name": "Default calculation method",
-                "description": "",
-                "applicability": "",
-                "equations": unmatched_eqs,
-            }]
+            empty_methods[0]["equations"].extend(unmatched_eqs)
+        elif calc_methods:
+            calc_methods[0]["equations"].extend(unmatched_eqs)
 
     if not calc_methods and equations_list:
         calc_methods = [{
