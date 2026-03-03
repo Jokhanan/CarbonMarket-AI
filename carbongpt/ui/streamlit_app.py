@@ -1678,13 +1678,13 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     std_short = {"CDM": "CDM", "Verra": "VCS", "GoldStandard": "GS"}
     for m in shown:
         name = (m.get("name") or "").strip()
-        proj = m.get("project_count", 0) or 0
+        version = (m.get("version") or "").strip()
         ms = std_short.get(m.get("standard", ""), "")
         label = f"[{ms}] {m['code']}" if ms else m["code"]
+        if version:
+            label += f" v{version}"
         if name:
-            label += f" - {name[:55]}"
-        if proj:
-            label += f" // {proj} registered"
+            label += f" - {name[:60]}"
         labels[m["code"]] = label
 
     default_idx = 0
