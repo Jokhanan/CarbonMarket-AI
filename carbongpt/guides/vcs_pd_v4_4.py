@@ -49,7 +49,12 @@ SUBSECTIONS: dict[str, dict] = {
             "current monitoring period not included in the table",
         ],
         "content_format": "table",
-        "format_instructions": "Present as a table with columns: Audit Type | Period Start | Period End | VVB Name | Years Covered. Include one row per audit event.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each audit event.",
+        "template_scaffold": (
+            "| Audit type | Period | Program | Validation/verification body name | Number of years |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| Validation/verification | (DD-Month-YYYY -- DD-Month-YYYY) | VCS | [...] | [...] |"
+        ),
     },
     "1.3": {
         "title": "Sectoral Scope and Project Type",
@@ -135,7 +140,16 @@ SUBSECTIONS: dict[str, dict] = {
             "multiple proponents listed without separate tables for each",
         ],
         "content_format": "table",
-        "format_instructions": "Present contact information in a structured table with rows for: Organization Name, Contact Person, Title, Address, Telephone, Email. Use a separate table for each project proponent.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Use a separate table for each project proponent.",
+        "template_scaffold": (
+            "| Organization name | [...] |\n"
+            "| --- | --- |\n"
+            "| Contact person | [...] |\n"
+            "| Title | [...] |\n"
+            "| Address | [...] |\n"
+            "| Telephone | [...] |\n"
+            "| Email | [...] |"
+        ),
     },
     "1.7": {
         "title": "Other Entities Involved in the Project",
@@ -154,7 +168,17 @@ SUBSECTIONS: dict[str, dict] = {
             "section left blank without stating that no other entities are involved",
         ],
         "content_format": "table",
-        "format_instructions": "Present a separate contact information table for each entity with rows for: Organization Name, Role, Contact Person, Title, Address, Telephone, Email. If no other entities are involved, state so explicitly.",
+        "format_instructions": "Fill in the exact template table below for each entity. Replace [...] placeholders with actual values. If no other entities are involved, state so explicitly.",
+        "template_scaffold": (
+            "| Organization name | [...] |\n"
+            "| --- | --- |\n"
+            "| Role in the project | [...] |\n"
+            "| Contact person | [...] |\n"
+            "| Title | [...] |\n"
+            "| Address | [...] |\n"
+            "| Telephone | [...] |\n"
+            "| Email | [...] |"
+        ),
     },
     "1.8": {
         "title": "Ownership",
@@ -231,7 +255,17 @@ SUBSECTIONS: dict[str, dict] = {
             "calendar years in the table do not match the crediting period",
         ],
         "content_format": "summary_table",
-        "format_instructions": "State the project scale, then present a table with columns: Year | Estimated ERRs (tCO2e). Include a row for each calendar year of the crediting period, a Total row, a Total Number of Years row, and an Average Annual ERRs row.",
+        "format_instructions": "State the project scale, then fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each calendar year of the crediting period.",
+        "template_scaffold": (
+            "| Calendar year of crediting period | Estimated GHG emission reductions or removals (tCO2e) |\n"
+            "| --- | --- |\n"
+            "| DD-Month-YYYY to 31-December-YYYY | [...] |\n"
+            "| 01-January-YYYY to 31-December-YYYY | [...] |\n"
+            "| 01-January-YYYY to DD-Month-YYYY | [...] |\n"
+            "| Total estimated ERRs during the first or fixed crediting period | [...] |\n"
+            "| Total number of years | [...] |\n"
+            "| Average annual ERRs | [...] |"
+        ),
     },
     "1.12": {
         "title": "Description of the Project Activity",
@@ -554,7 +588,27 @@ SUBSECTIONS: dict[str, dict] = {
             "gases included not specified",
         ],
         "content_format": "table",
-        "format_instructions": "Present the project boundary as a table with columns: Source | Gas | Included/Excluded | Justification. Separate rows for baseline and project scenarios. Include a description of the project boundary and a flow diagram placeholder.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Rename 'Source 1', 'Source 2' to actual emission sources. Add or remove rows as needed. Include a description of the project boundary before the table.",
+        "template_scaffold": (
+            "| Source | Gas | Included? | Justification/Explanation |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Baseline | Source 1 | CO2 | [...] |\n"
+            "| Baseline | Source 1 | CH4 | [...] |\n"
+            "| Baseline | Source 1 | N2O | [...] |\n"
+            "| Baseline | Source 1 | Other | [...] |\n"
+            "| Baseline | Source 2 | CO2 | [...] |\n"
+            "| Baseline | Source 2 | CH4 | [...] |\n"
+            "| Baseline | Source 2 | N2O | [...] |\n"
+            "| Baseline | Source 2 | Other | [...] |\n"
+            "| Project | Source 1 | CO2 | [...] |\n"
+            "| Project | Source 1 | CH4 | [...] |\n"
+            "| Project | Source 1 | N2O | [...] |\n"
+            "| Project | Source 1 | Other | [...] |\n"
+            "| Project | Source 2 | CO2 | [...] |\n"
+            "| Project | Source 2 | CH4 | [...] |\n"
+            "| Project | Source 2 | N2O | [...] |\n"
+            "| Project | Source 2 | Other | [...] |"
+        ),
     },
     "3.4": {
         "title": "Baseline Scenario",
@@ -695,7 +749,15 @@ SUBSECTIONS: dict[str, dict] = {
             "values inconsistent with Section 1.11 estimates",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present a summary table with columns: Year | Baseline Emissions (tCO2e) | Project Emissions (tCO2e) | Leakage (tCO2e) | Net ERRs (tCO2e). Include a row for each year of the crediting period and a Total row. Show the calculation ERR_y = BE_y - PE_y - LE_y.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each vintage period of the crediting period.",
+        "template_scaffold": (
+            "| Vintage period | Estimated baseline emissions (tCO2e) | Estimated project emissions (tCO2e) | Estimated leakage emissions (tCO2e) | Estimated reduction VCUs (tCO2e) | Estimated removal VCUs (tCO2e) | Estimated total VCUs (tCO2e) |\n"
+            "| --- | --- | --- | --- | --- | --- | --- |\n"
+            "| DD-MMM-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] | [...] | [...] |\n"
+            "| 01-Jan-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] | [...] | [...] |\n"
+            "| 01-Jan-YYYY to DD-MMM-YYYY | [...] | [...] | [...] | [...] | [...] | [...] |\n"
+            "| Total | [...] | [...] | [...] | [...] | [...] | [...] |"
+        ),
     },
     "5.1": {
         "title": "Data and Parameters Available at Validation",
@@ -719,7 +781,18 @@ SUBSECTIONS: dict[str, dict] = {
             "not all ex ante parameters listed",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Value Applied, Justification of Choice / Measurement Method, Purpose of Data, Comments. Include one block per ex ante parameter.",
+        "format_instructions": "Present each parameter using the exact template block below. Repeat this block for each ex-ante parameter. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Data unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value applied | [...] |\n"
+            "| Justification of choice of data or description of measurement methods and procedures applied | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Comments | [...] |"
+        ),
     },
     "5.2": {
         "title": "Data and Parameters Monitored",
@@ -744,7 +817,22 @@ SUBSECTIONS: dict[str, dict] = {
             "not all monitored parameters listed as required by the methodology",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each monitored parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Measurement Methods and Procedures, Monitoring/Recording Frequency, QA/QC Procedures, Purpose of Data, Calculation Method (if applicable), Comments. Include one block per monitored parameter.",
+        "format_instructions": "Present each monitored parameter using the exact template block below. Repeat this block for each monitored parameter. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Data unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Description of measurement methods and procedures to be applied | [...] |\n"
+            "| Frequency of monitoring/recording | [...] |\n"
+            "| Value applied | [...] |\n"
+            "| Monitoring equipment | [...] |\n"
+            "| QA/QC procedures to be applied | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Calculation method | [...] |\n"
+            "| Comments | [...] |"
+        ),
     },
     "5.3": {
         "title": "Monitoring Plan",

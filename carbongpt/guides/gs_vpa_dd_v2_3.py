@@ -220,7 +220,17 @@ SUBSECTIONS: dict[str, dict] = {
             "boundary inconsistent with methodology requirements",
         ],
         "content_format": "table",
-        "format_instructions": "Present as a table with columns: Source | Gas | Included? (Yes/No) | Justification. Separate rows for baseline and project scenario emission sources. Include a placeholder for a flow diagram (e.g. '[Insert boundary flow diagram here]'). Follow with any narrative on exclusions.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Rename 'Source 1', 'Source 2' to actual emission sources. Add or remove rows as needed. Include a placeholder for a flow diagram (e.g. '[Insert boundary flow diagram here]').",
+        "template_scaffold": (
+            "| Source | GHGs | Included? | Justification/Explanation |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Baseline scenario | Source 1 | CO2 | [...] |\n"
+            "| Baseline scenario | Source 1 | CH4 | [...] |\n"
+            "| Baseline scenario | Source 1 | N2O | [...] |\n"
+            "| Project scenario | Source 1 | CO2 | [...] |\n"
+            "| Project scenario | Source 1 | CH4 | [...] |\n"
+            "| Project scenario | Source 1 | N2O | [...] |"
+        ),
     },
     "B.4": {
         "title": "Establishment and description of baseline scenario",
@@ -327,7 +337,13 @@ SUBSECTIONS: dict[str, dict] = {
             "estimated values not provided in summary table",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present as a summary table with columns: SDG | Target | Indicator | Estimated Annual Impact | Units. Include at least three SDGs with SDG 13 (Climate Action) listed first. Provide estimated annual average values for each indicator.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each targeted SDG. SDG 13 (Climate Action) must be the first row.",
+        "template_scaffold": (
+            "| SUSTAINABLE DEVELOPMENT GOALS TARGETED | MOST RELEVANT SDG TARGET | SDG IMPACT | INDICATOR (PROPOSED OR SDG INDICATOR) |\n"
+            "| --- | --- | --- | --- |\n"
+            "| 13 Climate Action (mandatory) | [...] | [...] | [...] |\n"
+            "| [...] | [...] | [...] | [...] |"
+        ),
     },
     "B.6.1": {
         "title": "Explanation of methodological choices",
@@ -372,7 +388,18 @@ SUBSECTIONS: dict[str, dict] = {
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (with traceable reference), Purpose (baseline/project/leakage). Organize parameters under SDG headings with SDG 13 first. Cross-reference rather than duplicate parameters used across multiple SDGs.",
+        "format_instructions": "Present each parameter using the exact template block below. Repeat this block for each parameter. Replace [...] placeholders with actual values. Organize under SDG headings with SDG 13 first.",
+        "template_scaffold": (
+            "| Data/parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Choice of data or Measurement methods and procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "B.6.3": {
         "title": "Ex ante estimation of SDG Impact",
@@ -414,7 +441,20 @@ SUBSECTIONS: dict[str, dict] = {
             "values inconsistent with calculations in B.6.3",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present as a summary table with columns: Year | Baseline Estimate | Project Estimate | Net Benefit. Include a row for each crediting year, plus rows for Total over crediting period, Annual average, and Total number of crediting years.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Repeat this table for each targeted SDG.",
+        "template_scaffold": (
+            "| YEAR | BASELINE ESTIMATE | PROJECT ESTIMATE | NET BENEFIT |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Year 1 | [...] | [...] | [...] |\n"
+            "| Year 2 | [...] | [...] | [...] |\n"
+            "| Year 3 | [...] | [...] | [...] |\n"
+            "| Year 4 | [...] | [...] | [...] |\n"
+            "| Year 5 | [...] | [...] | [...] |\n"
+            "| Year n | [...] | [...] | [...] |\n"
+            "| Total | [...] | [...] | [...] |\n"
+            "| Total number of crediting years | [...] | [...] | [...] |\n"
+            "| Annual average over the crediting period | [...] | [...] | [...] |"
+        ),
     },
     "B.7": {
         "title": "Monitoring plan",
@@ -437,7 +477,20 @@ SUBSECTIONS: dict[str, dict] = {
             "parameters duplicated across SDG headings instead of cross-referenced",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each monitored parameter as a structured block with fields: Parameter Name, Symbol, Unit, Monitoring Frequency, Measurement Method, QA/QC Procedures, Purpose. Organize under SDG headings with SDG 13 first. Include a separate sub-section for the sampling plan (B.7.2) describing the sampling approach, sample size, and reference to the CDM sampling standard. Follow with other monitoring plan elements (B.7.3): operational/management structure, data archiving, and responsibilities.",
+        "format_instructions": "Present each monitored parameter using the exact template block below. Repeat for each parameter. Organize under SDG headings with SDG 13 first. Include sub-sections for sampling plan (B.7.2) and operational structure (B.7.3).",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Measurement methods and procedures | [...] |\n"
+            "| Monitoring frequency | [...] |\n"
+            "| QA/QC procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "C.1": {
         "title": "Duration of project",

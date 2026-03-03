@@ -209,7 +209,23 @@ SUBSECTIONS: dict[str, dict] = {
             "GHG sources listed without justification for inclusion or exclusion",
         ],
         "content_format": "table",
-        "format_instructions": "Present emission sources in a table with columns: Source | Gas | Included? (Yes/No) | Justification. Cover both baseline and project scenarios. Include a placeholder for a flow diagram (e.g. '[Insert project boundary flow diagram here]').",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Rename 'Source 1', 'Source 2' etc. to actual emission sources. Add or remove rows as needed. Include a placeholder for a flow diagram (e.g. '[Insert project boundary flow diagram here]').",
+        "template_scaffold": (
+            "| Source | GHGs | Included? | Justification/Explanation |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Baseline scenario | Source 1 | CO2 | [...] |\n"
+            "| Baseline scenario | Source 1 | CH4 | [...] |\n"
+            "| Baseline scenario | Source 1 | N2O | [...] |\n"
+            "| Baseline scenario | Source 2 | CO2 | [...] |\n"
+            "| Baseline scenario | Source 2 | CH4 | [...] |\n"
+            "| Baseline scenario | Source 2 | N2O | [...] |\n"
+            "| Project scenario | Source 1 | CO2 | [...] |\n"
+            "| Project scenario | Source 1 | CH4 | [...] |\n"
+            "| Project scenario | Source 1 | N2O | [...] |\n"
+            "| Project scenario | Source 2 | CO2 | [...] |\n"
+            "| Project scenario | Source 2 | CH4 | [...] |\n"
+            "| Project scenario | Source 2 | N2O | [...] |"
+        ),
     },
     "B.4": {
         "title": "Establishment and description of baseline scenario",
@@ -306,7 +322,13 @@ SUBSECTIONS: dict[str, dict] = {
             "no clear identification of which SDGs are targeted",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present an SDG targets summary table with columns: SDG | Target | Indicator | Estimated Impact | Units. SDG 13 must be the first row. Follow the table with a brief narrative linking each SDG to project activities.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each targeted SDG. SDG 13 (Climate Action) must be the first row. Follow the table with a brief narrative linking each SDG to project activities.",
+        "template_scaffold": (
+            "| SUSTAINABLE DEVELOPMENT GOALS TARGETED | MOST RELEVANT SDG TARGET | SDG IMPACT | INDICATOR (PROPOSED OR SDG INDICATOR) |\n"
+            "| --- | --- | --- | --- |\n"
+            "| 13 Climate Action (mandatory) | [...] | [...] | [...] |\n"
+            "| [...] | [...] | [...] | [...] |"
+        ),
     },
     "B.6.1": {
         "title": "Explanation of methodological choices",
@@ -347,7 +369,18 @@ SUBSECTIONS: dict[str, dict] = {
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each parameter as a structured block with the following fields on separate lines: Name, Symbol, Unit, Value, Source, Purpose (baseline/project/leakage). One block per parameter.",
+        "format_instructions": "Present each parameter using the exact template block below. Repeat this block for each parameter. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Data/parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Choice of data or Measurement methods and procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "B.6.3": {
         "title": "Ex ante estimation of SDG Impact",
@@ -387,7 +420,20 @@ SUBSECTIONS: dict[str, dict] = {
             "units not specified for each SDG impact",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present a year-by-year summary table for each SDG with columns showing the crediting period year, estimated impact value, and units. Include totals row.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Repeat this table for each targeted SDG. Replace [...] placeholders with actual values. Add or remove year rows to match the crediting period length.",
+        "template_scaffold": (
+            "| YEAR | BASELINE ESTIMATE | PROJECT ESTIMATE | NET BENEFIT |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Year 1 | [...] | [...] | [...] |\n"
+            "| Year 2 | [...] | [...] | [...] |\n"
+            "| Year 3 | [...] | [...] | [...] |\n"
+            "| Year 4 | [...] | [...] | [...] |\n"
+            "| Year 5 | [...] | [...] | [...] |\n"
+            "| Year n | [...] | [...] | [...] |\n"
+            "| Total | [...] | [...] | [...] |\n"
+            "| Total number of crediting years | [...] | [...] | [...] |\n"
+            "| Annual average over the crediting period | [...] | [...] | [...] |"
+        ),
     },
     "B.7": {
         "title": "Monitoring plan",
@@ -410,7 +456,20 @@ SUBSECTIONS: dict[str, dict] = {
             "monitoring plan inconsistent with the requirements of the applied methodology",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each monitored parameter as a structured block with fields: Name, Unit, Monitoring Frequency, Measurement Method, QA/QC Procedure, Purpose. Include a description of the sampling plan and roles/responsibilities.",
+        "format_instructions": "Present each monitored parameter using the exact template block below. Repeat this block for each parameter. Replace [...] placeholders with actual values. Include a description of the sampling plan and roles/responsibilities after the parameter blocks.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Measurement methods and procedures | [...] |\n"
+            "| Monitoring frequency | [...] |\n"
+            "| QA/QC procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "C.1": {
         "title": "Duration of project",
@@ -469,7 +528,13 @@ SUBSECTIONS: dict[str, dict] = {
             "safeguarding assessment appendix not completed or referenced",
         ],
         "content_format": "checklist",
-        "format_instructions": "Present a checklist of safeguarding principles from Appendix 1. For each principle, indicate: Principle | Applicable? (Yes/No/NA) | Indicator to Monitor | Tolerance/Threshold | Mitigation Measure.",
+        "format_instructions": "Fill in the exact template table below. List each safeguarding principle identified as applicable from Appendix 1, with the corresponding mitigation measure added to the monitoring plan. Add rows as needed.",
+        "template_scaffold": (
+            "| PRINCIPLES | MITIGATION MEASURES ADDED TO THE MONITORING PLAN |\n"
+            "| --- | --- |\n"
+            "| Principle x.y | [...] |\n"
+            "| [...] | [...] |"
+        ),
     },
     "D.2": {
         "title": "Gender sensitive assessment",
@@ -489,8 +554,15 @@ SUBSECTIONS: dict[str, dict] = {
             "no plan for gender-disaggregated data collection",
             "equitable benefit sharing not addressed",
         ],
-        "content_format": "prose",
-        "format_instructions": "Write a narrative describing the gender-sensitive assessment, including gender-disaggregated data plans and measures for equitable participation.",
+        "content_format": "table",
+        "format_instructions": "Fill in the exact template table below with project-specific responses to each gender question.",
+        "template_scaffold": (
+            "| Question 1 - Explain how the project reflects the key issues and requirements of Gender Sensitive design and implementation as outlined in the Gender Policy? | [...] |\n"
+            "| --- | --- |\n"
+            "| Question 2 - Explain how the project aligns with existing country policies, strategies and best practices | [...] |\n"
+            "| Question 3 - Is an Expert required for the Gender Safeguarding Principles & Requirements? | [...] |\n"
+            "| Question 4 - Is an Expert required to assist with Gender issues at the Stakeholder Consultation? | [...] |"
+        ),
     },
     "E.1": {
         "title": "Summary of stakeholder mitigation measures",
@@ -529,8 +601,15 @@ SUBSECTIONS: dict[str, dict] = {
             "no timeline for addressing and resolving grievances",
             "CIGM not accessible to all relevant stakeholders",
         ],
-        "content_format": "prose",
-        "format_instructions": "Describe the grievance mechanism in narrative form, including submission channels, contact information, and the timeline for addressing and resolving grievances.",
+        "content_format": "table",
+        "format_instructions": "Fill in the exact template table below with project-specific grievance mechanism details. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| METHOD | INCLUDE ALL DETAILS OF CHOSEN METHOD(S) SO THAT THEY MAY BE UNDERSTOOD AND, WHERE RELEVANT, USED BY READERS |\n"
+            "| --- | --- |\n"
+            "| Continuous Input / Grievance Expression Process Book (mandatory) | [...] |\n"
+            "| GS Contact (mandatory) | help@goldstandard.org |\n"
+            "| Other | [...] |"
+        ),
     },
 }
 

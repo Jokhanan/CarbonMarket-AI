@@ -188,7 +188,18 @@ SUBSECTIONS: dict[str, dict] = {
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each ex ante parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (with traceable reference), Measurement Method, Purpose (baseline/project/leakage). Organize parameters under SDG headings with SDG 13 first.",
+        "format_instructions": "Present each ex ante parameter using the exact template block below. Repeat this block for each parameter. Replace [...] placeholders with actual values. Organize under SDG headings with SDG 13 first.",
+        "template_scaffold": (
+            "| Data/parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Choice of data or Measurement methods and procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "D.2": {
         "title": "Data and parameters monitored",
@@ -211,7 +222,20 @@ SUBSECTIONS: dict[str, dict] = {
             "measured vs capped values not both reported where methodology requires capping",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each monitored parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (filename and sheet name), Measurement Method, Frequency, QA/QC Procedures, Purpose. Organize parameters under SDG headings with SDG 13 first.",
+        "format_instructions": "Present each monitored parameter using the exact template block below. Repeat this block for each parameter. Replace [...] placeholders with actual values. Organize under SDG headings with SDG 13 first.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value(s) applied | [...] |\n"
+            "| Measurement methods and procedures | [...] |\n"
+            "| Monitoring frequency | [...] |\n"
+            "| QA/QC procedures | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Additional comment | [...] |"
+        ),
     },
     "D.3": {
         "title": "Comparison of monitored parameters with last monitoring period",

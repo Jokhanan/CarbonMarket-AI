@@ -340,8 +340,18 @@ def generate_section_draft(
 
     content_format = subsection.get("content_format", "prose")
     format_instructions = subsection.get("format_instructions", "")
+    template_scaffold = subsection.get("template_scaffold", "")
 
     format_guidance = _get_format_system_guidance(content_format)
+
+    scaffold_rule = ""
+    if template_scaffold:
+        scaffold_rule = (
+            "\n- TEMPLATE COMPLIANCE: A template scaffold is provided below. You MUST use the EXACT table structure, "
+            "column headers, and row labels from the scaffold. Fill in the [...] placeholders with project-specific data. "
+            "You may add or remove rows as needed but do NOT change the column headers or field labels. "
+            "This scaffold comes directly from the official standard template document."
+        )
 
     system_prompt = (
         f"You are an expert carbon project developer and technical writer specialized in {std_label} projects. "
@@ -354,6 +364,7 @@ def generate_section_draft(
         "- Reference the correct standard sections and methodology clauses.\n"
         "- Do NOT fabricate quantitative data, emission factors, or measurement results.\n"
         "- Write in the professional style expected by VVBs (Validation/Verification Bodies).\n"
+        f"{scaffold_rule}"
         f"{format_guidance}"
     )
 
@@ -365,6 +376,14 @@ def generate_section_draft(
 
     if format_instructions:
         user_prompt += f"### Required Format:\n{format_instructions}\n\n"
+
+    if template_scaffold:
+        user_prompt += (
+            "### Official Template Scaffold (use this exact structure):\n"
+            "Fill in the [...] placeholders with project-specific data. "
+            "Do not change the column headers or field labels.\n\n"
+            f"{template_scaffold}\n\n"
+        )
 
     if examples:
         user_prompt += f"### Example of good content:\n{examples}\n\n"

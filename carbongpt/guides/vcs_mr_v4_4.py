@@ -48,7 +48,12 @@ SUBSECTIONS: dict[str, dict] = {
             "audit type not specified",
         ],
         "content_format": "table",
-        "format_instructions": "Present a table with columns: Audit Type | Period Covered | Program | Validation/Verification Body | Years Covered. Include one row per audit, covering all monitoring periods up to and including the current one.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values. Add rows for each audit event.",
+        "template_scaffold": (
+            "| Audit type | Period | Program | Validation/verification body name | Number of years |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| Validation/verification | (DD-Month-YYYY -- DD-Month-YYYY) | VCS | [...] | [...] |"
+        ),
     },
     "1.3": {
         "title": "Sectoral Scope and Project Type",
@@ -90,7 +95,16 @@ SUBSECTIONS: dict[str, dict] = {
             "no contact person identified",
         ],
         "content_format": "table",
-        "format_instructions": "Present the project proponent information in a structured table with rows: Organization | Contact Person | Title | Address | Telephone | Email.",
+        "format_instructions": "Fill in the exact template table below with project-specific data. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Organization name | [...] |\n"
+            "| --- | --- |\n"
+            "| Contact person | [...] |\n"
+            "| Title | [...] |\n"
+            "| Address | [...] |\n"
+            "| Telephone | [...] |\n"
+            "| Email | [...] |"
+        ),
     },
     "1.5": {
         "title": "Other Entities Involved in the Project",
@@ -109,7 +123,17 @@ SUBSECTIONS: dict[str, dict] = {
             "section left blank without stating no other entities are involved",
         ],
         "content_format": "table",
-        "format_instructions": "Present each entity in a table with columns: Organization | Role | Contact Person | Title | Address | Telephone | Email. If no other entities are involved, state this explicitly.",
+        "format_instructions": "Fill in the exact template table below for each entity. Replace [...] placeholders with actual values. If no other entities are involved, state so explicitly.",
+        "template_scaffold": (
+            "| Organization name | [...] |\n"
+            "| --- | --- |\n"
+            "| Role in the project | [...] |\n"
+            "| Contact person | [...] |\n"
+            "| Title | [...] |\n"
+            "| Address | [...] |\n"
+            "| Telephone | [...] |\n"
+            "| Email | [...] |"
+        ),
     },
     "1.6": {
         "title": "Project Start Date",
@@ -487,7 +511,18 @@ SUBSECTIONS: dict[str, dict] = {
             "measurement methods not described for measured values",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Value Applied, Justification/Measurement Methods, Purpose (baseline scenario determination, baseline emissions, project emissions, or leakage). Provide one block per parameter fixed at validation.",
+        "format_instructions": "Present each parameter using the exact template block below. Repeat this block for each parameter fixed at validation. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Data unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Value applied | [...] |\n"
+            "| Justification of choice of data or description of measurement methods and procedures applied | [...] |\n"
+            "| Purpose of data | [...] |\n"
+            "| Comments | [...] |"
+        ),
     },
     "4.2": {
         "title": "Data and Parameters Monitored",
@@ -517,7 +552,22 @@ SUBSECTIONS: dict[str, dict] = {
             "calculation method not provided where relevant",
         ],
         "content_format": "parameter_blocks",
-        "format_instructions": "Present each monitored parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Measurement Methods and Procedures, Monitoring Frequency, Value Monitored, Monitoring Equipment (type, accuracy class, serial number), QA/QC Procedures, Purpose (baseline emissions, project emissions, or leakage), Calculation Method. Provide one block per monitored parameter.",
+        "format_instructions": "Present each monitored parameter using the exact template block below. Repeat this block for each monitored parameter. Replace [...] placeholders with actual values.",
+        "template_scaffold": (
+            "| Data / Parameter | [...] |\n"
+            "| --- | --- |\n"
+            "| Data unit | [...] |\n"
+            "| Description | [...] |\n"
+            "| Source of data | [...] |\n"
+            "| Description of measurement methods and procedures to be applied | [...] |\n"
+            "| Frequency of monitoring/recording | [...] |\n"
+            "| Value monitored | [...] |\n"
+            "| Monitoring equipment | [...] |\n"
+            "| QA/QC procedures to be applied | [...] |\n"
+            "| Purpose of the data | [...] |\n"
+            "| Calculation method | [...] |\n"
+            "| Comments | [...] |"
+        ),
     },
     "4.3": {
         "title": "Monitoring Plan",
@@ -639,7 +689,21 @@ SUBSECTIONS: dict[str, dict] = {
             "total VCUs not summed across vintage periods",
         ],
         "content_format": "summary_table",
-        "format_instructions": "Present two tables: (1) Vintage period summary table with columns: Vintage Period | Baseline Emissions (tCO2e) | Project Emissions (tCO2e) | Leakage Emissions (tCO2e) | Reduction VCUs | Removal VCUs | Total VCUs, with one row per calendar year and a totals row. (2) Ex-ante vs achieved comparison table with columns: Vintage Period | Estimated Reductions/Removals | Achieved Reductions/Removals | Percent Difference | Explanation. Include the net emission reduction equation (ER_y = BE_y - PE_y - LE_y) and, for AFOLU projects, the non-permanence risk rating and buffer pool allocation.",
+        "format_instructions": "Fill in the two exact template tables below with project-specific data. Replace [...] placeholders with actual values. Add rows for each vintage period.",
+        "template_scaffold": (
+            "**Table 1: Emission Reductions and Removals**\n\n"
+            "| Vintage period | Baseline emissions (tCO2e) | Project emissions (tCO2e) | Leakage emissions (tCO2e) | Reduction VCUs (tCO2e) | Removal VCUs (tCO2e) | Total VCUs (tCO2e) |\n"
+            "| --- | --- | --- | --- | --- | --- | --- |\n"
+            "| DD-MMM-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] | [...] | [...] |\n"
+            "| 01-Jan-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] | [...] | [...] |\n"
+            "| Total | [...] | [...] | [...] | [...] | [...] | [...] |\n\n"
+            "**Table 2: Ex-ante vs Achieved Comparison**\n\n"
+            "| Vintage period | Ex-ante estimated reductions/removals | Achieved reductions/removals | Percent difference | Explanation for the difference |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| DD-MMM-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] |\n"
+            "| 01-Jan-YYYY to 31-Dec-YYYY | [...] | [...] | [...] | [...] |\n"
+            "| Total | [...] | [...] | [...] | [...] |"
+        ),
     },
 }
 
