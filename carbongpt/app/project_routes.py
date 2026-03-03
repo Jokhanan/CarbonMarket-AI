@@ -679,6 +679,15 @@ def generate_template_endpoint(project_id: int, data: GenerateTemplateRequest):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
+    intake = {}
+    if project.get("project_intake"):
+        try:
+            import json
+            raw = project["project_intake"]
+            intake = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            intake = {}
+
     project_info = {
         "name": project["name"],
         "standard": project.get("standard"),
@@ -686,6 +695,7 @@ def generate_template_endpoint(project_id: int, data: GenerateTemplateRequest):
         "country": project.get("country"),
         "description": project.get("description"),
         "doc_type": data.doc_type,
+        "intake": intake,
     }
 
     sections = get_sections_for_doc_type(project["standard"], data.doc_type)

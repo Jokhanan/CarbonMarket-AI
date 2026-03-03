@@ -95,24 +95,64 @@ def _parse_md_table(table_lines):
     return rows
 
 
-def _insert_content_into_doc(doc, insert_after_element, content_text, project_info=None):
+def _strip_leading_title(content_text, section_id):
+    lines = content_text.split("\n")
+    stripped = []
+    skip_next_blank = False
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if i < 3 and line.startswith("#"):
+            heading_text = re.sub(r"^#+\s*", "", line).strip()
+            sid_pattern = re.compile(
+                r"^" + re.escape(section_id) + r"[\s.\-:]+", re.IGNORECASE
+            )
+            if sid_pattern.match(heading_text) or heading_text.lower().startswith(section_id.lower()):
+                skip_next_blank = True
+                i += 1
+                continue
+        if skip_next_blank and line == "":
+            skip_next_blank = False
+            i += 1
+            continue
+        skip_next_blank = False
+        stripped.append(lines[i])
+        i += 1
+    return "\n".join(stripped)
+
+
+def _get_template_font(doc):
+    try:
+        normal_style = doc.styles["Normal"]
+        if normal_style.font.name:
+            return normal_style.font.name
+    except Exception:
+        pass
+    return None
+
+
+def _insert_content_into_doc(doc, insert_after_element, content_text, project_info=None, section_id=None):
     from docx.shared import Pt, RGBColor
     from docx.oxml.ns import qn
+
+    if section_id:
+        content_text = _strip_leading_title(content_text, section_id)
+
+    template_font = _get_template_font(doc)
 
     blocks = _parse_markdown_content(content_text)
     parent = insert_after_element.getparent()
     ref_element = insert_after_element
 
-    def _add_para_after(text, style_name=None, bold=False, italic=False, color=None, font_size=None):
-        nonlocal ref_element
-        new_para = copy.deepcopy(doc.paragraphs[0]._element)
-        for child in list(new_para):
-            new_para.remove(child)
-
-        p_el = doc.element.makeelement(qn("w:p"), {})
-        r_el = doc.element.makeelement(qn("w:r"), {})
+    def _make_rpr(bold=False, italic=False, color=None, font_size=None):
         rpr = doc.element.makeelement(qn("w:rPr"), {})
-
+        if template_font:
+            fonts_el = doc.element.makeelement(qn("w:rFonts"), {
+                qn("w:ascii"): template_font,
+                qn("w:hAnsi"): template_font,
+                qn("w:cs"): template_font,
+            })
+            rpr.append(fonts_el)
         if bold:
             rpr.append(doc.element.makeelement(qn("w:b"), {}))
         if italic:
@@ -122,7 +162,17 @@ def _insert_content_into_doc(doc, insert_after_element, content_text, project_in
             rpr.append(color_el)
         if font_size:
             sz_el = doc.element.makeelement(qn("w:sz"), {qn("w:val"): str(font_size * 2)})
+            szcs_el = doc.element.makeelement(qn("w:szCs"), {qn("w:val"): str(font_size * 2)})
             rpr.append(sz_el)
+            rpr.append(szcs_el)
+        return rpr
+
+    def _add_para_after(text, bold=False, italic=False, color=None, font_size=None):
+        nonlocal ref_element
+
+        p_el = doc.element.makeelement(qn("w:p"), {})
+        r_el = doc.element.makeelement(qn("w:r"), {})
+        rpr = _make_rpr(bold=bold, italic=italic, color=color, font_size=font_size)
 
         r_el.append(rpr)
         t_el = doc.element.makeelement(qn("w:t"), {})
@@ -169,11 +219,7 @@ def _insert_content_into_doc(doc, insert_after_element, content_text, project_in
                 tc = doc.element.makeelement(qn("w:tc"), {})
                 p = doc.element.makeelement(qn("w:p"), {})
                 r = doc.element.makeelement(qn("w:r"), {})
-                rpr = doc.element.makeelement(qn("w:rPr"), {})
-                sz = doc.element.makeelement(qn("w:sz"), {qn("w:val"): "20"})
-                rpr.append(sz)
-                if ri == 0:
-                    rpr.append(doc.element.makeelement(qn("w:b"), {}))
+                rpr = _make_rpr(bold=(ri == 0), font_size=10)
                 r.append(rpr)
                 t = doc.element.makeelement(qn("w:t"), {})
                 t.text = row_cells[ci] if ci < len(row_cells) else ""
@@ -210,6 +256,91 @@ def _insert_content_into_doc(doc, insert_after_element, content_text, project_in
             _add_para_after(block_data)
 
 
+def _fill_gs_kpi_table(doc, project_info):
+    from docx.oxml.ns import qn
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    kpi_table = doc.tables[0] if doc.tables else None
+    if not kpi_table:
+        return
+
+    intake = project_info.get("intake", {})
+
+    for row in kpi_table.rows:
+        label = row.cells[0].text.strip().lower()
+        cell = row.cells[1]
+
+        if "title" in label and "project" in label:
+            cell.text = project_info.get("name", "")
+        elif "host country" in label:
+            cell.text = project_info.get("country", "")
+        elif "methodology" in label and "applied" in label:
+            cell.text = project_info.get("methodology", "")
+        elif "project developer" in label and "participant" not in label:
+            dev_name = intake.get("developer_name", "")
+            if dev_name:
+                cell.text = dev_name
+        elif "scale of the project" in label:
+            scale = intake.get("project_scale", "")
+            if scale:
+                _check_checkbox_in_cell(cell._element, scale, ns)
+        elif "activity requirements" in label:
+            activity_type = intake.get("activity_type", "")
+            if activity_type:
+                _check_checkbox_in_cell(cell._element, activity_type, ns)
+        elif "product requirements" in label:
+            _check_checkbox_in_cell(cell._element, "GHG Emissions Reduction", ns)
+
+
+def _check_checkbox_in_cell(cell_element, target_text, ns):
+    target_lower = target_text.lower().strip()
+
+    for para_el in cell_element.findall(".//w:p", ns):
+        para_text = ""
+        for t_el in para_el.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+            para_text += (t_el.text or "")
+        para_text_lower = para_text.strip().lower()
+
+        if not para_text_lower:
+            continue
+
+        is_match = (
+            target_lower in para_text_lower
+            or para_text_lower in target_lower
+        )
+
+        if not is_match:
+            continue
+
+        ff_datas = para_el.findall(".//w:ffData", ns)
+        for ff in ff_datas:
+            cb = ff.find("w:checkBox", ns)
+            if cb is not None:
+                for old_default in cb.findall("w:default", ns):
+                    cb.remove(old_default)
+                for old_checked in cb.findall("w:checked", ns):
+                    cb.remove(old_checked)
+                from lxml import etree
+                checked_el = etree.SubElement(
+                    cb,
+                    "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}default"
+                )
+                checked_el.set(
+                    "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
+                    "1"
+                )
+
+        for sym_run in para_el.findall(".//w:r", ns):
+            for sym in sym_run.findall("w:sym", ns):
+                current_char = sym.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}char", "")
+                if current_char in ("00A8", "F0A8", "2610"):
+                    sym.set(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}char",
+                        "00FE"
+                    )
+
+
 def _fill_gs_template(doc, sections_map, project_info):
     paragraphs = list(doc.paragraphs)
 
@@ -231,16 +362,7 @@ def _fill_gs_template(doc, sections_map, project_info):
         "C.2.2 Total length of crediting period": "C.2",
     }
 
-    kpi_table = doc.tables[0] if doc.tables else None
-    if kpi_table:
-        for row in kpi_table.rows:
-            label = row.cells[0].text.strip().lower()
-            if "project" in label and "name" in label:
-                row.cells[1].text = project_info.get("name", "")
-            elif "country" in label:
-                row.cells[1].text = project_info.get("country", "")
-            elif "methodology" in label:
-                row.cells[1].text = project_info.get("methodology", "")
+    _fill_gs_kpi_table(doc, project_info)
 
     filled_sids = set()
 
@@ -286,7 +408,7 @@ def _fill_gs_template(doc, sections_map, project_info):
                     continue
             break
 
-        _insert_content_into_doc(doc, para._element, content, project_info)
+        _insert_content_into_doc(doc, para._element, content, project_info, section_id=sid)
 
     _remove_remaining_placeholders_gs(doc, sections_map)
 
@@ -393,7 +515,7 @@ def _fill_vcs_template(doc, sections_map, project_info):
             else:
                 break
 
-        _insert_content_into_doc(doc, para._element, content, project_info)
+        _insert_content_into_doc(doc, para._element, content, project_info, section_id=sid)
 
 
 def export_template_word(sections_content, project_info, template_type="pdd"):
