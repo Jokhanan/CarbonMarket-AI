@@ -1648,6 +1648,9 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
         if std_filtered:
             filtered = std_filtered
 
+    if not search:
+        filtered = [m for m in filtered if (m.get("name") or "").strip()]
+
     if standard and not search:
         def _sort_key(m):
             ms = m.get("standard", "")
@@ -1674,14 +1677,14 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     }
     std_short = {"CDM": "CDM", "Verra": "VCS", "GoldStandard": "GS"}
     for m in shown:
-        name = m.get("name") or ""
-        proj = m.get("project_count", 0)
+        name = (m.get("name") or "").strip()
+        proj = m.get("project_count", 0) or 0
         ms = std_short.get(m.get("standard", ""), "")
         label = f"[{ms}] {m['code']}" if ms else m["code"]
         if name:
             label += f" - {name[:55]}"
         if proj:
-            label += f" ({proj} projects)"
+            label += f" // {proj} registered"
         labels[m["code"]] = label
 
     default_idx = 0
@@ -3238,26 +3241,28 @@ def _render_intake_pdd(project_id, intake):
 
     with st.container(border=True):
         st.markdown("#### Technology & Approach")
-        tech_desc = st.text_area("Technology description", value=tech.get("description", ""),
+        tech_desc = st.text_area("Technology / intervention description", value=tech.get("description", ""),
                                   key=f"setup_tech_desc_{project_id}",
-                                  placeholder="Describe the technology or approach used...",
+                                  placeholder="Describe the technology, intervention, or approach used (e.g., improved cookstoves, solar panels, EV fleet, grid connection, afforestation)...",
                                   height=80)
         tc1, tc2 = st.columns(2)
         with tc1:
-            tech_manufacturer = st.text_input("Manufacturer", value=tech.get("manufacturer", ""),
-                                               key=f"setup_tech_mfr_{project_id}")
-            tech_fuel_baseline = st.text_input("Baseline fuel", value=tech.get("fuel_baseline", ""),
+            tech_manufacturer = st.text_input("Equipment manufacturer / supplier (if applicable)", value=tech.get("manufacturer", ""),
+                                               key=f"setup_tech_mfr_{project_id}",
+                                               placeholder="e.g., BioLite, Tesla, Vestas")
+            tech_baseline_scenario = st.text_input("Baseline energy source / practice", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
                                                 key=f"setup_tech_fuel_bl_{project_id}",
-                                                placeholder="e.g., Wood, Charcoal")
+                                                placeholder="e.g., Wood, Diesel generators, Grid electricity, Open burning")
         with tc2:
-            tech_model = st.text_input("Model", value=tech.get("model", ""),
-                                        key=f"setup_tech_model_{project_id}")
-            tech_fuel_project = st.text_input("Project fuel", value=tech.get("fuel_project", ""),
+            tech_model = st.text_input("Model / specification", value=tech.get("model", ""),
+                                        key=f"setup_tech_model_{project_id}",
+                                        placeholder="e.g., HomeStove 2, Model 3, V150-4.2MW")
+            tech_project_scenario = st.text_input("Project energy source / practice", value=tech.get("fuel_project", tech.get("project_scenario", "")),
                                                key=f"setup_tech_fuel_pj_{project_id}",
-                                               placeholder="e.g., LPG, Pellets, Same")
-        tech_distribution = st.text_input("Distribution method", value=tech.get("distribution_method", ""),
+                                               placeholder="e.g., LPG, Solar PV, Grid-connected wind, Improved cookstove")
+        tech_distribution = st.text_input("Distribution / implementation method", value=tech.get("distribution_method", ""),
                                            key=f"setup_tech_dist_{project_id}",
-                                           placeholder="e.g., Direct sales, NGO distribution, Subsidy program")
+                                           placeholder="e.g., Direct sales, Lease model, Government programme, Grid connection")
 
     with st.container(border=True):
         st.markdown("#### Location & Beneficiaries")
@@ -3374,7 +3379,8 @@ def _render_intake_pdd(project_id, intake):
         },
         "technology": {
             "description": tech_desc, "manufacturer": tech_manufacturer, "model": tech_model,
-            "fuel_baseline": tech_fuel_baseline, "fuel_project": tech_fuel_project,
+            "fuel_baseline": tech_baseline_scenario, "fuel_project": tech_project_scenario,
+            "baseline_scenario": tech_baseline_scenario, "project_scenario": tech_project_scenario,
             "distribution_method": tech_distribution,
         },
         "location": {
