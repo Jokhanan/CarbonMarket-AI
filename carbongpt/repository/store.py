@@ -969,12 +969,17 @@ def get_methodology_categories():
         return cur.fetchall()
 
 
-def create_user_project(name, standard, doc_type=None, methodology=None, country=None, description=None):
+def create_user_project(name, standard, doc_type=None, methodology=None, country=None, description=None,
+                        project_type=None, parent_project_id=None,
+                        monitoring_period_start=None, monitoring_period_end=None):
     with get_cursor() as cur:
         cur.execute(
-            "INSERT INTO user_projects (name, standard, doc_type, methodology, country, description) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (name, standard, doc_type, methodology, country, description)
+            "INSERT INTO user_projects (name, standard, doc_type, methodology, country, description, "
+            "project_type, parent_project_id, monitoring_period_start, monitoring_period_end) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (name, standard, doc_type, methodology, country, description,
+             project_type or "standalone_pdd", parent_project_id,
+             monitoring_period_start, monitoring_period_end)
         )
         row = cur.fetchone()
         return row["id"]
@@ -1017,8 +1022,10 @@ def list_user_projects(status=None):
 def update_user_project(project_id, **kwargs):
     import psycopg2.extras as _pg_extras
     allowed = {"name", "standard", "doc_type", "methodology", "country", "description", "status",
-               "crediting_period_start", "crediting_period_years", "project_settings", "project_intake"}
-    nullable_fields = {"crediting_period_start", "country", "description"}
+               "crediting_period_start", "crediting_period_years", "project_settings", "project_intake",
+               "project_type", "parent_project_id", "monitoring_period_start", "monitoring_period_end"}
+    nullable_fields = {"crediting_period_start", "country", "description",
+                       "parent_project_id", "monitoring_period_start", "monitoring_period_end"}
     updates = {}
     for k, v in kwargs.items():
         if k not in allowed:
@@ -1138,6 +1145,35 @@ def get_write_session(session_id):
     with get_cursor() as cur:
         cur.execute("SELECT * FROM project_write_sessions WHERE id = %s", (session_id,))
         return cur.fetchone()
+
+
+def get_child_projects(parent_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT p.*, "
+            "(SELECT COUNT(*) FROM project_documents pd WHERE pd.project_id = p.id) AS doc_count "
+            "FROM user_projects p WHERE p.parent_project_id = %s ORDER BY p.created_at ASC",
+            (parent_id,)
+        )
+        return cur.fetchall()
+
+
+def update_document_ai_context(doc_id, use_as_ai_context):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE project_documents SET use_as_ai_context = %s, updated_at = NOW() WHERE id = %s",
+            (use_as_ai_context, doc_id)
+        )
+
+
+def get_project_documents_for_ai(project_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM project_documents WHERE project_id = %s AND use_as_ai_context = true "
+            "AND parsed_text IS NOT NULL ORDER BY created_at DESC",
+            (project_id,)
+        )
+        return cur.fetchall()
 
 
 def save_knowledge_chunk(methodology_code, document_id, chunk_type, chunk_key, title,

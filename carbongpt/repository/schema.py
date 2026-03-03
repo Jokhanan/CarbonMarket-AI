@@ -235,6 +235,15 @@ ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS crediting_period_start DATE;
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS crediting_period_years INTEGER DEFAULT 7;
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS project_settings JSONB DEFAULT '{}';
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS project_intake JSONB DEFAULT '{}';
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS project_type VARCHAR(30) DEFAULT 'standalone_pdd';
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS parent_project_id INTEGER REFERENCES user_projects(id) ON DELETE SET NULL;
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS monitoring_period_start DATE;
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS monitoring_period_end DATE;
+
+ALTER TABLE project_documents ADD COLUMN IF NOT EXISTS use_as_ai_context BOOLEAN DEFAULT true;
+
+CREATE INDEX IF NOT EXISTS idx_user_projects_parent ON user_projects(parent_project_id);
+CREATE INDEX IF NOT EXISTS idx_user_projects_project_type ON user_projects(project_type);
 
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS search_vector tsvector;

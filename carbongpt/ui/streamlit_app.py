@@ -9,14 +9,13 @@ st.set_page_config(page_title="CarbonGPT", layout="wide", page_icon="C")
 
 st.markdown("""
 <style>
-    /* Premium typography and spacing */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     .stApp {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(180deg, #f8f9fb 0%, #f0f2f5 100%);
     }
 
-    /* Sidebar styling */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0c1821 0%, #162837 100%);
         border-right: 1px solid rgba(255,255,255,0.06);
@@ -37,7 +36,6 @@ st.markdown("""
         border-color: rgba(255,255,255,0.08);
     }
 
-    /* Brand header in sidebar */
     .brand-header {
         padding: 0.5rem 0 1.2rem 0;
         border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -60,7 +58,6 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* Page header styling */
     .page-header {
         padding: 0 0 1.5rem 0;
         margin-bottom: 0.5rem;
@@ -78,12 +75,12 @@ st.markdown("""
         line-height: 1.5;
     }
 
-    /* Metric cards */
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 1rem 1.2rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     div[data-testid="stMetric"] label {
         color: #64748b;
@@ -98,69 +95,85 @@ st.markdown("""
         color: #1e293b;
     }
 
-    /* Cards and containers */
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 12px;
+        border-radius: 14px;
         border-color: #e2e8f0;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        transition: all 0.2s ease;
     }
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
         border-color: #cbd5e1;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        transform: translateY(-1px);
     }
 
-    /* Button styling */
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #4ecdc4, #44a8b3);
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         font-weight: 600;
         letter-spacing: 0.01em;
         transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(78,205,196,0.2);
     }
     .stButton > button[kind="primary"]:hover {
         background: linear-gradient(135deg, #44b8b0, #3d9aa5);
-        box-shadow: 0 2px 8px rgba(78,205,196,0.3);
+        box-shadow: 0 4px 12px rgba(78,205,196,0.35);
+        transform: translateY(-1px);
     }
     .stButton > button[kind="secondary"] {
-        border-radius: 8px;
+        border-radius: 10px;
         font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        transform: translateY(-1px);
     }
 
-    /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
+        gap: 4px;
         border-bottom: 2px solid #e2e8f0;
+        background: transparent;
+        padding: 0 0 0 0;
     }
     .stTabs [data-baseweb="tab"] {
         font-weight: 500;
         font-size: 0.88rem;
-        padding: 0.6rem 1.2rem;
-        border-radius: 8px 8px 0 0;
+        padding: 0.7rem 1.4rem;
+        border-radius: 10px 10px 0 0;
         color: #64748b;
+        transition: all 0.2s ease;
+        background: transparent;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #334155;
+        background: rgba(78,205,196,0.06);
     }
     .stTabs [aria-selected="true"] {
         color: #1e293b !important;
-        border-bottom: 2px solid #4ecdc4 !important;
+        font-weight: 600 !important;
+        border-bottom: 3px solid #4ecdc4 !important;
+        background: rgba(78,205,196,0.04) !important;
     }
 
-    /* Expander styling */
     .streamlit-expanderHeader {
         font-weight: 600;
         font-size: 0.9rem;
     }
 
-    /* Data table styling */
     .stDataFrame {
-        border-radius: 10px;
+        border-radius: 12px;
         overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
-    /* Status badge styles */
     .status-badge {
         display: inline-block;
-        padding: 0.2rem 0.6rem;
+        padding: 0.2rem 0.7rem;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 0.73rem;
         font-weight: 600;
         letter-spacing: 0.03em;
     }
@@ -169,20 +182,138 @@ st.markdown("""
     .status-review { background: #eff6ff; color: #2563eb; }
     .status-complete { background: #f0fdf4; color: #16a34a; }
 
-    /* Smooth transitions */
+    .project-type-badge {
+        display: inline-block;
+        padding: 0.15rem 0.6rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .badge-pdd { background: #dbeafe; color: #1d4ed8; }
+    .badge-mr { background: #fef3c7; color: #b45309; }
+    .badge-poa { background: #ede9fe; color: #7c3aed; }
+    .badge-vpa { background: #e0e7ff; color: #4338ca; }
+    .badge-valver { background: #fce7f3; color: #be185d; }
+
+    .project-card-gs {
+        border-left: 4px solid #d4a843 !important;
+    }
+    .project-card-verra {
+        border-left: 4px solid #3b82f6 !important;
+    }
+
+    .section-card-drafted {
+        border-left: 4px solid #22c55e !important;
+    }
+    .section-card-empty {
+        border-left: 4px solid #e2e8f0 !important;
+    }
+    .section-card-revision {
+        border-left: 4px solid #f59e0b !important;
+    }
+
+    .step-indicator {
+        display: flex;
+        gap: 0;
+        align-items: center;
+        padding: 0.6rem 0;
+    }
+    .step-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.3rem 0.8rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #94a3b8;
+        border-radius: 20px;
+    }
+    .step-item.active {
+        background: rgba(78,205,196,0.1);
+        color: #0f766e;
+        font-weight: 600;
+    }
+    .step-item.done {
+        color: #22c55e;
+    }
+    .step-arrow {
+        color: #cbd5e1;
+        font-size: 0.75rem;
+        margin: 0 2px;
+    }
+
+    .doc-toggle-card {
+        display: flex;
+        align-items: center;
+        padding: 0.8rem 1rem;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        margin-bottom: 0.5rem;
+        transition: all 0.15s ease;
+    }
+    .doc-toggle-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    .type-selector-card {
+        padding: 1.2rem 1rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 14px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: #ffffff;
+    }
+    .type-selector-card:hover {
+        border-color: #4ecdc4;
+        box-shadow: 0 4px 12px rgba(78,205,196,0.15);
+        transform: translateY(-2px);
+    }
+    .type-selector-card.selected {
+        border-color: #4ecdc4;
+        background: rgba(78,205,196,0.04);
+        box-shadow: 0 4px 12px rgba(78,205,196,0.15);
+    }
+
     .stButton > button, .stSelectbox, .stTextInput input {
         transition: all 0.15s ease;
     }
 
-    /* Divider */
+    .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {
+        border-radius: 10px !important;
+    }
+
     hr {
         border-color: #e2e8f0 !important;
         margin: 1rem 0 !important;
     }
 
-    /* Hide fullscreen buttons on metrics */
     div[data-testid="stMetric"] button[title="View fullscreen"] {
         display: none;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
+        border-radius: 16px;
+        border: 1px dashed #cbd5e1;
+        margin: 1rem 0;
+    }
+    .empty-state-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    .empty-state-desc {
+        font-size: 0.88rem;
+        color: #64748b;
+        line-height: 1.5;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1584,6 +1715,52 @@ PROJECT_DOC_TYPES = {
     "template": "Template",
     "other": "Other",
 }
+PROJECT_TYPE_INFO = {
+    "standalone_pdd": {
+        "label": "Standalone PDD",
+        "short": "PDD",
+        "badge_class": "badge-pdd",
+        "description": "Write a new Project Design Document for a single project activity",
+        "default_doc_type": "pdd",
+        "standards": ["GoldStandard", "Verra"],
+    },
+    "poa_programme": {
+        "label": "Programme of Activities (PoA-DD)",
+        "short": "PoA-DD",
+        "badge_class": "badge-poa",
+        "description": "Create a PoA-DD programme envelope. You can add VPA-DDs under it later.",
+        "default_doc_type": "poa_dd",
+        "standards": ["GoldStandard"],
+    },
+    "vpa_component": {
+        "label": "VPA Design Document",
+        "short": "VPA-DD",
+        "badge_class": "badge-vpa",
+        "description": "Write a VPA-DD component linked to an existing PoA-DD programme",
+        "default_doc_type": "vpa_dd",
+        "standards": ["GoldStandard"],
+        "needs_parent": True,
+        "parent_type": "poa_programme",
+    },
+    "monitoring_report": {
+        "label": "Monitoring Report",
+        "short": "MR",
+        "badge_class": "badge-mr",
+        "description": "Write a Monitoring Report for an existing project",
+        "default_doc_type": "mr",
+        "standards": ["GoldStandard", "Verra"],
+        "needs_parent": True,
+        "parent_type": None,
+    },
+    "valver_report": {
+        "label": "Validation / Verification Report",
+        "short": "ValVer",
+        "badge_class": "badge-valver",
+        "description": "Write a Validation or Verification Report",
+        "default_doc_type": "valver",
+        "standards": ["Verra"],
+    },
+}
 STATUS_LABELS = {
     "draft": "Draft",
     "in_progress": "In Progress",
@@ -1626,69 +1803,248 @@ def _render_project_list():
         if projects:
             st.caption(f"{len(projects)} project{'s' if len(projects) != 1 else ''}")
     with col_right:
-        with st.popover("+ New Project", width="stretch"):
-            new_name = st.text_input("Project name", key="new_proj_name",
-                                      placeholder="e.g., Ghana Improved Cookstoves")
-            new_standard = st.selectbox("Standard", STANDARD_OPTIONS, key="new_proj_standard")
-            new_methodology = _methodology_selector("new_proj", standard=new_standard)
-            new_country = st.text_input("Country", key="new_proj_country",
-                                         placeholder="e.g., Ghana")
-            new_desc = st.text_area("Description (optional)", key="new_proj_desc",
-                                     placeholder="Brief description of the project activity...")
-            if st.button("Create Project", key="create_proj_btn", type="primary"):
-                if new_name:
-                    result = _fetch("/projects", method="POST", json={
-                        "name": new_name,
-                        "standard": new_standard,
-                        "methodology": new_methodology,
-                        "country": new_country or None,
-                        "description": new_desc or None,
-                    })
-                    if result:
-                        st.success(f"Project created!")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    st.warning("Please enter a project name.")
+        if st.button("+ New Project", key="new_proj_btn", type="primary"):
+            st.session_state["show_new_project"] = True
+
+    if st.session_state.get("show_new_project"):
+        _render_new_project_wizard(projects)
+        return
 
     if not projects:
         st.markdown("""
-        <div style="text-align: center; padding: 3rem 2rem; background: linear-gradient(135deg, #f8fafc, #f0f9ff); border-radius: 16px; border: 1px dashed #cbd5e1; margin: 1rem 0;">
-            <div style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">No projects yet</div>
-            <div style="font-size: 0.88rem; color: #64748b;">Create your first carbon project to start drafting PDDs, uploading documents, and getting AI-powered reviews.</div>
+        <div class="empty-state">
+            <div class="empty-state-title">No projects yet</div>
+            <div class="empty-state-desc">Create your first carbon project to start drafting PDDs, Monitoring Reports, and other documents with AI assistance.</div>
         </div>
         """, unsafe_allow_html=True)
         return
 
+    proj_by_parent = {}
+    top_level = []
     for proj in projects:
-        pid = proj["id"]
-        status = proj.get("status", "draft")
-        status_label = STATUS_LABELS.get(status, status)
-        status_color = STATUS_COLORS.get(status, "gray")
-        doc_count = proj.get("doc_count", 0)
+        parent_id = proj.get("parent_project_id")
+        if parent_id:
+            proj_by_parent.setdefault(parent_id, []).append(proj)
+        else:
+            top_level.append(proj)
 
-        with st.container(border=True):
+    for proj in top_level:
+        children = proj_by_parent.get(proj["id"], [])
+        _render_project_card(proj, child_count=len(children))
+        if children:
+            for child in children:
+                _render_project_card(child, indent=True)
+
+    orphaned_parents = set(proj_by_parent.keys()) - {p["id"] for p in top_level}
+    for parent_id in orphaned_parents:
+        for child in proj_by_parent[parent_id]:
+            _render_project_card(child)
+
+
+def _render_project_card(proj, indent=False, child_count=0):
+    pid = proj["id"]
+    status = proj.get("status", "draft")
+    status_label = STATUS_LABELS.get(status, status)
+    status_color = STATUS_COLORS.get(status, "gray")
+    doc_count = proj.get("doc_count", 0)
+    project_type = proj.get("project_type", "standalone_pdd")
+    type_info = PROJECT_TYPE_INFO.get(project_type, PROJECT_TYPE_INFO["standalone_pdd"])
+    badge_class = type_info.get("badge_class", "badge-pdd")
+
+    with st.container(border=True):
+        if indent:
+            c0, c1, c2, c3, c4 = st.columns([0.3, 3.2, 1.2, 0.8, 0.8])
+            with c0:
+                st.markdown("<span style='color:#cbd5e1;'>|--</span>", unsafe_allow_html=True)
+        else:
             c1, c2, c3, c4 = st.columns([3.5, 1.2, 0.8, 0.8])
-            with c1:
-                st.markdown(f"**{proj['name']}**")
-                details = []
-                if proj.get("standard"):
-                    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(proj["standard"], proj["standard"])
-                    details.append(std_display)
-                if proj.get("methodology"):
-                    details.append(proj["methodology"])
-                if proj.get("country"):
-                    details.append(proj["country"])
-                if details:
-                    st.caption(" / ".join(details))
-            with c2:
-                st.markdown(f":{status_color}[{status_label}]")
-            with c3:
-                st.caption(f"{doc_count} doc{'s' if doc_count != 1 else ''}")
-            with c4:
-                if st.button("Open", key=f"open_proj_{pid}", type="primary", width="stretch"):
-                    st.session_state.selected_project_id = pid
-                    st.rerun()
+
+        with c1:
+            type_badge = f"<span class='project-type-badge {badge_class}'>{type_info['short']}</span>"
+            st.markdown(f"{type_badge} **{proj['name']}**", unsafe_allow_html=True)
+            details = []
+            if proj.get("standard"):
+                std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(proj["standard"], proj["standard"])
+                details.append(std_display)
+            if proj.get("methodology"):
+                details.append(proj["methodology"])
+            if proj.get("country"):
+                details.append(proj["country"])
+            if details:
+                st.caption(" / ".join(details))
+            if child_count > 0:
+                st.caption(f"{child_count} VPA{'s' if child_count != 1 else ''}")
+
+        with c2:
+            st.markdown(f":{status_color}[{status_label}]")
+        with c3:
+            st.caption(f"{doc_count} doc{'s' if doc_count != 1 else ''}")
+        with c4:
+            if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
+                st.session_state.selected_project_id = pid
+                st.rerun()
+
+
+def _render_new_project_wizard(existing_projects):
+    st.markdown("### Create New Project")
+
+    if st.button("Cancel", key="cancel_new_proj"):
+        st.session_state["show_new_project"] = False
+        st.session_state.pop("new_proj_step", None)
+        st.session_state.pop("new_proj_type", None)
+        st.rerun()
+
+    step_key = "new_proj_step"
+    if step_key not in st.session_state:
+        st.session_state[step_key] = 1
+
+    step = st.session_state[step_key]
+
+    if step == 1:
+        st.markdown("**Step 1: What are you working on?**")
+        type_cols = st.columns(len(PROJECT_TYPE_INFO))
+        for i, (ptype, info) in enumerate(PROJECT_TYPE_INFO.items()):
+            with type_cols[i]:
+                with st.container(border=True):
+                    badge_class = info.get("badge_class", "badge-pdd")
+                    st.markdown(
+                        f"<span class='project-type-badge {badge_class}'>{info['short']}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f"**{info['label']}**")
+                    st.caption(info["description"])
+                    standards_str = ", ".join(
+                        {"GoldStandard": "GS", "Verra": "Verra"}.get(s, s) for s in info["standards"]
+                    )
+                    st.caption(f"Standards: {standards_str}")
+                    if st.button("Select", key=f"select_type_{ptype}", use_container_width=True):
+                        st.session_state["new_proj_type"] = ptype
+                        st.session_state[step_key] = 2
+                        st.rerun()
+
+    elif step == 2:
+        selected_type = st.session_state.get("new_proj_type", "standalone_pdd")
+        type_info = PROJECT_TYPE_INFO[selected_type]
+        badge_class = type_info.get("badge_class", "badge-pdd")
+        st.markdown(
+            f"<span class='project-type-badge {badge_class}'>{type_info['short']}</span> "
+            f"**{type_info['label']}**",
+            unsafe_allow_html=True,
+        )
+
+        available_standards = type_info.get("standards", STANDARD_OPTIONS)
+        if len(available_standards) == 1:
+            new_standard = available_standards[0]
+            std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(new_standard, new_standard)
+            st.info(f"Standard: {std_display}")
+        else:
+            new_standard = st.selectbox("Standard", available_standards, key="wizard_standard",
+                                         format_func=lambda x: {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(x, x))
+
+        needs_parent = type_info.get("needs_parent", False)
+        parent_id = None
+        if needs_parent:
+            parent_filter_type = type_info.get("parent_type")
+            if parent_filter_type:
+                linkable = [p for p in existing_projects
+                            if p.get("project_type") == parent_filter_type
+                            and p.get("standard") == new_standard]
+                parent_label = "Select parent PoA-DD programme"
+            else:
+                linkable = [p for p in existing_projects
+                            if p.get("project_type") in ("standalone_pdd", "vpa_component", "poa_programme")
+                            and p.get("standard") == new_standard]
+                parent_label = "Link to existing project (optional)"
+
+            if linkable:
+                parent_options = {p["id"]: f"{p['name']} ({p.get('methodology', 'N/A')})" for p in linkable}
+                parent_id = st.selectbox(
+                    parent_label,
+                    [None] + list(parent_options.keys()),
+                    format_func=lambda x: parent_options[x] if x else "(none)",
+                    key="wizard_parent",
+                )
+            else:
+                if parent_filter_type == "poa_programme":
+                    st.warning("No PoA-DD programmes found. Create a PoA-DD first, or proceed without linking.")
+                else:
+                    st.info("No existing projects to link. You can proceed without linking.")
+
+        new_name = st.text_input("Project name", key="wizard_name",
+                                  placeholder="e.g., Ghana Improved Cookstoves")
+        new_methodology = _methodology_selector("wizard", standard=new_standard)
+        c1, c2 = st.columns(2)
+        with c1:
+            new_country = st.text_input("Country", key="wizard_country", placeholder="e.g., Ghana")
+        with c2:
+            new_desc = st.text_area("Description (optional)", key="wizard_desc",
+                                     placeholder="Brief description...", height=68)
+
+        monitoring_start = None
+        monitoring_end = None
+        if selected_type == "monitoring_report":
+            st.markdown("**Monitoring Period**")
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                monitoring_start = st.date_input("Period start", key="wizard_mon_start", value=None, format="YYYY-MM-DD")
+            with mc2:
+                monitoring_end = st.date_input("Period end", key="wizard_mon_end", value=None, format="YYYY-MM-DD")
+            if monitoring_start and monitoring_end and monitoring_end <= monitoring_start:
+                st.warning("Monitoring period end date must be after the start date.")
+
+        if parent_id:
+            parent_proj = next((p for p in existing_projects if p["id"] == parent_id), None)
+            if parent_proj:
+                inherited = []
+                if parent_proj.get("methodology") and not new_methodology:
+                    inherited.append(f"Methodology: {parent_proj['methodology']}")
+                if parent_proj.get("country") and not new_country:
+                    inherited.append(f"Country: {parent_proj['country']}")
+                if inherited:
+                    st.info(f"Inherited from parent: {', '.join(inherited)}")
+
+        bc1, bc2 = st.columns([1, 3])
+        with bc1:
+            if st.button("Back", key="wizard_back"):
+                st.session_state[step_key] = 1
+                st.rerun()
+        with bc2:
+            if st.button("Create Project", key="wizard_create", type="primary"):
+                if not new_name:
+                    st.warning("Please enter a project name.")
+                else:
+                    final_methodology = new_methodology
+                    final_country = new_country
+                    if parent_id:
+                        parent_proj = next((p for p in existing_projects if p["id"] == parent_id), None)
+                        if parent_proj:
+                            if not final_methodology:
+                                final_methodology = parent_proj.get("methodology")
+                            if not final_country:
+                                final_country = parent_proj.get("country")
+
+                    payload = {
+                        "name": new_name,
+                        "standard": new_standard,
+                        "methodology": final_methodology,
+                        "country": final_country or None,
+                        "description": new_desc or None,
+                        "project_type": selected_type,
+                        "parent_project_id": parent_id,
+                    }
+                    if monitoring_start:
+                        payload["monitoring_period_start"] = monitoring_start.isoformat()
+                    if monitoring_end:
+                        payload["monitoring_period_end"] = monitoring_end.isoformat()
+
+                    result = _fetch("/projects", method="POST", json=payload)
+                    if result:
+                        st.success("Project created!")
+                        st.session_state["show_new_project"] = False
+                        st.session_state.pop(step_key, None)
+                        time.sleep(0.5)
+                        st.session_state.selected_project_id = result["id"]
+                        st.rerun()
 
 
 def _render_project_workspace(project_id):
@@ -1706,12 +2062,18 @@ def _render_project_workspace(project_id):
     status = project.get("status", "draft")
     status_label = STATUS_LABELS.get(status, status)
     status_color = STATUS_COLORS.get(status, "gray")
+    project_type = project.get("project_type", "standalone_pdd")
+    type_info = PROJECT_TYPE_INFO.get(project_type, PROJECT_TYPE_INFO["standalone_pdd"])
+    badge_class = type_info.get("badge_class", "badge-pdd")
 
     std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(project.get("standard", ""), project.get("standard", ""))
 
     st.markdown(f"""
     <div class="page-header">
-        <h1>{project['name']}</h1>
+        <h1>
+            <span class="project-type-badge {badge_class}">{type_info['short']}</span>
+            {project['name']}
+        </h1>
         <div class="page-subtitle">
             {std_display}
             {(' / ' + project['methodology']) if project.get('methodology') else ''}
@@ -1720,18 +2082,52 @@ def _render_project_workspace(project_id):
     </div>
     """, unsafe_allow_html=True)
 
+    if project.get("parent_project_id"):
+        parent = _fetch(f"/projects/{project['parent_project_id']}")
+        if parent:
+            parent_type_info = PROJECT_TYPE_INFO.get(parent.get("project_type", ""), {})
+            parent_short = parent_type_info.get("short", "Project")
+            st.caption(f"Linked to: {parent_short} - {parent['name']}")
+
     if project.get("description"):
         st.caption(project["description"])
 
-    tabs = st.tabs(["Project Setup", "Write / Draft", "Review", "Export"])
+    if project_type == "poa_programme":
+        children = _fetch(f"/projects/{project_id}/children") or []
+        if children:
+            with st.expander(f"{len(children)} VPA{'s' if len(children) != 1 else ''} in this programme"):
+                for child in children:
+                    child_type_info = PROJECT_TYPE_INFO.get(child.get("project_type", ""), {})
+                    child_badge = child_type_info.get("badge_class", "badge-vpa")
+                    cc1, cc2 = st.columns([4, 1])
+                    with cc1:
+                        st.markdown(
+                            f"<span class='project-type-badge {child_badge}'>{child_type_info.get('short', 'VPA')}</span> "
+                            f"**{child['name']}**",
+                            unsafe_allow_html=True,
+                        )
+                    with cc2:
+                        if st.button("Open", key=f"open_child_{child['id']}", use_container_width=True):
+                            st.session_state.selected_project_id = child["id"]
+                            st.rerun()
+        if st.button("+ Add VPA", key=f"add_vpa_{project_id}"):
+            st.session_state["show_new_project"] = True
+            st.session_state["new_proj_type"] = "vpa_component"
+            st.session_state["new_proj_step"] = 2
+            st.session_state.selected_project_id = None
+            st.rerun()
+
+    tabs = st.tabs(["Project Setup", "Documents", "Write / Draft", "Review", "Export"])
 
     with tabs[0]:
         _render_project_settings(project)
     with tabs[1]:
-        _render_write_tab(project)
+        _render_documents_tab(project)
     with tabs[2]:
-        _render_review_tab(project)
+        _render_write_tab(project)
     with tabs[3]:
+        _render_review_tab(project)
+    with tabs[4]:
         _render_export_tab(project)
 
 
@@ -2103,15 +2499,17 @@ def _render_export_tab(project):
     st.markdown("### Template Export")
     st.write("Export a Word document with all your drafted sections filled into the standard template structure.")
 
-    doc_type_map = {
-        "GoldStandard": {"pdd": "Project Design Document (PDD)", "mr": "Monitoring Report (MR)"},
-        "Verra": {"pdd": "Project Description (VCS-PD)", "mr": "Monitoring Report (VCS-MR)"},
-    }
-    available_types = doc_type_map.get(standard, {"pdd": "PDD", "mr": "MR"})
+    project_type = project.get("project_type", "standalone_pdd")
+    available_types = DOC_TYPES_FOR_STANDARD.get(standard, {"pdd": "PDD", "mr": "MR"})
+
+    default_dt = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
+    type_keys = list(available_types.keys())
+    default_idx = type_keys.index(default_dt) if default_dt in type_keys else 0
 
     selected_doc_type = st.selectbox(
         "Document type to export",
-        list(available_types.keys()),
+        type_keys,
+        index=default_idx,
         format_func=lambda x: available_types[x],
         key=f"export_doc_type_{project_id}",
     )
@@ -2216,14 +2614,22 @@ def _render_export_tab(project):
 
 def _render_documents_tab(project):
     project_id = project["id"]
-    st.subheader("Project Documents")
-    st.write("Upload your PDD, Monitoring Reports, reference documents, research papers, and field data.")
+    project_type = project.get("project_type", "standalone_pdd")
+
+    st.subheader("Documents & Knowledge Base")
+    st.write("Upload project documents. Toggle which ones the AI uses when writing and reviewing your documents.")
+
+    documents = project.get("documents", [])
+
+    if not documents:
+        _render_document_prompts(project_type)
 
     standard = project.get("standard", "GoldStandard")
     available_doc_types = list(DOC_TYPES_FOR_STANDARD.get(standard, {}).keys())
     upload_types = available_doc_types + ["reference", "research", "field_data", "other"]
 
-    with st.expander("Upload Document", expanded=not project.get("documents")):
+    with st.container(border=True):
+        st.markdown("#### Upload Document")
         upload_col1, upload_col2 = st.columns(2)
         with upload_col1:
             upload_file = st.file_uploader("Choose a file", type=["docx", "pdf"], key=f"upload_{project_id}")
@@ -2254,83 +2660,247 @@ def _render_documents_tab(project):
                     time.sleep(0.5)
                     st.rerun()
 
-    documents = project.get("documents", [])
-    if documents:
-        for doc in documents:
-            doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
-            status_icon = "parsed" if doc.get("status") == "parsed" else ("reviewed" if doc.get("status") == "reviewed" else "uploaded")
-
+    if project.get("parent_project_id"):
+        parent = _fetch(f"/projects/{project['parent_project_id']}")
+        if parent and parent.get("documents"):
+            parent_type_info = PROJECT_TYPE_INFO.get(parent.get("project_type", ""), {})
+            parent_label = parent_type_info.get("short", "Parent")
             with st.container(border=True):
-                dc1, dc2, dc3, dc4 = st.columns([3, 1.5, 1, 0.5])
-                with dc1:
-                    st.markdown(f"**{doc['file_name']}**")
-                    st.caption(f"{doc_type_label}")
-                with dc2:
-                    st.caption(f"Status: {status_icon}")
-                    if doc.get("notes"):
-                        st.caption(f"Notes: {doc['notes']}")
-                with dc3:
-                    size = doc.get("file_size_bytes", 0) or 0
-                    if size > 1024 * 1024:
-                        st.caption(f"{size / 1024 / 1024:.1f} MB")
-                    elif size > 1024:
-                        st.caption(f"{size / 1024:.0f} KB")
-                with dc4:
-                    if st.button("X", key=f"del_doc_{doc['id']}", help="Delete document"):
-                        _fetch(f"/projects/{project_id}/documents/{doc['id']}", method="DELETE")
-                        time.sleep(0.3)
-                        st.rerun()
-    else:
-        st.info("No documents uploaded yet. Upload your project documents above.")
+                st.markdown(f"#### Documents from {parent_label}: {parent['name']}")
+                st.caption("These documents are automatically available as AI context.")
+                for pdoc in parent.get("documents", []):
+                    if pdoc.get("parsed_text"):
+                        doc_type_label = PROJECT_DOC_TYPES.get(pdoc["doc_type"], pdoc["doc_type"])
+                        st.markdown(f"- **{pdoc['file_name']}** ({doc_type_label})")
+
+    if documents:
+        core_docs = [d for d in documents if d.get("doc_type") in ("pdd", "mr", "valver", "poa_dd", "vpa_dd")]
+        support_docs = [d for d in documents if d.get("doc_type") in ("reference", "research", "field_data")]
+        other_docs = [d for d in documents if d.get("doc_type") in ("template", "other")]
+
+        if core_docs:
+            st.markdown("#### Core Documents")
+            for doc in core_docs:
+                _render_document_card(project_id, doc)
+
+        if support_docs:
+            st.markdown("#### Supporting Evidence")
+            st.caption("KPT reports, field data, feasibility studies, and other supporting materials")
+            for doc in support_docs:
+                _render_document_card(project_id, doc)
+
+        if other_docs:
+            st.markdown("#### Other Documents")
+            for doc in other_docs:
+                _render_document_card(project_id, doc)
+
+        ai_context_count = sum(1 for d in documents if d.get("use_as_ai_context", True) and d.get("parsed_text"))
+        if ai_context_count > 0:
+            st.info(f"{ai_context_count} document{'s' if ai_context_count != 1 else ''} active as AI context")
+    elif not documents:
+        pass
+
+
+def _render_document_card(project_id, doc):
+    doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
+    status_label = doc.get("status", "uploaded")
+    use_ai = doc.get("use_as_ai_context", True)
+    has_parsed = bool(doc.get("parsed_text"))
+
+    with st.container(border=True):
+        dc1, dc2, dc3, dc4, dc5 = st.columns([3, 1.2, 0.8, 0.8, 0.5])
+        with dc1:
+            st.markdown(f"**{doc['file_name']}**")
+            st.caption(f"{doc_type_label}")
+        with dc2:
+            status_display = {"parsed": "Parsed", "reviewed": "Reviewed", "uploaded": "Uploaded", "draft_generated": "Generated"}.get(status_label, status_label)
+            st.caption(f"Status: {status_display}")
+            if doc.get("notes"):
+                st.caption(f"Notes: {doc['notes']}")
+        with dc3:
+            size = doc.get("file_size_bytes", 0) or 0
+            if size > 1024 * 1024:
+                st.caption(f"{size / 1024 / 1024:.1f} MB")
+            elif size > 1024:
+                st.caption(f"{size / 1024:.0f} KB")
+        with dc4:
+            toggle_label = "AI Context" if has_parsed else "Not parsed"
+            new_val = st.checkbox(
+                toggle_label,
+                value=use_ai and has_parsed,
+                key=f"ai_ctx_{doc['id']}",
+                disabled=not has_parsed,
+                help="Toggle whether the AI writer/reviewer uses this document as context",
+            )
+            if new_val != use_ai and has_parsed:
+                _fetch(
+                    f"/projects/{project_id}/documents/{doc['id']}/ai-context?use_as_ai_context={str(new_val).lower()}",
+                    method="PATCH",
+                )
+                st.rerun()
+        with dc5:
+            if st.button("X", key=f"del_doc_{doc['id']}", help="Delete document"):
+                _fetch(f"/projects/{project_id}/documents/{doc['id']}", method="DELETE")
+                time.sleep(0.3)
+                st.rerun()
+
+
+def _render_document_prompts(project_type):
+    prompts = {
+        "standalone_pdd": {
+            "title": "Recommended documents for your PDD",
+            "items": [
+                "KPT (Kitchen Performance Test) report",
+                "Baseline study or survey data",
+                "Feasibility study",
+                "Stakeholder consultation report",
+                "Technical specifications / test certificates",
+            ],
+        },
+        "poa_programme": {
+            "title": "Recommended documents for your PoA-DD",
+            "items": [
+                "Programme concept document",
+                "CME organizational details",
+                "Eligibility criteria documentation",
+                "Methodology document",
+            ],
+        },
+        "vpa_component": {
+            "title": "Recommended documents for your VPA-DD",
+            "items": [
+                "Parent PoA-DD document (will be used for eligibility criteria context)",
+                "VPA-specific KPT or field test reports",
+                "Local baseline data",
+                "VPA location documentation",
+            ],
+        },
+        "monitoring_report": {
+            "title": "Recommended documents for your Monitoring Report",
+            "items": [
+                "PDD (critical - the AI will reference your baseline, methodology, and monitoring plan)",
+                "Previous Monitoring Reports (for consistency)",
+                "Monitoring data spreadsheets",
+                "Field visit reports",
+                "Survey or sampling data",
+            ],
+        },
+        "valver_report": {
+            "title": "Recommended documents for your ValVer Report",
+            "items": [
+                "PDD or Project Description being validated/verified",
+                "Monitoring Report (if verification)",
+                "Field visit notes",
+                "Interview records",
+            ],
+        },
+    }
+    prompt_data = prompts.get(project_type, prompts["standalone_pdd"])
+    with st.container(border=True):
+        st.markdown(f"#### {prompt_data['title']}")
+        st.caption("Upload these documents to give the AI better context for writing and reviewing.")
+        for item in prompt_data["items"]:
+            st.markdown(f"- {item}")
 
 
 def _render_review_tab(project):
     project_id = project["id"]
-    st.subheader("Review Documents")
-    st.write("Select a document to review. The AI will check it against the standard's requirements, the methodology, and your other project documents.")
+    standard = project.get("standard", "GoldStandard")
+    project_type = project.get("project_type", "standalone_pdd")
 
-    documents = project.get("documents", [])
-    reviewable = [d for d in documents if d.get("status") in ("parsed", "reviewed") and d.get("doc_type") in ("pdd", "mr", "valver", "poa_dd", "vpa_dd")]
+    st.subheader("Review")
 
-    if not reviewable:
-        st.info("Upload a PDD, MR, or other reviewable document first (DOCX or PDF format).")
-        return
+    review_tabs = st.tabs(["Review Your Draft", "Review Uploaded Document"])
 
-    doc_options = {d["id"]: f"{d['file_name']} ({PROJECT_DOC_TYPES.get(d['doc_type'], d['doc_type'])})" for d in reviewable}
-    selected_doc_id = st.selectbox(
-        "Select document to review",
-        list(doc_options.keys()),
-        format_func=lambda x: doc_options[x],
-        key=f"review_doc_select_{project_id}",
-    )
+    with review_tabs[0]:
+        st.markdown("#### Review Your Draft")
+        st.write("The AI will assemble all your drafted sections and review them against the standard's requirements.")
 
-    selected_doc = next((d for d in reviewable if d["id"] == selected_doc_id), None)
+        available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
+        default_dt = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
+        doc_type_keys = list(available_doc_types.keys())
+        default_idx = doc_type_keys.index(default_dt) if default_dt in doc_type_keys else 0
 
-    if selected_doc and selected_doc.get("doc_type") == "mr":
-        pdd_docs = [d for d in documents if d["doc_type"] == "pdd" and d.get("parsed_text")]
-        if pdd_docs:
-            st.info(f"PDD found in project: {pdd_docs[0]['file_name']}. The AI will cross-reference your MR against the PDD for consistency.")
+        draft_doc_type = st.selectbox(
+            "Document type to review",
+            doc_type_keys,
+            index=default_idx,
+            format_func=lambda x: available_doc_types[x],
+            key=f"draft_review_dt_{project_id}",
+        )
+
+        write_sessions = _fetch(f"/projects/{project_id}/write-sessions?doc_type={draft_doc_type}")
+        drafted_count = sum(1 for s in (write_sessions or []) if (s.get("user_text") or s.get("generated_text", "")).strip())
+
+        if drafted_count > 0:
+            st.info(f"{drafted_count} section{'s' if drafted_count != 1 else ''} drafted. Ready for review.")
+
+            if st.button("Start Draft Review", key=f"draft_review_btn_{project_id}", type="primary"):
+                with st.spinner("AI is reviewing your draft... This may take a minute."):
+                    result = _fetch(
+                        f"/projects/{project_id}/review-draft?doc_type={draft_doc_type}",
+                        method="POST",
+                    )
+                    if result:
+                        st.session_state[f"draft_review_result_{project_id}_{draft_doc_type}"] = result
+                        st.rerun()
+
+            draft_result = st.session_state.get(f"draft_review_result_{project_id}_{draft_doc_type}")
+            if draft_result:
+                _render_review_result(draft_result)
         else:
-            st.warning("No PDD found in this project. For the best MR review, upload your PDD first so the AI can check consistency.")
+            st.markdown("""
+            <div class="empty-state">
+                <div class="empty-state-title">No drafted sections yet</div>
+                <div class="empty-state-desc">Use the Write / Draft tab to generate content, then come back here to review it.</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    if st.button("Start Review", key=f"review_btn_{project_id}", type="primary"):
-        with st.spinner("AI is reviewing your document... This may take a minute."):
-            result = _fetch(f"/projects/{project_id}/review/{selected_doc_id}", method="POST")
+    with review_tabs[1]:
+        st.markdown("#### Review Uploaded Document")
+        st.write("Select an uploaded document to review against the standard's requirements.")
+
+        documents = project.get("documents", [])
+        reviewable = [d for d in documents if d.get("status") in ("parsed", "reviewed") and d.get("doc_type") in ("pdd", "mr", "valver", "poa_dd", "vpa_dd")]
+
+        if not reviewable:
+            st.info("Upload a PDD, MR, or other reviewable document first (DOCX or PDF format).")
+        else:
+            doc_options = {d["id"]: f"{d['file_name']} ({PROJECT_DOC_TYPES.get(d['doc_type'], d['doc_type'])})" for d in reviewable}
+            selected_doc_id = st.selectbox(
+                "Select document to review",
+                list(doc_options.keys()),
+                format_func=lambda x: doc_options[x],
+                key=f"review_doc_select_{project_id}",
+            )
+
+            selected_doc = next((d for d in reviewable if d["id"] == selected_doc_id), None)
+
+            if selected_doc and selected_doc.get("doc_type") == "mr":
+                pdd_docs = [d for d in documents if d["doc_type"] == "pdd" and d.get("parsed_text")]
+                if pdd_docs:
+                    st.info(f"PDD found in project: {pdd_docs[0]['file_name']}. The AI will cross-reference your MR against the PDD for consistency.")
+                else:
+                    st.warning("No PDD found in this project. For the best MR review, upload your PDD first so the AI can check consistency.")
+
+            if st.button("Start Review", key=f"review_btn_{project_id}", type="primary"):
+                with st.spinner("AI is reviewing your document... This may take a minute."):
+                    result = _fetch(f"/projects/{project_id}/review/{selected_doc_id}", method="POST")
+                    if result:
+                        st.session_state[f"review_result_{selected_doc_id}"] = result
+                        st.rerun()
+
+            result = st.session_state.get(f"review_result_{selected_doc_id}")
+            if not result:
+                if selected_doc and selected_doc.get("review_result"):
+                    import json
+                    try:
+                        result = json.loads(selected_doc["review_result"]) if isinstance(selected_doc["review_result"], str) else selected_doc["review_result"]
+                    except (json.JSONDecodeError, TypeError):
+                        result = None
+
             if result:
-                st.session_state[f"review_result_{selected_doc_id}"] = result
-                st.rerun()
-
-    result = st.session_state.get(f"review_result_{selected_doc_id}")
-    if not result:
-        if selected_doc and selected_doc.get("review_result"):
-            import json
-            try:
-                result = json.loads(selected_doc["review_result"]) if isinstance(selected_doc["review_result"], str) else selected_doc["review_result"]
-            except (json.JSONDecodeError, TypeError):
-                result = None
-
-    if result:
-        _render_review_result(result)
+                _render_review_result(result)
 
 
 def _render_review_result(result):
@@ -2389,21 +2959,26 @@ def _render_review_result(result):
 def _render_write_tab(project):
     project_id = project["id"]
     standard = project.get("standard", "GoldStandard")
+    project_type = project.get("project_type", "standalone_pdd")
 
     st.subheader("AI Writing Assistant")
-    st.write("Draft your document section by section or generate the full document at once. Content appears in the template below.")
+    st.write("Draft your document section by section or generate the full document at once.")
 
     available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
     if not available_doc_types:
         st.error("No document templates available for this standard.")
         return
 
+    default_dt = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
+    doc_type_keys = list(available_doc_types.keys())
+    default_idx = doc_type_keys.index(default_dt) if default_dt in doc_type_keys else 0
+
     col_dt, col_actions = st.columns([1, 2])
     with col_dt:
-        doc_type_keys = list(available_doc_types.keys())
         selected_write_dt = st.selectbox(
             "Document type",
             doc_type_keys,
+            index=default_idx,
             format_func=lambda x: available_doc_types[x],
             key=f"write_dt_{project_id}",
         )
@@ -2507,10 +3082,34 @@ def _render_write_tab(project):
         sess = session_map.get(sec_id, {})
         draft_text = sess.get("user_text") or sess.get("generated_text") or ""
 
+        if has_draft and draft_text.strip():
+            stripe_class = "section-card-drafted"
+            status_text = "Drafted"
+        else:
+            stripe_class = "section-card-empty"
+            status_text = "Not started"
+
         with st.container(border=True):
-            header_col, action_col1, action_col2 = st.columns([4, 1, 1])
+            st.markdown(
+                f"<div class='{stripe_class}' style='margin:-1rem -1rem 0.5rem -1rem; padding:0;'></div>",
+                unsafe_allow_html=True,
+            )
+            header_col, status_col, action_col1, action_col2 = st.columns([3.5, 0.8, 1, 1])
             with header_col:
                 st.markdown(f"**{sec_id} &mdash; {sec_title}**")
+            with status_col:
+                if has_draft and draft_text.strip():
+                    wc = len(draft_text.split())
+                    st.markdown(
+                        f"<span class='status-badge status-active'>{status_text}</span>"
+                        f"<br/><span style='font-size:0.7rem;color:#94a3b8;'>{wc} words</span>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f"<span class='status-badge status-draft'>{status_text}</span>",
+                        unsafe_allow_html=True,
+                    )
             with action_col1:
                 btn_label = "Regenerate" if has_draft else "Generate"
                 if st.button(btn_label, key=f"gen_sec_{project_id}_{selected_write_dt}_{sec_id}", use_container_width=True):
@@ -2587,16 +3186,22 @@ def _render_write_tab(project):
                 )
 
 
-def _render_project_settings(project):
-    project_id = project["id"]
-    intake = project.get("project_intake") or {}
-    if isinstance(intake, str):
-        import json as _json
-        intake = _json.loads(intake)
+def _render_intake_by_type(project_id, project_type, intake):
+    if project_type in ("standalone_pdd", ""):
+        return _render_intake_pdd(project_id, intake)
+    elif project_type == "poa_programme":
+        return _render_intake_poa(project_id, intake)
+    elif project_type == "vpa_component":
+        return _render_intake_vpa(project_id, intake)
+    elif project_type == "monitoring_report":
+        return _render_intake_mr(project_id, intake)
+    elif project_type == "valver_report":
+        return _render_intake_valver(project_id, intake)
+    else:
+        return _render_intake_pdd(project_id, intake)
 
-    st.subheader("Project Setup")
-    st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
 
+def _render_intake_pdd(project_id, intake):
     po = intake.get("project_overview", {})
     tech = intake.get("technology", {})
     loc = intake.get("location", {})
@@ -2608,44 +3213,7 @@ def _render_project_settings(project):
     safeg = intake.get("safeguards", {})
 
     with st.container(border=True):
-        st.markdown("#### About Your Project")
-        new_name = st.text_input("Project name", value=project.get("name", ""),
-                                  key=f"setup_name_{project_id}")
-        c1, c2 = st.columns(2)
-        with c1:
-            new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
-                                         index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
-                                         if project.get("standard") in STANDARD_OPTIONS else 0,
-                                         key=f"setup_standard_{project_id}")
-        with c2:
-            new_country = st.text_input("Country", value=project.get("country", "") or "",
-                                         key=f"setup_country_{project_id}")
-        new_methodology = _methodology_selector(
-            f"setup_{project_id}", standard=new_standard,
-            current_value=project.get("methodology"))
-
-        meth_detail = None
-        if new_methodology:
-            meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
-        if meth_detail:
-            with st.container(border=True):
-                st.caption("Selected methodology")
-                st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
-                mc1, mc2, mc3 = st.columns(3)
-                with mc1:
-                    st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
-                with mc2:
-                    st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
-                with mc3:
-                    st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
-                if meth_detail.get("applicability"):
-                    st.markdown(f"Applicability: {meth_detail['applicability']}")
-                if meth_detail.get("status") == "deprecated":
-                    st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
-
-        new_desc = st.text_area("Project description / objective", value=project.get("description", "") or "",
-                                 key=f"setup_desc_{project_id}",
-                                 placeholder="Briefly describe the project activity and its objective...")
+        st.markdown("#### Project Overview")
         po_objective = st.text_area("Detailed objective", value=po.get("objective", ""),
                                      key=f"setup_po_objective_{project_id}",
                                      placeholder="What is the primary goal of this project?",
@@ -2667,12 +3235,6 @@ def _render_project_settings(project):
             po_num_units = st.text_input("Number of units", value=po.get("num_units", ""),
                                           key=f"setup_po_num_units_{project_id}",
                                           placeholder="e.g., 50,000 stoves")
-
-        new_status = st.selectbox("Project status", list(STATUS_LABELS.keys()),
-                                   format_func=lambda x: STATUS_LABELS[x],
-                                   index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
-                                   if project.get("status") in STATUS_LABELS else 0,
-                                   key=f"setup_status_{project_id}")
 
     with st.container(border=True):
         st.markdown("#### Technology & Approach")
@@ -2773,33 +3335,7 @@ def _render_project_settings(project):
                                    placeholder="Brief summary of the emission reduction claim...",
                                    height=80)
 
-    with st.container(border=True):
-        st.markdown("#### SDGs & Co-benefits")
-        st.caption("Select the Sustainable Development Goals this project contributes to.")
-        existing_sdgs = sdgs_data.get("selected_sdgs", [])
-        sdg_list = []
-        sdg_goals = [
-            "1 - No Poverty", "2 - Zero Hunger", "3 - Good Health and Well-being",
-            "4 - Quality Education", "5 - Gender Equality", "6 - Clean Water and Sanitation",
-            "7 - Affordable and Clean Energy", "8 - Decent Work and Economic Growth",
-            "9 - Industry, Innovation and Infrastructure", "10 - Reduced Inequalities",
-            "11 - Sustainable Cities and Communities", "12 - Responsible Consumption and Production",
-            "13 - Climate Action", "14 - Life Below Water", "15 - Life on Land",
-            "16 - Peace, Justice and Strong Institutions", "17 - Partnerships for the Goals",
-        ]
-        existing_map = {str(s.get("goal_number", "")): s.get("contribution_description", "") for s in existing_sdgs}
-        for goal in sdg_goals:
-            goal_num = goal.split(" - ")[0].strip()
-            is_selected = st.checkbox(goal, value=goal_num in existing_map,
-                                       key=f"setup_sdg_{project_id}_{goal_num}")
-            if is_selected:
-                contrib = st.text_input(
-                    f"SDG {goal_num} contribution",
-                    value=existing_map.get(goal_num, ""),
-                    key=f"setup_sdg_contrib_{project_id}_{goal_num}",
-                    placeholder=f"How does the project contribute to SDG {goal_num}?",
-                )
-                sdg_list.append({"goal_number": goal_num, "contribution_description": contrib})
+    sdg_list = _render_sdg_section(project_id, sdgs_data)
 
     with st.container(border=True):
         st.markdown("#### Stakeholder Engagement")
@@ -2831,6 +3367,454 @@ def _render_project_settings(project):
                                   placeholder="Describe the do-no-harm assessment...",
                                   height=80)
 
+    return {
+        "project_overview": {
+            "objective": po_objective, "summary": po_summary,
+            "start_date": po_start_date, "scale": po_scale, "num_units": po_num_units,
+        },
+        "technology": {
+            "description": tech_desc, "manufacturer": tech_manufacturer, "model": tech_model,
+            "fuel_baseline": tech_fuel_baseline, "fuel_project": tech_fuel_project,
+            "distribution_method": tech_distribution,
+        },
+        "location": {
+            "regions": loc_regions, "coordinates": loc_coords,
+            "target_population": loc_target, "beneficiaries": loc_beneficiaries,
+        },
+        "baseline_additionality": {
+            "baseline_scenario": ba_baseline, "additionality_justification": ba_additionality,
+            "barriers": ba_barriers, "common_practice": ba_common,
+        },
+        "monitoring": {
+            "monitoring_approach": mon_approach, "key_parameters": mon_params,
+            "sampling_approach": mon_sampling, "qa_qc": mon_qaqc,
+        },
+        "emission_reductions": {
+            "annual_er_estimate": er_annual, "total_er_estimate": er_total,
+            "calculation_approach": er_calc_approach, "er_summary": er_summary,
+        },
+        "sdgs": {"selected_sdgs": sdg_list},
+        "stakeholders": {
+            "consultation_summary": stk_consultation, "grievance_mechanism": stk_grievance,
+            "gender_assessment": stk_gender,
+        },
+        "safeguards": {
+            "environmental_safeguards": safeg_env, "social_safeguards": safeg_social,
+            "do_no_harm": safeg_dnh,
+        },
+    }
+
+
+def _render_intake_poa(project_id, intake):
+    prog = intake.get("programme", {})
+    elig = intake.get("eligibility", {})
+    mon = intake.get("monitoring", {})
+    er = intake.get("emission_reductions", {})
+    sdgs_data = intake.get("sdgs", {})
+    stk = intake.get("stakeholders", {})
+    safeg = intake.get("safeguards", {})
+
+    with st.container(border=True):
+        st.markdown("#### Programme Description")
+        prog_objective = st.text_area("Programme objective", value=prog.get("objective", ""),
+                                       key=f"setup_poa_objective_{project_id}",
+                                       placeholder="What is the overall objective of this Programme of Activities?",
+                                       height=80)
+        prog_scope = st.text_area("Geographic scope", value=prog.get("geographic_scope", ""),
+                                   key=f"setup_poa_scope_{project_id}",
+                                   placeholder="Countries/regions covered by the programme...",
+                                   height=80)
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            prog_cme = st.text_input("Coordinating/Managing Entity (CME)", value=prog.get("cme_name", ""),
+                                      key=f"setup_poa_cme_{project_id}",
+                                      placeholder="Name of the CME organization")
+        with pc2:
+            prog_target_vpas = st.text_input("Target number of VPAs", value=prog.get("target_vpas", ""),
+                                              key=f"setup_poa_target_vpas_{project_id}",
+                                              placeholder="e.g., 15")
+        prog_cme_details = st.text_area("CME organizational details", value=prog.get("cme_details", ""),
+                                         key=f"setup_poa_cme_details_{project_id}",
+                                         placeholder="Describe the CME's role, experience, and organizational structure...",
+                                         height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Eligibility & Inclusion")
+        elig_criteria = st.text_area("VPA eligibility criteria", value=elig.get("criteria", ""),
+                                      key=f"setup_poa_elig_{project_id}",
+                                      placeholder="What criteria must a VPA meet to be included in this programme?",
+                                      height=100)
+        elig_process = st.text_area("VPA inclusion process", value=elig.get("inclusion_process", ""),
+                                     key=f"setup_poa_inclusion_{project_id}",
+                                     placeholder="Describe the process for adding new VPAs to the programme...",
+                                     height=80)
+        elig_approval = st.text_area("VPA approval mechanism", value=elig.get("approval_mechanism", ""),
+                                      key=f"setup_poa_approval_{project_id}",
+                                      placeholder="How are VPAs approved and validated?",
+                                      height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Monitoring & Emission Reductions")
+        mon_approach = st.text_area("Programme-level monitoring approach", value=mon.get("monitoring_approach", ""),
+                                     key=f"setup_poa_mon_{project_id}",
+                                     placeholder="Describe the overall monitoring framework for the programme...",
+                                     height=80)
+        ec1, ec2 = st.columns(2)
+        with ec1:
+            er_annual = st.text_input("Estimated annual ERs (tCO2e)", value=er.get("annual_er_estimate", ""),
+                                       key=f"setup_poa_er_annual_{project_id}")
+        with ec2:
+            er_total = st.text_input("Total estimated ERs (tCO2e)", value=er.get("total_er_estimate", ""),
+                                      key=f"setup_poa_er_total_{project_id}")
+
+    sdg_list = _render_sdg_section(project_id, sdgs_data)
+
+    with st.container(border=True):
+        st.markdown("#### Stakeholder Engagement")
+        stk_consultation = st.text_area("Consultation summary", value=stk.get("consultation_summary", ""),
+                                         key=f"setup_poa_stk_{project_id}",
+                                         placeholder="Describe the stakeholder consultation process...",
+                                         height=80)
+        stk_grievance = st.text_area("Grievance mechanism", value=stk.get("grievance_mechanism", ""),
+                                      key=f"setup_poa_grievance_{project_id}",
+                                      placeholder="Describe the grievance redress mechanism...",
+                                      height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Safeguards")
+        safeg_env = st.text_area("Environmental safeguards", value=safeg.get("environmental_safeguards", ""),
+                                  key=f"setup_poa_safeg_env_{project_id}", height=80)
+        safeg_social = st.text_area("Social safeguards", value=safeg.get("social_safeguards", ""),
+                                     key=f"setup_poa_safeg_social_{project_id}", height=80)
+
+    return {
+        "programme": {
+            "objective": prog_objective, "geographic_scope": prog_scope,
+            "cme_name": prog_cme, "cme_details": prog_cme_details,
+            "target_vpas": prog_target_vpas,
+        },
+        "eligibility": {
+            "criteria": elig_criteria, "inclusion_process": elig_process,
+            "approval_mechanism": elig_approval,
+        },
+        "monitoring": {"monitoring_approach": mon_approach},
+        "emission_reductions": {"annual_er_estimate": er_annual, "total_er_estimate": er_total},
+        "sdgs": {"selected_sdgs": sdg_list},
+        "stakeholders": {"consultation_summary": stk_consultation, "grievance_mechanism": stk_grievance},
+        "safeguards": {"environmental_safeguards": safeg_env, "social_safeguards": safeg_social},
+    }
+
+
+def _render_intake_vpa(project_id, intake):
+    vpa = intake.get("vpa_details", {})
+    tech = intake.get("technology", {})
+    loc = intake.get("location", {})
+    mon = intake.get("monitoring", {})
+    er = intake.get("emission_reductions", {})
+
+    with st.container(border=True):
+        st.markdown("#### VPA Details")
+        vpa_elig = st.text_area("How this VPA meets PoA eligibility criteria", value=vpa.get("eligibility_justification", ""),
+                                 key=f"setup_vpa_elig_{project_id}",
+                                 placeholder="Explain how this VPA satisfies the eligibility criteria defined in the parent PoA-DD...",
+                                 height=100)
+        vpa_start = st.text_input("VPA start date", value=vpa.get("start_date", ""),
+                                   key=f"setup_vpa_start_{project_id}",
+                                   placeholder="YYYY-MM-DD")
+
+    with st.container(border=True):
+        st.markdown("#### Technology & Approach")
+        tech_desc = st.text_area("VPA-specific technology/approach", value=tech.get("description", ""),
+                                  key=f"setup_vpa_tech_{project_id}",
+                                  placeholder="Describe the technology or approach specific to this VPA...",
+                                  height=80)
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            tech_manufacturer = st.text_input("Manufacturer", value=tech.get("manufacturer", ""),
+                                               key=f"setup_vpa_mfr_{project_id}")
+        with tc2:
+            tech_model = st.text_input("Model", value=tech.get("model", ""),
+                                        key=f"setup_vpa_model_{project_id}")
+
+    with st.container(border=True):
+        st.markdown("#### Location & Geography")
+        loc_regions = st.text_input("VPA location / regions", value=loc.get("regions", ""),
+                                     key=f"setup_vpa_regions_{project_id}",
+                                     placeholder="Specific regions or districts for this VPA")
+        loc_coords = st.text_input("Coordinates", value=loc.get("coordinates", ""),
+                                    key=f"setup_vpa_coords_{project_id}",
+                                    placeholder="e.g., 7.9465, -1.0232")
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
+                                        key=f"setup_vpa_target_{project_id}")
+        with lc2:
+            loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
+                                               key=f"setup_vpa_bene_{project_id}")
+
+    with st.container(border=True):
+        st.markdown("#### Monitoring & Emission Reductions")
+        mon_approach = st.text_area("VPA-specific monitoring arrangements", value=mon.get("monitoring_approach", ""),
+                                     key=f"setup_vpa_mon_{project_id}",
+                                     placeholder="Any VPA-specific monitoring requirements beyond the PoA-level plan...",
+                                     height=80)
+        ec1, ec2 = st.columns(2)
+        with ec1:
+            er_annual = st.text_input("Expected annual ERs (tCO2e)", value=er.get("annual_er_estimate", ""),
+                                       key=f"setup_vpa_er_annual_{project_id}")
+        with ec2:
+            er_total = st.text_input("Expected total ERs (tCO2e)", value=er.get("total_er_estimate", ""),
+                                      key=f"setup_vpa_er_total_{project_id}")
+
+    return {
+        "vpa_details": {
+            "eligibility_justification": vpa_elig, "start_date": vpa_start,
+        },
+        "technology": {
+            "description": tech_desc, "manufacturer": tech_manufacturer, "model": tech_model,
+        },
+        "location": {
+            "regions": loc_regions, "coordinates": loc_coords,
+            "target_population": loc_target, "beneficiaries": loc_beneficiaries,
+        },
+        "monitoring": {"monitoring_approach": mon_approach},
+        "emission_reductions": {"annual_er_estimate": er_annual, "total_er_estimate": er_total},
+    }
+
+
+def _render_intake_mr(project_id, intake):
+    period = intake.get("monitoring_period", {})
+    data = intake.get("data_collection", {})
+    deviations = intake.get("deviations", {})
+    results = intake.get("results", {})
+
+    with st.container(border=True):
+        st.markdown("#### Monitoring Period")
+        mp1, mp2 = st.columns(2)
+        with mp1:
+            period_start = st.text_input("Monitoring period start", value=period.get("start_date", ""),
+                                          key=f"setup_mr_period_start_{project_id}",
+                                          placeholder="YYYY-MM-DD")
+        with mp2:
+            period_end = st.text_input("Monitoring period end", value=period.get("end_date", ""),
+                                        key=f"setup_mr_period_end_{project_id}",
+                                        placeholder="YYYY-MM-DD")
+        period_number = st.text_input("Monitoring period number", value=period.get("period_number", ""),
+                                       key=f"setup_mr_period_num_{project_id}",
+                                       placeholder="e.g., 1, 2, 3...")
+
+    with st.container(border=True):
+        st.markdown("#### Data Collection")
+        data_units = st.text_input("Number of devices/installations in this period",
+                                    value=data.get("num_units", ""),
+                                    key=f"setup_mr_units_{project_id}",
+                                    placeholder="e.g., 25,000 stoves distributed")
+        data_summary = st.text_area("Data collection summary", value=data.get("collection_summary", ""),
+                                     key=f"setup_mr_data_summary_{project_id}",
+                                     placeholder="Summarize the monitoring data collected during this period...",
+                                     height=100)
+        data_highlights = st.text_area("Key monitoring data highlights", value=data.get("data_highlights", ""),
+                                        key=f"setup_mr_highlights_{project_id}",
+                                        placeholder="Notable findings, trends, or data points...",
+                                        height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Deviations & Changes")
+        dev_methodology = st.text_area("Deviations from PDD methodology", value=deviations.get("methodology_deviations", ""),
+                                        key=f"setup_mr_dev_meth_{project_id}",
+                                        placeholder="Describe any deviations from the applied methodology...",
+                                        height=80)
+        dev_changes = st.text_area("Changes since last monitoring period", value=deviations.get("period_changes", ""),
+                                    key=f"setup_mr_dev_changes_{project_id}",
+                                    placeholder="Describe any changes compared to the previous monitoring period...",
+                                    height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Emission Reduction Results")
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            res_baseline = st.text_input("Baseline emissions (tCO2e)", value=results.get("baseline_emissions", ""),
+                                          key=f"setup_mr_res_bl_{project_id}")
+        with rc2:
+            res_project = st.text_input("Project emissions (tCO2e)", value=results.get("project_emissions", ""),
+                                         key=f"setup_mr_res_pj_{project_id}")
+        rc3, rc4 = st.columns(2)
+        with rc3:
+            res_leakage = st.text_input("Leakage (tCO2e)", value=results.get("leakage", ""),
+                                         key=f"setup_mr_res_leak_{project_id}")
+        with rc4:
+            res_net = st.text_input("Net emission reductions (tCO2e)", value=results.get("net_er", ""),
+                                     key=f"setup_mr_res_net_{project_id}")
+
+    return {
+        "monitoring_period": {
+            "start_date": period_start, "end_date": period_end,
+            "period_number": period_number,
+        },
+        "data_collection": {
+            "num_units": data_units, "collection_summary": data_summary,
+            "data_highlights": data_highlights,
+        },
+        "deviations": {
+            "methodology_deviations": dev_methodology, "period_changes": dev_changes,
+        },
+        "results": {
+            "baseline_emissions": res_baseline, "project_emissions": res_project,
+            "leakage": res_leakage, "net_er": res_net,
+        },
+    }
+
+
+def _render_intake_valver(project_id, intake):
+    scope = intake.get("scope", {})
+    assessment = intake.get("assessment", {})
+    findings = intake.get("findings", {})
+
+    with st.container(border=True):
+        st.markdown("#### Assessment Scope")
+        scope_type = st.selectbox("Assessment type",
+                                   ["Validation", "Verification", "Combined"],
+                                   index=["Validation", "Verification", "Combined"].index(scope.get("assessment_type", "Validation"))
+                                   if scope.get("assessment_type") in ["Validation", "Verification", "Combined"] else 0,
+                                   key=f"setup_vv_type_{project_id}")
+        scope_desc = st.text_area("Scope description", value=scope.get("scope_description", ""),
+                                   key=f"setup_vv_scope_{project_id}",
+                                   placeholder="Describe the scope of this validation/verification...",
+                                   height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Assessment Methodology")
+        assess_method = st.text_area("Assessment methodology", value=assessment.get("methodology", ""),
+                                      key=f"setup_vv_method_{project_id}",
+                                      placeholder="Describe the assessment methodology used...",
+                                      height=80)
+        assess_site = st.text_area("Site visit details", value=assessment.get("site_visit", ""),
+                                    key=f"setup_vv_site_{project_id}",
+                                    placeholder="Details of site visits conducted...",
+                                    height=80)
+        assess_interviews = st.text_area("Interview records", value=assessment.get("interviews", ""),
+                                          key=f"setup_vv_interviews_{project_id}",
+                                          placeholder="Summary of interviews conducted...",
+                                          height=80)
+
+    with st.container(border=True):
+        st.markdown("#### Key Findings")
+        findings_summary = st.text_area("Findings summary", value=findings.get("summary", ""),
+                                         key=f"setup_vv_findings_{project_id}",
+                                         placeholder="Summary of key findings from the assessment...",
+                                         height=100)
+        findings_cars = st.text_area("CARs (Corrective Action Requests)", value=findings.get("cars", ""),
+                                      key=f"setup_vv_cars_{project_id}",
+                                      placeholder="List any Corrective Action Requests raised...",
+                                      height=80)
+        findings_cls = st.text_area("CLs (Clarification Requests)", value=findings.get("cls", ""),
+                                     key=f"setup_vv_cls_{project_id}",
+                                     placeholder="List any Clarification Requests raised...",
+                                     height=80)
+
+    return {
+        "scope": {
+            "assessment_type": scope_type, "scope_description": scope_desc,
+        },
+        "assessment": {
+            "methodology": assess_method, "site_visit": assess_site,
+            "interviews": assess_interviews,
+        },
+        "findings": {
+            "summary": findings_summary, "cars": findings_cars, "cls": findings_cls,
+        },
+    }
+
+
+def _render_sdg_section(project_id, sdgs_data):
+    with st.container(border=True):
+        st.markdown("#### SDGs & Co-benefits")
+        st.caption("Select the Sustainable Development Goals this project contributes to.")
+        existing_sdgs = sdgs_data.get("selected_sdgs", [])
+        sdg_list = []
+        sdg_goals = [
+            "1 - No Poverty", "2 - Zero Hunger", "3 - Good Health and Well-being",
+            "4 - Quality Education", "5 - Gender Equality", "6 - Clean Water and Sanitation",
+            "7 - Affordable and Clean Energy", "8 - Decent Work and Economic Growth",
+            "9 - Industry, Innovation and Infrastructure", "10 - Reduced Inequalities",
+            "11 - Sustainable Cities and Communities", "12 - Responsible Consumption and Production",
+            "13 - Climate Action", "14 - Life Below Water", "15 - Life on Land",
+            "16 - Peace, Justice and Strong Institutions", "17 - Partnerships for the Goals",
+        ]
+        existing_map = {str(s.get("goal_number", "")): s.get("contribution_description", "") for s in existing_sdgs}
+        for goal in sdg_goals:
+            goal_num = goal.split(" - ")[0].strip()
+            is_selected = st.checkbox(goal, value=goal_num in existing_map,
+                                       key=f"setup_sdg_{project_id}_{goal_num}")
+            if is_selected:
+                contrib = st.text_input(
+                    f"SDG {goal_num} contribution",
+                    value=existing_map.get(goal_num, ""),
+                    key=f"setup_sdg_contrib_{project_id}_{goal_num}",
+                    placeholder=f"How does the project contribute to SDG {goal_num}?",
+                )
+                sdg_list.append({"goal_number": goal_num, "contribution_description": contrib})
+    return sdg_list
+
+
+def _render_project_settings(project):
+    project_id = project["id"]
+    project_type = project.get("project_type", "standalone_pdd")
+    intake = project.get("project_intake") or {}
+    if isinstance(intake, str):
+        import json as _json
+        intake = _json.loads(intake)
+
+    st.subheader("Project Setup")
+    st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
+
+    with st.container(border=True):
+        st.markdown("#### About Your Project")
+        new_name = st.text_input("Project name", value=project.get("name", ""),
+                                  key=f"setup_name_{project_id}")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
+                                         index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
+                                         if project.get("standard") in STANDARD_OPTIONS else 0,
+                                         key=f"setup_standard_{project_id}")
+        with c2:
+            new_country = st.text_input("Country", value=project.get("country", "") or "",
+                                         key=f"setup_country_{project_id}")
+        new_methodology = _methodology_selector(
+            f"setup_{project_id}", standard=new_standard,
+            current_value=project.get("methodology"))
+
+        meth_detail = None
+        if new_methodology:
+            meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
+        if meth_detail:
+            with st.container(border=True):
+                st.caption("Selected methodology")
+                st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
+                mc1, mc2, mc3 = st.columns(3)
+                with mc1:
+                    st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
+                with mc2:
+                    st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
+                with mc3:
+                    st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
+                if meth_detail.get("applicability"):
+                    st.markdown(f"Applicability: {meth_detail['applicability']}")
+                if meth_detail.get("status") == "deprecated":
+                    st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
+
+        new_desc = st.text_area("Project description / objective", value=project.get("description", "") or "",
+                                 key=f"setup_desc_{project_id}",
+                                 placeholder="Briefly describe the project activity and its objective...")
+        new_status = st.selectbox("Project status", list(STATUS_LABELS.keys()),
+                                   format_func=lambda x: STATUS_LABELS[x],
+                                   index=list(STATUS_LABELS.keys()).index(project.get("status", "draft"))
+                                   if project.get("status") in STATUS_LABELS else 0,
+                                   key=f"setup_status_{project_id}")
+
+    intake_data = _render_intake_by_type(project_id, project_type, intake)
+
     st.divider()
     st.subheader("Crediting Period")
 
@@ -2858,7 +3842,6 @@ def _render_project_settings(project):
         key=f"setup_cp_years_{project_id}",
     )
     if cp_start:
-        from datetime import timedelta
         cp_end = _date(cp_start.year + cp_years, cp_start.month, cp_start.day) if cp_start else None
         if cp_end:
             st.caption(f"Crediting period: {cp_start.isoformat()} to {cp_end.isoformat()} ({cp_years} years)")
@@ -2902,69 +3885,7 @@ def _render_project_settings(project):
 
     st.divider()
 
-    with st.container(border=True):
-        st.markdown("#### Documents")
-        st.caption("Upload project documents such as PDDs, Monitoring Reports, and reference materials.")
-        _render_documents_tab(project)
-
-    st.divider()
-
     if st.button("Save All Changes", key=f"save_setup_{project_id}", type="primary"):
-        new_intake = {
-            "project_overview": {
-                "objective": po_objective,
-                "summary": po_summary,
-                "start_date": po_start_date,
-                "scale": po_scale,
-                "num_units": po_num_units,
-            },
-            "technology": {
-                "description": tech_desc,
-                "manufacturer": tech_manufacturer,
-                "model": tech_model,
-                "fuel_baseline": tech_fuel_baseline,
-                "fuel_project": tech_fuel_project,
-                "distribution_method": tech_distribution,
-            },
-            "location": {
-                "regions": loc_regions,
-                "coordinates": loc_coords,
-                "target_population": loc_target,
-                "beneficiaries": loc_beneficiaries,
-            },
-            "baseline_additionality": {
-                "baseline_scenario": ba_baseline,
-                "additionality_justification": ba_additionality,
-                "barriers": ba_barriers,
-                "common_practice": ba_common,
-            },
-            "monitoring": {
-                "monitoring_approach": mon_approach,
-                "key_parameters": mon_params,
-                "sampling_approach": mon_sampling,
-                "qa_qc": mon_qaqc,
-            },
-            "emission_reductions": {
-                "annual_er_estimate": er_annual,
-                "total_er_estimate": er_total,
-                "calculation_approach": er_calc_approach,
-                "er_summary": er_summary,
-            },
-            "sdgs": {
-                "selected_sdgs": sdg_list,
-            },
-            "stakeholders": {
-                "consultation_summary": stk_consultation,
-                "grievance_mechanism": stk_grievance,
-                "gender_assessment": stk_gender,
-            },
-            "safeguards": {
-                "environmental_safeguards": safeg_env,
-                "social_safeguards": safeg_social,
-                "do_no_harm": safeg_dnh,
-            },
-        }
-
         update_payload = {
             "name": new_name,
             "standard": new_standard,
@@ -2974,7 +3895,7 @@ def _render_project_settings(project):
             "status": new_status,
             "crediting_period_years": cp_years,
             "project_settings": new_settings,
-            "project_intake": new_intake,
+            "project_intake": intake_data,
         }
         if cp_start:
             update_payload["crediting_period_start"] = cp_start.isoformat()

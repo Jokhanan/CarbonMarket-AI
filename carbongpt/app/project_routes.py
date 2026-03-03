@@ -24,6 +24,10 @@ class ProjectCreate(BaseModel):
     methodology: str | None = None
     country: str | None = None
     description: str | None = None
+    project_type: str | None = None
+    parent_project_id: int | None = None
+    monitoring_period_start: str | None = None
+    monitoring_period_end: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -38,6 +42,10 @@ class ProjectUpdate(BaseModel):
     crediting_period_years: int | None = None
     project_settings: dict | None = None
     project_intake: dict | None = None
+    project_type: str | None = None
+    parent_project_id: int | None = None
+    monitoring_period_start: str | None = None
+    monitoring_period_end: str | None = None
 
 
 class WriteSectionRequest(BaseModel):
@@ -130,6 +138,10 @@ def create_project(data: ProjectCreate):
         methodology=data.methodology,
         country=data.country,
         description=data.description,
+        project_type=data.project_type,
+        parent_project_id=data.parent_project_id,
+        monitoring_period_start=data.monitoring_period_start,
+        monitoring_period_end=data.monitoring_period_end,
     )
     project_dir = PROJECT_FILES_DIR / str(project_id)
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -160,6 +172,22 @@ def delete_project(project_id: int):
     from carbongpt.repository.store import delete_user_project
     delete_user_project(project_id)
     return {"message": "Project deleted."}
+
+
+@router.get("/{project_id}/children")
+def get_child_projects_endpoint(project_id: int):
+    from carbongpt.repository.store import get_child_projects
+    return get_child_projects(project_id)
+
+
+@router.patch("/{project_id}/documents/{doc_id}/ai-context")
+def toggle_document_ai_context(project_id: int, doc_id: int, use_as_ai_context: bool = True):
+    from carbongpt.repository.store import get_project_document, update_document_ai_context
+    doc = get_project_document(doc_id)
+    if not doc or doc["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    update_document_ai_context(doc_id, use_as_ai_context)
+    return {"message": "AI context updated.", "use_as_ai_context": use_as_ai_context}
 
 
 @router.post("/{project_id}/documents")
@@ -274,11 +302,41 @@ def get_document_sections(project_id: int, doc_type: str = "pdd"):
     return sections
 
 
+def _gather_ai_context(project_id, project, doc_type):
+    from carbongpt.repository.store import get_project_documents_for_ai, get_project_documents_by_type
+    pdd_text = None
+    if doc_type == "mr":
+        pdd_docs = get_project_documents_by_type(project_id, "pdd")
+        if pdd_docs:
+            pdd_text = pdd_docs[0].get("parsed_text", "")
+        if not pdd_text and project.get("parent_project_id"):
+            parent_pdd_docs = get_project_documents_by_type(project["parent_project_id"], "pdd")
+            if parent_pdd_docs:
+                pdd_text = parent_pdd_docs[0].get("parsed_text", "")
+
+    ai_docs = get_project_documents_for_ai(project_id)
+    ref_texts = []
+    for rd in ai_docs:
+        if rd.get("doc_type") in ("reference", "research", "field_data", "other"):
+            if rd.get("parsed_text"):
+                ref_texts.append(rd["parsed_text"][:2000])
+        elif rd.get("doc_type") == "pdd" and doc_type == "mr" and not pdd_text:
+            pdd_text = rd.get("parsed_text", "")
+
+    if project.get("parent_project_id"):
+        parent_ai_docs = get_project_documents_for_ai(project["parent_project_id"])
+        for rd in parent_ai_docs:
+            if rd.get("parsed_text"):
+                ref_texts.append(rd["parsed_text"][:2000])
+
+    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+    return pdd_text, reference_text
+
+
 @router.post("/{project_id}/write")
 def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "pdd"):
     from carbongpt.repository.store import (
-        get_user_project, get_project_documents_by_type,
-        save_write_session
+        get_user_project, save_write_session
     )
     from carbongpt.core.ai_writer import generate_section_draft
 
@@ -294,19 +352,7 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
         "project_intake": project.get("project_intake") or {},
     }
 
-    pdd_text = None
-    if doc_type == "mr":
-        pdd_docs = get_project_documents_by_type(project_id, "pdd")
-        if pdd_docs:
-            pdd_text = pdd_docs[0].get("parsed_text", "")
-
-    ref_texts = []
-    for ref_type in ["reference", "research", "field_data"]:
-        ref_docs = get_project_documents_by_type(project_id, ref_type)
-        for rd in ref_docs:
-            if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:2000])
-    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
 
     try:
         generated = generate_section_draft(
@@ -351,8 +397,7 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
 @router.post("/{project_id}/write-all")
 def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "pdd"):
     from carbongpt.repository.store import (
-        get_user_project, get_project_documents_by_type,
-        save_write_session
+        get_user_project, save_write_session
     )
     from carbongpt.core.ai_writer import generate_full_document
 
@@ -368,19 +413,7 @@ def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "
         "project_intake": project.get("project_intake") or {},
     }
 
-    pdd_text = None
-    if doc_type == "mr":
-        pdd_docs = get_project_documents_by_type(project_id, "pdd")
-        if pdd_docs:
-            pdd_text = pdd_docs[0].get("parsed_text", "")
-
-    ref_texts = []
-    for ref_type in ["reference", "research", "field_data"]:
-        ref_docs = get_project_documents_by_type(project_id, ref_type)
-        for rd in ref_docs:
-            if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:2000])
-    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
 
     try:
         results = generate_full_document(
@@ -493,19 +526,7 @@ def review_document(project_id: int, doc_id: int):
         "project_intake": project.get("project_intake") or {},
     }
 
-    pdd_text = None
-    if doc["doc_type"] == "mr":
-        pdd_docs = get_project_documents_by_type(project_id, "pdd")
-        if pdd_docs:
-            pdd_text = pdd_docs[0].get("parsed_text", "")
-
-    ref_texts = []
-    for ref_type in ["reference", "research", "field_data"]:
-        ref_docs = get_project_documents_by_type(project_id, ref_type)
-        for rd in ref_docs:
-            if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:2000])
-    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc["doc_type"])
 
     try:
         review_result = review_with_context(
@@ -528,6 +549,64 @@ def review_document(project_id: int, doc_id: int):
         review_result=Json(review_result),
         status="reviewed",
     )
+
+    return review_result
+
+
+@router.post("/{project_id}/review-draft")
+def review_draft(project_id: int, doc_type: str = "pdd"):
+    from carbongpt.repository.store import get_user_project, get_write_sessions
+    from carbongpt.core.ai_writer import review_with_context
+
+    valid_doc_types = {"pdd", "mr", "poa_dd", "vpa_dd", "valver"}
+    if doc_type not in valid_doc_types:
+        raise HTTPException(status_code=400, detail=f"Invalid doc_type: {doc_type}. Must be one of: {', '.join(sorted(valid_doc_types))}")
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    sessions = get_write_sessions(project_id, doc_type=doc_type)
+    if not sessions:
+        raise HTTPException(status_code=400, detail="No drafted sections found for this document type.")
+
+    draft_parts = []
+    for sess in sessions:
+        text = sess.get("user_text") or sess.get("generated_text") or ""
+        if text.strip():
+            section_id = sess.get("section_id", "")
+            section_title = sess.get("section_title", "")
+            draft_parts.append(f"## {section_id} {section_title}\n\n{text}")
+
+    if not draft_parts:
+        raise HTTPException(status_code=400, detail="All drafted sections are empty.")
+
+    document_text = "\n\n---\n\n".join(draft_parts)
+
+    project_info = {
+        "name": project["name"],
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
+    }
+
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
+
+    try:
+        review_result = review_with_context(
+            standard=project["standard"],
+            project_doc_type=doc_type,
+            document_text=document_text,
+            project_info=project_info,
+            pdd_text=pdd_text,
+            reference_texts=reference_text,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Draft review failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Draft review failed: {e}")
 
     return review_result
 

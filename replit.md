@@ -15,8 +15,14 @@ CarbonGPT is built with Python 3.11, FastAPI for backend services, and Streamlit
 **UI/UX Decisions:**
 The application features a streamlined two-section navigation:
 - **Workspace (Streamlit UI):** Contains "My Projects" (project workspace) and "Carbon Intelligence" (dashboard with project data from Verra and Gold Standard registries).
-- **Project Workspace Tabs:** Focus on document writing and review: "Project Setup" (guided intake form), "Write / Draft" (AI writing assistant), "Review" (AI-powered document review), "Export" (Word/Excel).
-- **Project Intake Form:** A 9-card guided form for collecting project data, stored in a `project_intake` JSONB column.
+- **Project Types:** `standalone_pdd`, `poa_programme`, `vpa_component`, `monitoring_report`, `valver_report`. Each type has its own intake form and default doc type.
+- **Project Hierarchy:** PoA programmes contain VPA children (`parent_project_id` FK). MR projects link to their parent PDD. Hierarchy displayed in project list with indentation.
+- **Project Workspace Tabs:** 5 tabs: "Project Setup" (type-specific intake form), "Documents" (knowledge base with AI context toggles), "Write / Draft" (AI writing with section status cards), "Review" (draft review + uploaded doc review), "Export" (all doc types).
+- **Project Intake Forms:** Type-specific: PDD has 9 cards (overview, technology, location, baseline, monitoring, ERs, SDGs, stakeholders, safeguards). PoA-DD has programme/eligibility/monitoring cards. VPA-DD has VPA details/technology/location/monitoring. MR has monitoring period/data collection/deviations/results. ValVer has scope/assessment/findings.
+- **Documents Tab:** Dedicated knowledge base with file upload, AI context toggle per document, parent document auto-linking, smart prompts by project type, grouped display (core/supporting/other).
+- **AI Context System:** `use_as_ai_context` boolean on `project_documents`. `_gather_ai_context()` helper filters by toggle, also pulls parent project docs. Used by write, write-all, review, and review-draft endpoints.
+- **Review Draft:** `POST /projects/{id}/review-draft?doc_type=pdd` assembles all write sessions into a virtual document and runs AI review without needing export+upload.
+- **Premium CSS:** Elevated cards with shadows, hover lift, colored borders per standard (GS=gold, Verra=blue), project type badges, section status stripes (green=drafted, gray=empty), smooth transitions.
 - **Admin (Streamlit UI):** Document repository management, compliance rules, knowledge base, methodology sync, and web intelligence tools.
 
 **Technical Implementations:**
