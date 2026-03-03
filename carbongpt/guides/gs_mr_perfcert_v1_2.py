@@ -25,6 +25,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no mention of the GHG reduction mechanism",
             "copy-pasted boilerplate text that does not describe the specific project",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a concise narrative covering the project purpose, activity type, technology employed, and GHG reduction mechanism. Use sub-headings if the description spans multiple activity components.",
     },
     "A.2": {
         "title": "Location of the project",
@@ -43,6 +45,8 @@ SUBSECTIONS: dict[str, dict] = {
             "only country-level description without specific location",
             "map referenced but not included or attached",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide host country, region/province, and GPS coordinates. Include a placeholder for a map showing the project boundary.",
     },
     "A.3": {
         "title": "Parties and project participants",
@@ -60,6 +64,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no contact information provided for the coordinating entity",
             "roles are ambiguous or not clearly assigned",
         ],
+        "content_format": "table",
+        "format_instructions": "Present project participants in a table with columns: Entity Name | Role | Country | Contact Details. Include a row for each project participant and the coordinating/managing entity.",
     },
     "A.4": {
         "title": "Reference of applied methodology",
@@ -77,6 +83,8 @@ SUBSECTIONS: dict[str, dict] = {
             "wrong methodology referenced for the project type",
             "methodological tools used but not listed",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the full methodology name and version number. List any applicable methodological tools or combined methodologies used.",
     },
     "B.1": {
         "title": "Implementation status of the project",
@@ -95,6 +103,8 @@ SUBSECTIONS: dict[str, dict] = {
             "start date of operation not provided",
             "deviations from PDD not disclosed or discussed",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the current operational status, start date, implementation progress versus the project design, and any deviations from the registered PDD.",
     },
     "B.2": {
         "title": "Post-registration changes",
@@ -113,6 +123,8 @@ SUBSECTIONS: dict[str, dict] = {
             "changes occurred but are not described",
             "no explicit statement confirming presence or absence of changes",
         ],
+        "content_format": "prose",
+        "format_instructions": "Clearly state whether any post-registration changes have occurred. If changes occurred, describe each change, its approval status, and impact on emission reductions.",
     },
     "B.3": {
         "title": "Compliance with applicable rules and standards",
@@ -130,6 +142,8 @@ SUBSECTIONS: dict[str, dict] = {
             "host country regulations not referenced",
             "safeguards requirements not addressed",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide an explicit compliance statement covering Gold Standard rules, host country regulations, and environmental and social safeguards requirements.",
     },
     "C.1": {
         "title": "Description of the monitoring system",
@@ -149,6 +163,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no mention of who is responsible for data collection",
             "instruments or tools used for measurement not specified",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the monitoring system as implemented, referencing the approved monitoring plan. Cover data collection procedures, instruments used, and roles and responsibilities.",
     },
     "D.1": {
         "title": "Data and parameters fixed ex ante",
@@ -171,6 +187,8 @@ SUBSECTIONS: dict[str, dict] = {
             "parameters duplicated across SDG headings instead of cross-referenced",
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each ex ante parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (with traceable reference), Measurement Method, Purpose (baseline/project/leakage). Organize parameters under SDG headings with SDG 13 first.",
     },
     "D.2": {
         "title": "Data and parameters monitored",
@@ -192,6 +210,8 @@ SUBSECTIONS: dict[str, dict] = {
             "usage rates reported without showing age group breakdown and weighted average",
             "measured vs capped values not both reported where methodology requires capping",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each monitored parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (filename and sheet name), Measurement Method, Frequency, QA/QC Procedures, Purpose. Organize parameters under SDG headings with SDG 13 first.",
     },
     "D.3": {
         "title": "Comparison of monitored parameters with last monitoring period",
@@ -209,6 +229,8 @@ SUBSECTIONS: dict[str, dict] = {
             "section marked N/A for Community Service Activities (should be completed)",
             "previous period values not reported",
         ],
+        "content_format": "table",
+        "format_instructions": "Present a comparison table with columns: Parameter | Current Period Value | Previous Period Value | Explanation. Include a row for each monitored parameter, with explanations for any values that have increased or become less conservative.",
     },
     "D.4": {
         "title": "Implementation of sampling plan",
@@ -230,6 +252,8 @@ SUBSECTIONS: dict[str, dict] = {
             "spreadsheets or detailed calculations not referenced or attached",
             "section left blank when D.2 parameters use sampling",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the implemented sampling design, collected data summary, and analysis. Demonstrate that the required confidence/precision level has been met with calculations, and that samples were randomly selected and representative.",
     },
     "E.1": {
         "title": "Calculation of baseline emissions or baseline situation",
@@ -249,6 +273,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no reference to supporting spreadsheets",
             "SDG impacts other than SDG 13 not addressed",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present baseline equations with all variables defined, then substitute actual parameter values to show calculation steps. Organize under SDG headings with SDG 13 first. Include references to supporting spreadsheets with sheet names.",
     },
     "E.2": {
         "title": "Calculation of project emissions or project situation",
@@ -268,6 +294,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no reference to supporting spreadsheets",
             "SDG impacts other than SDG 13 not addressed",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present project scenario equations with all variables defined, then substitute actual parameter values to show calculation steps. Organize under SDG headings with SDG 13 first. Include references to supporting spreadsheets with sheet names.",
     },
     "E.3": {
         "title": "Calculation of leakage",
@@ -286,6 +314,8 @@ SUBSECTIONS: dict[str, dict] = {
             "formulae shown but actual values not substituted",
             "no reference to supporting spreadsheets",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present leakage equations with all variables defined and substitute actual values. If no leakage applies, provide an explicit statement with methodology justification. Include references to supporting spreadsheets with sheet names.",
     },
     "E.4": {
         "title": "Calculation of net SDG impact",
@@ -305,6 +335,8 @@ SUBSECTIONS: dict[str, dict] = {
             "leakage not accounted for in the project estimate",
             "SDGs listed but without corresponding impact values",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present a summary table with columns: SDG | Baseline Estimate | Project Estimate (incl. leakage) | Net Benefit. List SDG 13 first, followed by other design-certified SDGs. Include totals row where applicable.",
     },
     "E.5": {
         "title": "Comparison of actual SDG impacts with estimates in approved PDD",
@@ -325,6 +357,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no explanation of how ex ante estimate was derived for this period",
             "anomalous differences between estimated and actual values not explained",
         ],
+        "content_format": "table",
+        "format_instructions": "Present a comparison table with columns: SDG | Ex Ante Estimate | Actual Achieved | Variance | Explanation. Report both capped and uncapped values where applicable. Ensure estimates are specific to this monitoring period.",
     },
     "E.6": {
         "title": "Remarks on increase in achieved SDG impacts",
@@ -343,6 +377,8 @@ SUBSECTIONS: dict[str, dict] = {
             "increase in impacts acknowledged but cause not explained",
             "differences from PDD assumptions not discussed",
         ],
+        "content_format": "prose",
+        "format_instructions": "State whether actual impacts exceed ex ante estimates. If impacts increased, explain the cause and describe any differences from assumptions in the Design Certified PDD.",
     },
     "F.1": {
         "title": "Safeguards reporting",
@@ -364,6 +400,8 @@ SUBSECTIONS: dict[str, dict] = {
             "assessment questions requiring re-assessment not addressed",
             "section left blank or marked N/A when safeguards were part of the monitoring plan",
         ],
+        "content_format": "checklist",
+        "format_instructions": "Present as a structured checklist of safeguarding principles from the monitoring plan. For each principle, report: Safeguard | Indicator | Monitored Value | Tolerance Threshold | Status (Met/Not Met) | Corrective Action. Include updates on mitigation measure effectiveness and any assessment questions requiring re-assessment.",
     },
     "G.1": {
         "title": "Inputs and grievances received",
@@ -383,6 +421,8 @@ SUBSECTIONS: dict[str, dict] = {
             "unresolved items not flagged with follow-up actions",
             "CIGM not referenced by name",
         ],
+        "content_format": "table",
+        "format_instructions": "Present grievances in a table with columns: Date | Source | Description | Response/Mitigation Action | Status. If no grievances were received, provide an explicit statement referencing the CIGM by name.",
     },
     "G.2": {
         "title": "Stakeholder mitigations monitoring",
@@ -399,6 +439,8 @@ SUBSECTIONS: dict[str, dict] = {
             "mitigations listed without current status",
             "section left blank when mitigations were agreed during stakeholder consultation",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide an update on each agreed stakeholder mitigation measure, including its current status and any actions taken during this monitoring period.",
     },
     "G.3": {
         "title": "Legal contests during the monitoring period",
@@ -417,6 +459,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no statement on compliance with host country regulations",
             "failure to transparently declare events may result in decertification",
         ],
+        "content_format": "prose",
+        "format_instructions": "State whether any legal challenges have arisen during this monitoring period. If none, provide an explicit statement. Confirm compliance with host country legal, environmental, ecological, and social regulations.",
     },
 }
 

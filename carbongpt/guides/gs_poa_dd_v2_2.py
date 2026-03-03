@@ -26,6 +26,8 @@ SUBSECTIONS: dict[str, dict] = {
             "missing confirmation that the PoA is a voluntary action",
             "description is too vague without specifying the actual programme activity",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a coherent narrative describing the PoA purpose, the policy or goal it promotes, the framework for VPA inclusion, and confirmation of voluntary action by the CME.",
     },
     "A.2": {
         "title": "Physical/geographical boundary of the PoA",
@@ -43,6 +45,8 @@ SUBSECTIONS: dict[str, dict] = {
             "boundary described too vaguely without specifying countries or regions",
             "boundary not defined in its entirety at time of Design Certification",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the geographical boundary clearly, specifying countries, regions, or municipalities where VPAs will be implemented. Confirm the boundary is defined in its entirety at Design Certification.",
     },
     "A.3": {
         "title": "Technologies/measures",
@@ -59,6 +63,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no mention of how technology/know-how is transferred to host party",
             "generic description without specifying the actual technology",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the technologies and measures deployed by VPAs under the PoA, including specifications and how technology transfer to the host party is arranged.",
     },
     "A.4": {
         "title": "Target/Indicator for SDGs",
@@ -78,6 +84,8 @@ SUBSECTIONS: dict[str, dict] = {
             "SDG targets or indicators missing for listed SDGs",
             "no table or structured presentation of SDG targets and indicators",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present SDG targets in a summary table with columns: SDG | Target | Indicator | Estimated Impact | Units. Include SDG 13 (Climate Action) as mandatory and at least two additional SDGs.",
     },
     "A.5": {
         "title": "Coordinating/managing entity",
@@ -94,6 +102,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no reference to contact information in appendix",
             "CME role and responsibilities not clear",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the name of the coordinating/managing entity and reference the appendix containing contact details.",
     },
     "A.6": {
         "title": "Funding sources of PoA",
@@ -113,6 +123,8 @@ SUBSECTIONS: dict[str, dict] = {
             "ODA Declaration missing for projects in eligible countries",
             "section left blank without explicit statement",
         ],
+        "content_format": "prose",
+        "format_instructions": "State whether the PoA receives public funding. If yes, list sources and confirm ODA Declaration is attached for OECD DAC ODA recipient countries. If no, state explicitly.",
     },
     "B.1": {
         "title": "Management System",
@@ -138,6 +150,8 @@ SUBSECTIONS: dict[str, dict] = {
             "missing training and capacity development arrangements",
             "no measures for continuous improvement",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the operational and management system in detail, covering roles and responsibilities, training arrangements, technical review procedures, double counting prevention, documentation control, and continuous improvement measures.",
     },
     "B.2": {
         "title": "Application of methodologies",
@@ -157,6 +171,8 @@ SUBSECTIONS: dict[str, dict] = {
             "methodological tools used but not listed",
             "mandatory GS Guidelines not referenced",
         ],
+        "content_format": "prose",
+        "format_instructions": "List all selected methodologies with exact title, version number, and UNFCCC reference number. Include any referenced methodological tools and mandatory GS Guidelines.",
     },
     "B.2.1": {
         "title": "Multiple technologies/measures",
@@ -174,6 +190,8 @@ SUBSECTIONS: dict[str, dict] = {
             "cross effects exist but no explanation of how they are accounted for in calculations",
             "section left blank when multiple technologies are applied",
         ],
+        "content_format": "prose",
+        "format_instructions": "List all combinations of technologies/measures and methodologies. Demonstrate whether GHG/SDG cross effects exist between technologies and, if so, explain how they are accounted for.",
     },
     "B.3": {
         "title": "Eligibility criteria for inclusion of VPA in PoA",
@@ -200,6 +218,8 @@ SUBSECTIONS: dict[str, dict] = {
             "additionality demonstration requirements missing",
             "distinct criteria not defined for different VPA types when applicable",
         ],
+        "content_format": "table",
+        "format_instructions": "Present eligibility criteria in a table with columns: Criterion # | Description | Means of Verification. Include criteria for GS4GG compliance, Activity Requirements, geographical boundary, double counting prevention, start date verification, methodology compliance, and additionality.",
     },
     "C.1": {
         "title": "Demonstration of additionality",
@@ -219,6 +239,8 @@ SUBSECTIONS: dict[str, dict] = {
             "prior consideration not demonstrated for retroactive PoAs/VPAs",
             "section contains only generic statements without project-specific justification",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide a clear narrative demonstrating additionality, supported by evidence or financial analysis. Address prior consideration for retroactive PoAs/VPAs where applicable.",
     },
     "D.1": {
         "title": "Date of first submission",
@@ -235,6 +257,8 @@ SUBSECTIONS: dict[str, dict] = {
             "date not in required DD/MM/YYYY format",
             "section left blank",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the date of first submission to Gold Standard in DD/MM/YYYY format.",
     },
     "D.2": {
         "title": "Duration of the PoA",
@@ -253,6 +277,8 @@ SUBSECTIONS: dict[str, dict] = {
             "duration exceeds maximum allowed period without justification",
             "section left blank",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the crediting cycle start date and total PoA duration in years and months. Confirm the duration does not exceed the maximum 28 years.",
     },
     "E.1": {
         "title": "Summary of stakeholder consultation at PoA Level",
@@ -273,6 +299,8 @@ SUBSECTIONS: dict[str, dict] = {
             "key topics not summarized",
             "section left blank when PoA-level consultation is required",
         ],
+        "content_format": "prose",
+        "format_instructions": "Summarize the stakeholder consultation process, identifying stakeholders consulted, consultation methods used, and key topics discussed.",
     },
     "E.2": {
         "title": "Consideration of stakeholder comments received",
@@ -291,6 +319,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no explanation of how comments influenced PoA design",
             "section left blank when comments were received",
         ],
+        "content_format": "table",
+        "format_instructions": "Present stakeholder comments in a table with columns: Comment | Response | Action. For each comment, describe the response provided and any action taken or explanation of why the comment was not incorporated.",
     },
     "E.3": {
         "title": "Final Continuous Input / Grievance Mechanism",
@@ -311,6 +341,8 @@ SUBSECTIONS: dict[str, dict] = {
             "CIGM not confirmed to be maintained throughout PoA duration",
             "section left blank",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the Continuous Input and Grievance Mechanism, including how stakeholders can submit inputs or grievances, the process for addressing and resolving them, and confirmation that the CIGM will be maintained throughout the PoA duration.",
     },
 }
 

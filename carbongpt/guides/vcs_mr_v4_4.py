@@ -24,6 +24,8 @@ SUBSECTIONS: dict[str, dict] = {
             "total GHG reductions or removals for the monitoring period not stated",
             "exceeds one page limit",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a concise narrative (no more than one page) summarising the implementation status, key dates, and total GHG reductions/removals for the monitoring period.",
     },
     "1.2": {
         "title": "Audit History",
@@ -45,6 +47,8 @@ SUBSECTIONS: dict[str, dict] = {
             "validation/verification body not named",
             "audit type not specified",
         ],
+        "content_format": "table",
+        "format_instructions": "Present a table with columns: Audit Type | Period Covered | Program | Validation/Verification Body | Years Covered. Include one row per audit, covering all monitoring periods up to and including the current one.",
     },
     "1.3": {
         "title": "Sectoral Scope and Project Type",
@@ -63,6 +67,8 @@ SUBSECTIONS: dict[str, dict] = {
             "AFOLU category missing for AFOLU projects",
             "non-AFOLU table used for an AFOLU project or vice versa",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the sectoral scope number and name, the project activity type, and (for AFOLU projects) the AFOLU project category in short declarative sentences.",
     },
     "1.4": {
         "title": "Project Proponent",
@@ -83,6 +89,8 @@ SUBSECTIONS: dict[str, dict] = {
             "email domain does not match the organization",
             "no contact person identified",
         ],
+        "content_format": "table",
+        "format_instructions": "Present the project proponent information in a structured table with rows: Organization | Contact Person | Title | Address | Telephone | Email.",
     },
     "1.5": {
         "title": "Other Entities Involved in the Project",
@@ -100,6 +108,8 @@ SUBSECTIONS: dict[str, dict] = {
             "contact information incomplete for listed entities",
             "section left blank without stating no other entities are involved",
         ],
+        "content_format": "table",
+        "format_instructions": "Present each entity in a table with columns: Organization | Role | Contact Person | Title | Address | Telephone | Email. If no other entities are involved, state this explicitly.",
     },
     "1.6": {
         "title": "Project Start Date",
@@ -116,6 +126,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no justification for how the start date conforms with VCS requirements",
             "start date inconsistent with other project documents",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the project start date in DD-Month-YYYY format followed by a brief justification of how it conforms with VCS Program requirements.",
     },
     "1.7": {
         "title": "Project Crediting Period",
@@ -132,6 +144,8 @@ SUBSECTIONS: dict[str, dict] = {
             "start and end dates of crediting period not provided",
             "non-standard crediting period selected without justification",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the crediting period type and its start and end dates. If the crediting period is non-standard, include a justification.",
     },
     "1.8": {
         "title": "Project Location",
@@ -150,6 +164,8 @@ SUBSECTIONS: dict[str, dict] = {
             "project location described only at country level without specifics",
             "KML file not referenced for AFOLU or grouped projects",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the project location with geodetic coordinates. Reference a KML file attachment for AFOLU, GCS, grouped, or multi-instance projects.",
     },
     "1.9": {
         "title": "Title and Reference of Methodology",
@@ -169,6 +185,8 @@ SUBSECTIONS: dict[str, dict] = {
             "tools or modules used but not listed",
             "type (methodology, tool, module) not distinguished",
         ],
+        "content_format": "prose",
+        "format_instructions": "List each methodology, tool, or module used with its type, reference ID, title, and version number.",
     },
     "1.10": {
         "title": "Double Counting and Participation under Other GHG Programs",
@@ -187,6 +205,8 @@ SUBSECTIONS: dict[str, dict] = {
             "participation under other GHG programs not addressed",
             "yes answer given without providing required evidence or registration details",
         ],
+        "content_format": "checklist",
+        "format_instructions": "Present as a checklist with Yes/No answers for each question: (1) Is the project receiving or seeking credit under another GHG program? (2) Was the project registered or seeking registration under other GHG programs? Provide supporting evidence or details for any 'Yes' answers.",
     },
     "1.11": {
         "title": "Double Claiming, Other Forms of Credit, and Scope 3 Emissions",
@@ -206,6 +226,8 @@ SUBSECTIONS: dict[str, dict] = {
             "yes answers given without providing required evidence or public statements",
             "supply chain disclosure missing when applicable",
         ],
+        "content_format": "checklist",
+        "format_instructions": "Present as a checklist with Yes/No answers for each question: (1) Are reductions/removals included in an emissions trading program or binding emission limit? (2) Has the project sought or received credit from another GHG-related environmental credit system? (3) Do project activities affect the emissions footprint of supply chain products? Provide supporting evidence for any 'Yes' answers.",
     },
     "1.12": {
         "title": "Sustainable Development Contributions",
@@ -228,6 +250,8 @@ SUBSECTIONS: dict[str, dict] = {
             "description exceeds 100 words",
             "activities from previous monitoring periods included",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Begin with a brief narrative (max 100 words) describing project activities and SD contributions. Then present Table 1 with columns: SDG Target | Indicator | Net Impact | Current Period Contributions | Cumulative Lifetime Contributions. Include SDG 13.0 for climate mitigation. Reference appendices containing evidence of SD contributions.",
     },
     "1.13": {
         "title": "Commercially Sensitive Information",
@@ -247,6 +271,8 @@ SUBSECTIONS: dict[str, dict] = {
             "information related to baseline, additionality, or emission quantification excluded (not permitted)",
             "no justification provided for excluding information",
         ],
+        "content_format": "prose",
+        "format_instructions": "State whether any commercially sensitive information has been excluded. If yes, describe the items, justify why the information is commercially sensitive, and confirm it is not otherwise publicly available.",
     },
     "2.1": {
         "title": "Stakeholder Engagement and Consultation",
@@ -276,6 +302,8 @@ SUBSECTIONS: dict[str, dict] = {
             "public comments not addressed or actions not documented",
             "stakeholder identification not updated when makeup has changed",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a structured narrative covering stakeholder identification, consultation activities, dates, FPIC process, grievance redress, and public comments. Use sub-headings to organise the different aspects of stakeholder engagement.",
     },
     "2.2": {
         "title": "Risks to Stakeholders and the Environment",
@@ -296,6 +324,8 @@ SUBSECTIONS: dict[str, dict] = {
             "risk categories from the template not all addressed",
             "new entities involved but their management experience not demonstrated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Begin with a narrative demonstrating management team expertise. Then describe each risk category (natural/human-induced, participation, working conditions, safety of women/girls, minorities, pollutants) with corresponding mitigation measures taken during the monitoring period.",
     },
     "2.3": {
         "title": "Respect for Human Rights and Equity",
@@ -317,6 +347,8 @@ SUBSECTIONS: dict[str, dict] = {
             "risks identified but mitigation measures not described",
             "section marked N/A without justification",
         ],
+        "content_format": "prose",
+        "format_instructions": "Address each rights category (labor/work, indigenous peoples/local communities, cultural heritage/property, equality/non-discrimination) with identified risks and corresponding mitigation measures.",
     },
     "2.4": {
         "title": "Ecosystem Health",
@@ -337,6 +369,8 @@ SUBSECTIONS: dict[str, dict] = {
             "AFOLU species requirements not addressed",
             "risks identified but no mitigation measures provided",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe risks to biodiversity, ecosystems, soil, water, and air resources with corresponding mitigation measures. For AFOLU projects, demonstrate that native species are used or justify the use of non-native species.",
     },
     "3.1": {
         "title": "Implementation Status of the Project Activity",
@@ -357,6 +391,8 @@ SUBSECTIONS: dict[str, dict] = {
             "AFOLU carbon stock losses not reported when applicable",
             "loss events reported without specifying date, size, and extent",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the operation of project activities during the monitoring period, any events impacting GHG reductions, and any changes to proponents or entities. For AFOLU projects, address continuation of activities and any carbon stock losses with date, size, and extent.",
     },
     "3.2": {
         "title": "Deviations",
@@ -379,6 +415,8 @@ SUBSECTIONS: dict[str, dict] = {
             "previous deviations not mentioned",
             "section left blank without stating whether deviations exist",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe any methodology deviations and project description deviations separately. For each deviation, provide justification and impact assessment. If no deviations exist, state this explicitly.",
     },
     "3.3": {
         "title": "Grouped Projects",
@@ -398,6 +436,8 @@ SUBSECTIONS: dict[str, dict] = {
             "eligibility criteria not addressed separately",
             "section left blank for grouped projects",
         ],
+        "content_format": "prose",
+        "format_instructions": "If not a grouped project, state this explicitly. For grouped projects, describe each new project activity instance and demonstrate compliance with each eligibility criterion separately.",
     },
     "3.4": {
         "title": "Baseline Reassessment",
@@ -420,6 +460,8 @@ SUBSECTIONS: dict[str, dict] = {
             "impact of policy changes on baseline not discussed when applicable",
             "percentage change in baseline emissions not reported after reassessment",
         ],
+        "content_format": "prose",
+        "format_instructions": "State whether a baseline reassessment was conducted. If yes, provide a summary including methodology version used, updated project description sections, validity of previous baseline, policy impacts, and percentage change in baseline emissions.",
     },
     "4.1": {
         "title": "Data and Parameters Available at Validation",
@@ -444,6 +486,8 @@ SUBSECTIONS: dict[str, dict] = {
             "purpose of data not specified",
             "measurement methods not described for measured values",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Value Applied, Justification/Measurement Methods, Purpose (baseline scenario determination, baseline emissions, project emissions, or leakage). Provide one block per parameter fixed at validation.",
     },
     "4.2": {
         "title": "Data and Parameters Monitored",
@@ -472,6 +516,8 @@ SUBSECTIONS: dict[str, dict] = {
             "monitoring equipment not identified with accuracy information",
             "calculation method not provided where relevant",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each monitored parameter as a structured block with fields on separate lines: Parameter Name, Data Unit, Description, Source of Data, Measurement Methods and Procedures, Monitoring Frequency, Value Monitored, Monitoring Equipment (type, accuracy class, serial number), QA/QC Procedures, Purpose (baseline emissions, project emissions, or leakage), Calculation Method. Provide one block per monitored parameter.",
     },
     "4.3": {
         "title": "Monitoring Plan",
@@ -496,6 +542,8 @@ SUBSECTIONS: dict[str, dict] = {
             "calibration procedures not described for monitoring equipment",
             "internal audit processes not documented",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a structured narrative covering the monitoring process, data management methods, calibration procedures, organisational structure, internal auditing, and sampling approaches. Use sub-headings to organise each aspect of the monitoring plan.",
     },
     "5.1": {
         "title": "Baseline Emissions",
@@ -518,6 +566,8 @@ SUBSECTIONS: dict[str, dict] = {
             "reductions and removals not separated where required",
             "no reference to calculation spreadsheet",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present all baseline emission equations using standard notation (e.g. BE_y = A_BSL x EF_BSL). Define all variables with their units and substitute actual values from the monitoring period. Separate reductions and removals where required by the methodology. Reference the ER calculation spreadsheet.",
     },
     "5.2": {
         "title": "Project Emissions",
@@ -540,6 +590,8 @@ SUBSECTIONS: dict[str, dict] = {
             "reductions and removals not separated where required",
             "no reference to calculation spreadsheet",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present all project emission equations using standard notation (e.g. PE_y = sum of emission sources). Define all variables with their units and substitute actual values from the monitoring period. Separate reductions and removals where required by the methodology. Reference the ER calculation spreadsheet.",
     },
     "5.3": {
         "title": "Leakage Emissions",
@@ -562,6 +614,8 @@ SUBSECTIONS: dict[str, dict] = {
             "equations not shown or insufficient for reproduction",
             "no reference to calculation spreadsheet",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present all leakage emission equations using standard notation (e.g. LE_y = LE_activity + LE_market). Define all variables with their units and substitute actual values from the monitoring period. If leakage is zero, state the methodology justification. Reference the ER calculation spreadsheet.",
     },
     "5.4": {
         "title": "GHG Emission Reductions and Carbon Dioxide Removals",
@@ -584,6 +638,8 @@ SUBSECTIONS: dict[str, dict] = {
             "percent difference not calculated or explained",
             "total VCUs not summed across vintage periods",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present two tables: (1) Vintage period summary table with columns: Vintage Period | Baseline Emissions (tCO2e) | Project Emissions (tCO2e) | Leakage Emissions (tCO2e) | Reduction VCUs | Removal VCUs | Total VCUs, with one row per calendar year and a totals row. (2) Ex-ante vs achieved comparison table with columns: Vintage Period | Estimated Reductions/Removals | Achieved Reductions/Removals | Percent Difference | Explanation. Include the net emission reduction equation (ER_y = BE_y - PE_y - LE_y) and, for AFOLU projects, the non-permanence risk rating and buffer pool allocation.",
     },
 }
 

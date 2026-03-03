@@ -26,6 +26,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no summary of location, technology, boundary, or baseline provided",
             "copy-pasted boilerplate text that does not describe the specific project",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a concise narrative overview covering the project purpose, location, technology, boundary, and baseline scenario. Use sub-headings or a structured paragraph for each topic.",
     },
     "A.1.1": {
         "title": "Eligibility under Gold Standard",
@@ -48,6 +50,8 @@ SUBSECTIONS: dict[str, dict] = {
             "double counting risk not discussed",
             "host country regulatory compliance not demonstrated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Address each eligibility criterion point by point in narrative form, citing the relevant GS4GG Principles & Requirements sections.",
     },
     "A.1.2": {
         "title": "Legal ownership of products",
@@ -65,6 +69,8 @@ SUBSECTIONS: dict[str, dict] = {
             "ownership transfer from beneficiaries not demonstrated transparently",
             "land tenure or resource rights not addressed for applicable project types",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative describing legal ownership of products, referencing supporting agreements and documentation.",
     },
     "A.2": {
         "title": "Location of project",
@@ -84,6 +90,8 @@ SUBSECTIONS: dict[str, dict] = {
             "only country-level description without specific location details",
             "map referenced but not included or attached",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide the location details in prose. Include a placeholder for the project location map (e.g. '[Insert map of project location here]') and present geographic coordinates in a small table with columns: Site | Latitude | Longitude.",
     },
     "A.3": {
         "title": "Technologies and/or measures",
@@ -102,6 +110,8 @@ SUBSECTIONS: dict[str, dict] = {
             "equipment lifespan not provided",
             "no explanation of how the technology reduces emissions or contributes to SDGs",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the technology and measures in narrative form, specifying equipment details, lifespan, and the mechanism by which emissions are reduced.",
     },
     "A.4": {
         "title": "Scale of the project",
@@ -119,6 +129,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no justification provided for the declared scale",
             "scale limits not referenced against applicable Activity Requirements",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the project scale classification and provide a brief justification referencing the applicable Activity Requirements and CDM scale limits.",
     },
     "A.5": {
         "title": "Funding sources",
@@ -137,6 +149,8 @@ SUBSECTIONS: dict[str, dict] = {
             "public funding sources not identified",
             "ODA Declaration missing for projects in ODA recipient countries",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe funding sources in narrative form, clearly stating whether public funding is received and referencing any attached ODA Declarations.",
     },
     "B.1": {
         "title": "Reference of approved methodology(ies)",
@@ -156,6 +170,8 @@ SUBSECTIONS: dict[str, dict] = {
             "referenced methodological tools not listed",
             "no confirmation that the latest version was applied at first submission",
         ],
+        "content_format": "prose",
+        "format_instructions": "List each methodology and tool with its exact title and version number. Confirm the version was current at first submission.",
     },
     "B.2": {
         "title": "Applicability of methodology(ies)",
@@ -172,6 +188,8 @@ SUBSECTIONS: dict[str, dict] = {
             "blanket statement of compliance without demonstrating each condition",
             "additional GS-specific criteria not addressed",
         ],
+        "content_format": "table",
+        "format_instructions": "Present a table with one row per applicability condition. Columns: Condition | Met? (Yes/No) | Justification. Address each condition individually.",
     },
     "B.3": {
         "title": "Project boundary",
@@ -190,6 +208,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no table or diagram showing included and excluded emission sources",
             "GHG sources listed without justification for inclusion or exclusion",
         ],
+        "content_format": "table",
+        "format_instructions": "Present emission sources in a table with columns: Source | Gas | Included? (Yes/No) | Justification. Cover both baseline and project scenarios. Include a placeholder for a flow diagram (e.g. '[Insert project boundary flow diagram here]').",
     },
     "B.4": {
         "title": "Establishment and description of baseline scenario",
@@ -209,6 +229,8 @@ SUBSECTIONS: dict[str, dict] = {
             "alternative scenarios not considered or discussed",
             "key assumptions not stated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the baseline scenario in narrative form, explaining the most plausible scenario in the absence of the project and the key assumptions underpinning it.",
     },
     "B.5": {
         "title": "Demonstration of additionality",
@@ -226,6 +248,8 @@ SUBSECTIONS: dict[str, dict] = {
             "investment analysis missing or incomplete",
             "barrier analysis claims not substantiated with evidence",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative demonstrating additionality using the appropriate tool or method. Include investment or barrier analysis results with supporting evidence.",
     },
     "B.5.1": {
         "title": "Prior Consideration",
@@ -243,6 +267,8 @@ SUBSECTIONS: dict[str, dict] = {
             "timeline of prior consideration not clearly documented",
             "first submission date more than one year after project start date",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide a narrative with a clear timeline showing when GS certification was first considered relative to the project start date, referencing supporting documentation.",
     },
     "B.5.2": {
         "title": "Ongoing Financial Need",
@@ -260,6 +286,8 @@ SUBSECTIONS: dict[str, dict] = {
             "carbon revenue treated as supplementary without justifying necessity",
             "no description of how carbon revenue is allocated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide financial projections in narrative form demonstrating the ongoing need for carbon revenue, including how it is allocated to project activities.",
     },
     "B.6": {
         "title": "Sustainable Development Goals outcomes",
@@ -277,6 +305,8 @@ SUBSECTIONS: dict[str, dict] = {
             "SDG contributions described vaguely without linking to project activities",
             "no clear identification of which SDGs are targeted",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present an SDG targets summary table with columns: SDG | Target | Indicator | Estimated Impact | Units. SDG 13 must be the first row. Follow the table with a brief narrative linking each SDG to project activities.",
     },
     "B.6.1": {
         "title": "Explanation of methodological choices",
@@ -294,6 +324,8 @@ SUBSECTIONS: dict[str, dict] = {
             "deviations from default approaches not justified",
             "methodological choices inconsistent with the selected methodology",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "For each targeted SDG, present the quantification equations with all variables defined. Explain methodological choices and justify any deviations from default approaches.",
     },
     "B.6.2": {
         "title": "Data and parameters fixed ex ante",
@@ -314,6 +346,8 @@ SUBSECTIONS: dict[str, dict] = {
             "purpose of data not specified for each parameter",
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each parameter as a structured block with the following fields on separate lines: Name, Symbol, Unit, Value, Source, Purpose (baseline/project/leakage). One block per parameter.",
     },
     "B.6.3": {
         "title": "Ex ante estimation of SDG Impact",
@@ -333,6 +367,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no reference to supporting spreadsheets",
             "SDG impacts other than SDG 13 not addressed",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "Present sample calculations for each SDG (SDG 13 first). Show the formula, substitute actual parameter values, and compute the result. Reference supporting spreadsheets.",
     },
     "B.6.4": {
         "title": "Summary of ex ante estimates",
@@ -350,6 +386,8 @@ SUBSECTIONS: dict[str, dict] = {
             "estimates not broken down by crediting period year",
             "units not specified for each SDG impact",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present a year-by-year summary table for each SDG with columns showing the crediting period year, estimated impact value, and units. Include totals row.",
     },
     "B.7": {
         "title": "Monitoring plan",
@@ -371,6 +409,8 @@ SUBSECTIONS: dict[str, dict] = {
             "monitoring equipment and calibration not addressed",
             "monitoring plan inconsistent with the requirements of the applied methodology",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each monitored parameter as a structured block with fields: Name, Unit, Monitoring Frequency, Measurement Method, QA/QC Procedure, Purpose. Include a description of the sampling plan and roles/responsibilities.",
     },
     "C.1": {
         "title": "Duration of project",
@@ -388,6 +428,8 @@ SUBSECTIONS: dict[str, dict] = {
             "operational lifetime not stated or justified",
             "duration inconsistent with equipment lifespan or project design",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the project start date and operational lifetime in narrative form, with justification linked to equipment lifespan and project design.",
     },
     "C.2": {
         "title": "Crediting period",
@@ -405,6 +447,8 @@ SUBSECTIONS: dict[str, dict] = {
             "start date or length of crediting period not stated",
             "crediting period exceeds maximum allowed under GS4GG rules",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the crediting period type, start date, and length in narrative form with justification referencing GS4GG requirements.",
     },
     "D.1": {
         "title": "Safeguarding Principles that will be monitored",
@@ -424,6 +468,8 @@ SUBSECTIONS: dict[str, dict] = {
             "mitigation measures not described for identified risks",
             "safeguarding assessment appendix not completed or referenced",
         ],
+        "content_format": "checklist",
+        "format_instructions": "Present a checklist of safeguarding principles from Appendix 1. For each principle, indicate: Principle | Applicable? (Yes/No/NA) | Indicator to Monitor | Tolerance/Threshold | Mitigation Measure.",
     },
     "D.2": {
         "title": "Gender sensitive assessment",
@@ -443,6 +489,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no plan for gender-disaggregated data collection",
             "equitable benefit sharing not addressed",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative describing the gender-sensitive assessment, including gender-disaggregated data plans and measures for equitable participation.",
     },
     "E.1": {
         "title": "Summary of stakeholder mitigation measures",
@@ -460,6 +508,8 @@ SUBSECTIONS: dict[str, dict] = {
             "stakeholder concerns listed without corresponding mitigation actions",
             "no indication of how feedback was incorporated into project design",
         ],
+        "content_format": "prose",
+        "format_instructions": "Summarize stakeholder mitigation measures in narrative form, describing the concerns raised, mitigation actions taken, and their current status.",
     },
     "E.2": {
         "title": "Final continuous input / grievance mechanism",
@@ -479,6 +529,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no timeline for addressing and resolving grievances",
             "CIGM not accessible to all relevant stakeholders",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the grievance mechanism in narrative form, including submission channels, contact information, and the timeline for addressing and resolving grievances.",
     },
 }
 

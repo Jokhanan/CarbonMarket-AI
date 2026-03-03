@@ -241,6 +241,60 @@ def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=40
     return data["choices"][0]["message"]["content"]
 
 
+FORMAT_SYSTEM_GUIDANCE = {
+    "table": (
+        "\n\nFORMAT REQUIREMENT: This section must use markdown tables with clear column headers. "
+        "Present structured information in table format. "
+        "Each row should represent one item (condition, parameter, entity, etc.) with columns for key attributes. "
+        "Include brief introductory or contextual prose before the table where appropriate."
+    ),
+    "parameter_blocks": (
+        "\n\nFORMAT REQUIREMENT: Present each parameter as a clearly delineated structured block. "
+        "Each block must include fields on separate lines: Parameter name, Symbol (if applicable), Unit, "
+        "Value applied, Source of data (with traceable reference), and Purpose of data. "
+        "Organize parameters under SDG headings where applicable, with SDG 13 first. "
+        "Include introductory prose and any necessary narrative context between parameter blocks."
+    ),
+    "checklist": (
+        "\n\nFORMAT REQUIREMENT: Present as a structured checklist or assessment table. "
+        "Each item should have a clear Yes/No/NA indicator followed by a brief justification or description. "
+        "Use a consistent format for all items (e.g., markdown table or structured list with indicators). "
+        "Include introductory context and summary remarks where appropriate."
+    ),
+    "equations_and_prose": (
+        "\n\nFORMAT REQUIREMENT: Combine narrative explanation with mathematical equations. "
+        "Include equations using standard notation (e.g., ER_y = BE_y - PE_y - LE_y). "
+        "Define all variables after each equation. "
+        "Show sample calculations with actual parameter values substituted into the equations. "
+        "Organize calculations under SDG headings where applicable, with SDG 13 first. "
+        "Reference supporting spreadsheets where calculations are performed."
+    ),
+    "summary_table": (
+        "\n\nFORMAT REQUIREMENT: Present results in a markdown summary table with clear column headers, "
+        "row-by-row data (e.g., by year or by SDG), and totals/averages where applicable. "
+        "Include units in column headers. "
+        "Include introductory prose before the table and any required narrative context after it."
+    ),
+}
+
+FORMAT_CLOSING_INSTRUCTIONS = {
+    "table": "Present the core information using markdown tables, with introductory context as needed.",
+    "parameter_blocks": "Present each parameter as a structured block, with narrative context between blocks as needed.",
+    "checklist": "Present the assessment as a structured checklist, with introductory and summary prose as needed.",
+    "equations_and_prose": "Include equations with variable definitions and sample calculations, combined with explanatory narrative.",
+    "summary_table": "Present the summary in a markdown table, with introductory and contextual prose as needed.",
+    "prose": "Use proper formatting with sub-headings where appropriate. Include markdown tables where the format instructions specify them.",
+}
+
+
+def _get_format_system_guidance(content_format):
+    return FORMAT_SYSTEM_GUIDANCE.get(content_format, "")
+
+
+def _get_format_closing_instruction(content_format):
+    return FORMAT_CLOSING_INSTRUCTIONS.get(content_format, "Use proper formatting with sub-headings where appropriate.")
+
+
 def generate_section_draft(
     standard,
     project_doc_type,
@@ -284,6 +338,11 @@ def generate_section_draft(
     except Exception as e:
         logger.warning("Methodology DB lookup failed: %s", e)
 
+    content_format = subsection.get("content_format", "prose")
+    format_instructions = subsection.get("format_instructions", "")
+
+    format_guidance = _get_format_system_guidance(content_format)
+
     system_prompt = (
         f"You are an expert carbon project developer and technical writer specialized in {std_label} projects. "
         f"You are helping draft a {doc_label} document.\n\n"
@@ -294,7 +353,8 @@ def generate_section_draft(
         "- Follow the methodology's requirements precisely when writing calculations or parameter descriptions.\n"
         "- Reference the correct standard sections and methodology clauses.\n"
         "- Do NOT fabricate quantitative data, emission factors, or measurement results.\n"
-        "- Write in the professional style expected by VVBs (Validation/Verification Bodies)."
+        "- Write in the professional style expected by VVBs (Validation/Verification Bodies).\n"
+        f"{format_guidance}"
     )
 
     must_include = "\n".join(f"  - {item}" for item in subsection.get("must_include", []))
@@ -302,6 +362,9 @@ def generate_section_draft(
 
     user_prompt = f"## Task: Draft section {section_id}: {subsection['title']}\n\n"
     user_prompt += f"### Section Requirements (must include):\n{must_include}\n\n"
+
+    if format_instructions:
+        user_prompt += f"### Required Format:\n{format_instructions}\n\n"
 
     if examples:
         user_prompt += f"### Example of good content:\n{examples}\n\n"
@@ -350,9 +413,10 @@ def generate_section_draft(
     if user_instructions:
         user_prompt += f"### Additional instructions from the user:\n{user_instructions}\n\n"
 
+    format_closing = _get_format_closing_instruction(content_format)
     user_prompt += (
         f"Write the complete content for section {section_id}: {subsection['title']}. "
-        "Make it ready for inclusion in the document. Use proper formatting with sub-headings where appropriate."
+        f"Make it ready for inclusion in the document. {format_closing}"
     )
 
     result = _call_openai(system_prompt, user_prompt, max_tokens=4000)

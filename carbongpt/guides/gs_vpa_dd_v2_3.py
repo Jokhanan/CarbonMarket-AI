@@ -27,6 +27,8 @@ SUBSECTIONS: dict[str, dict] = {
             "project boundary and baseline scenario not summarised",
             "Forestry/AGR VPAs missing environmental conditions or species information",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a structured narrative covering the VPA purpose, location, technology, project boundary summary, and baseline scenario summary. Use sub-headings where appropriate. For Forestry/AGR VPAs, include a dedicated paragraph on environmental conditions and species.",
     },
     "A.1.1": {
         "title": "Eligibility of the VPA under approved PoA",
@@ -47,6 +49,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no supporting evidence or means of verification provided",
             "general GS4GG eligibility criteria not addressed",
         ],
+        "content_format": "table",
+        "format_instructions": "Present as a table with columns: Criterion | Description/Required Condition | How the VPA Meets the Criterion | Supporting Evidence. Include one row per eligibility criterion from the PoA-DD, plus rows for general GS4GG eligibility criteria and applicable Activity Requirements.",
     },
     "A.1.2": {
         "title": "Legal ownership of products",
@@ -66,6 +70,8 @@ SUBSECTIONS: dict[str, dict] = {
             "transfer of ownership from beneficiaries not transparently demonstrated",
             "legal right to alter resource use not addressed",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative demonstrating legal ownership of all products, including references to contractual arrangements and legal documentation. Where ownership is transferred from beneficiaries, describe the transfer process transparently.",
     },
     "A.2": {
         "title": "Location of VPA",
@@ -86,6 +92,8 @@ SUBSECTIONS: dict[str, dict] = {
             "map referenced but not included or attached",
             "map missing required elements (legend, scale, GPS grid, etc.)",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide the host country, region/province, and GPS coordinates. Include a placeholder for the map (e.g. '[Insert map here]') with a note that the map must include project name, ID, legend, scale, north direction, GPS coordinate system, and infrastructure.",
     },
     "A.3": {
         "title": "Technologies and/or measures",
@@ -105,6 +113,8 @@ SUBSECTIONS: dict[str, dict] = {
             "inconsistency with technology described in the PoA-DD",
             "multiple technologies listed without clear distinction",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the technology or measure employed, including technical specifications (e.g. efficiency, capacity). Explain how it achieves emission reductions or SDG impacts and confirm consistency with the PoA-DD.",
     },
     "A.4": {
         "title": "Scale of the VPA",
@@ -123,6 +133,8 @@ SUBSECTIONS: dict[str, dict] = {
             "scale inconsistent with real case VPA requirements",
             "threshold values for scale classification not referenced",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the scale classification (microscale, small-scale, or large-scale) and provide justification based on applicable Activity Requirements and thresholds.",
     },
     "A.5": {
         "title": "Funding sources of VPA",
@@ -142,6 +154,8 @@ SUBSECTIONS: dict[str, dict] = {
             "public funding involved but not transparently declared",
             "section left blank or marked N/A without justification",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe all funding sources, indicate whether public or private, and state whether ODA is involved. If ODA is used, confirm it does not result in diversion of ODA.",
     },
     "B.1": {
         "title": "Reference of approved methodology(ies)",
@@ -161,6 +175,8 @@ SUBSECTIONS: dict[str, dict] = {
             "methodological tools used but not listed",
             "methodology not confirmed as Gold Standard approved",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the full methodology name, version number, and any applicable methodological tools. Confirm Gold Standard approval status.",
     },
     "B.2": {
         "title": "Applicability of methodology(ies)",
@@ -180,6 +196,8 @@ SUBSECTIONS: dict[str, dict] = {
             "applicability demonstration inconsistent with PoA-DD",
             "section contains generic statements without specific justification",
         ],
+        "content_format": "table",
+        "format_instructions": "Present as a table with columns: Applicability Condition | Met? (Yes/No) | Justification/Evidence. Include one row per applicability condition from the methodology. Ensure consistency with the PoA-DD demonstration.",
     },
     "B.3": {
         "title": "VPA boundary",
@@ -201,6 +219,8 @@ SUBSECTIONS: dict[str, dict] = {
             "exclusions from boundary not justified",
             "boundary inconsistent with methodology requirements",
         ],
+        "content_format": "table",
+        "format_instructions": "Present as a table with columns: Source | Gas | Included? (Yes/No) | Justification. Separate rows for baseline and project scenario emission sources. Include a placeholder for a flow diagram (e.g. '[Insert boundary flow diagram here]'). Follow with any narrative on exclusions.",
     },
     "B.4": {
         "title": "Establishment and description of baseline scenario",
@@ -222,6 +242,8 @@ SUBSECTIONS: dict[str, dict] = {
             "baseline scenario inconsistent with PoA-DD",
             "alternative scenarios not considered",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the baseline scenario, justify why it is the most plausible, explain what would occur without the VPA, and state key assumptions. Confirm consistency with the PoA-DD.",
     },
     "B.5": {
         "title": "Demonstration of additionality",
@@ -242,6 +264,8 @@ SUBSECTIONS: dict[str, dict] = {
             "common practice analysis missing when required",
             "additionality argument inconsistent with PoA-level demonstration",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative demonstrating additionality using the applicable tool or approach. Include barrier analysis and/or investment analysis as required, and common practice analysis where applicable.",
     },
     "B.5.1": {
         "title": "Prior Consideration",
@@ -259,6 +283,8 @@ SUBSECTIONS: dict[str, dict] = {
             "timeline shows carbon finance considered after project start",
             "supporting documentation not referenced or attached",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide evidence of prior consideration of carbon finance with a clear timeline, referencing supporting documentation such as correspondence or meeting minutes.",
     },
     "B.5.2": {
         "title": "Ongoing Financial Need",
@@ -277,6 +303,8 @@ SUBSECTIONS: dict[str, dict] = {
             "financial projections not supported by evidence",
             "section left blank or marked N/A",
         ],
+        "content_format": "prose",
+        "format_instructions": "Present a financial analysis demonstrating that the VPA is not viable without carbon credit revenue. Include key financial metrics (e.g. IRR, NPV) and show the contribution of carbon revenue to total project revenue.",
     },
     "B.6": {
         "title": "Sustainable Development Goals outcomes",
@@ -298,6 +326,8 @@ SUBSECTIONS: dict[str, dict] = {
             "indicators not defined or not justified",
             "estimated values not provided in summary table",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present as a summary table with columns: SDG | Target | Indicator | Estimated Annual Impact | Units. Include at least three SDGs with SDG 13 (Climate Action) listed first. Provide estimated annual average values for each indicator.",
     },
     "B.6.1": {
         "title": "Explanation of methodological choices",
@@ -317,6 +347,8 @@ SUBSECTIONS: dict[str, dict] = {
             "SDG 13 impact not aligned with selected indicator",
             "approach inconsistent with validated VPA methodology",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "For each SDG, explain the methodological steps and present the equations used to calculate baseline and project outcomes. Define all variables and state the net benefit equation (e.g. ER_y = BE_y - PE_y - LE_y). Present SDG 13 first.",
     },
     "B.6.2": {
         "title": "Data and parameters fixed ex ante",
@@ -339,6 +371,8 @@ SUBSECTIONS: dict[str, dict] = {
             "parameters duplicated across SDG headings instead of cross-referenced",
             "IPCC or methodology defaults used without citing the specific table or version",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each parameter as a structured block with fields: Parameter Name, Symbol, Unit, Value, Source (with traceable reference), Purpose (baseline/project/leakage). Organize parameters under SDG headings with SDG 13 first. Cross-reference rather than duplicate parameters used across multiple SDGs.",
     },
     "B.6.3": {
         "title": "Ex ante estimation of SDG Impact",
@@ -358,6 +392,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no reference to supporting spreadsheets",
             "reader cannot reproduce the calculation from information provided",
         ],
+        "content_format": "equations_and_prose",
+        "format_instructions": "For each SDG, show the ex ante calculation step by step: state the equation, substitute the parameter values from B.6.2, and compute the result. Include references to supporting spreadsheets. Ensure a reader can reproduce every calculation.",
     },
     "B.6.4": {
         "title": "Summary of ex ante estimates",
@@ -377,6 +413,8 @@ SUBSECTIONS: dict[str, dict] = {
             "total and annual average not provided",
             "values inconsistent with calculations in B.6.3",
         ],
+        "content_format": "summary_table",
+        "format_instructions": "Present as a summary table with columns: Year | Baseline Estimate | Project Estimate | Net Benefit. Include a row for each crediting year, plus rows for Total over crediting period, Annual average, and Total number of crediting years.",
     },
     "B.7": {
         "title": "Monitoring plan",
@@ -398,6 +436,8 @@ SUBSECTIONS: dict[str, dict] = {
             "data archiving provisions not included",
             "parameters duplicated across SDG headings instead of cross-referenced",
         ],
+        "content_format": "parameter_blocks",
+        "format_instructions": "Present each monitored parameter as a structured block with fields: Parameter Name, Symbol, Unit, Monitoring Frequency, Measurement Method, QA/QC Procedures, Purpose. Organize under SDG headings with SDG 13 first. Include a separate sub-section for the sampling plan (B.7.2) describing the sampling approach, sample size, and reference to the CDM sampling standard. Follow with other monitoring plan elements (B.7.3): operational/management structure, data archiving, and responsibilities.",
     },
     "C.1": {
         "title": "Duration of project",
@@ -419,6 +459,8 @@ SUBSECTIONS: dict[str, dict] = {
             "expected operational lifetime not stated",
             "start date definition not referenced to GS4GG Principle 4",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the VPA start date in DD/MM/YYYY format, define it per GS4GG Principle 4, provide evidence, justify regular vs retroactive status, and state the expected operational lifetime in years and months.",
     },
     "C.2": {
         "title": "Crediting period",
@@ -440,6 +482,8 @@ SUBSECTIONS: dict[str, dict] = {
             "crediting period exceeds PoA duration without justification",
             "maximum crediting period not referenced",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the crediting period start date in DD/MM/YYYY format, justify it per applicable rules, provide total length in years and months, confirm it does not exceed PoA duration, and reference maximum crediting period from applicable Activity Requirements.",
     },
     "D.1": {
         "title": "Safeguarding Principles",
@@ -459,6 +503,8 @@ SUBSECTIONS: dict[str, dict] = {
             "principles requiring monitoring not identified",
             "section left blank when safeguards were part of the assessment",
         ],
+        "content_format": "checklist",
+        "format_instructions": "Present as a checklist of safeguarding principles with columns or fields: Principle Number | Principle Description | Risk Identified (Yes/No) | Mitigation Measure | Requires Ongoing Monitoring (Yes/No). Reference the completed Safeguarding Principles Assessment in Appendix 1.",
     },
     "D.2": {
         "title": "Gender sensitive assessment",
@@ -478,6 +524,8 @@ SUBSECTIONS: dict[str, dict] = {
             "expert assessment questions (Q3, Q4) not answered",
             "section left blank or contains only placeholder text",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a narrative covering the gender perspective in project design, reference local gender policies, and answer whether an expert is needed for Gender Safeguarding Principles and for gender issues at Stakeholder Consultation.",
     },
     "E.1": {
         "title": "Summary of stakeholder mitigation measures",
@@ -499,6 +547,8 @@ SUBSECTIONS: dict[str, dict] = {
             "stakeholder comments not taken into account without justification",
             "section left blank when stakeholder consultation was conducted",
         ],
+        "content_format": "prose",
+        "format_instructions": "Summarize stakeholder concerns and mitigation measures in a narrative. For each concern raised, describe the mitigation measure proposed and how it will be monitored. Justify any comments not incorporated.",
     },
     "E.2": {
         "title": "Final continuous input / grievance mechanism",
@@ -519,6 +569,8 @@ SUBSECTIONS: dict[str, dict] = {
             "section left blank or marked N/A",
             "methods not agreed with stakeholders during consultation",
         ],
+        "content_format": "prose",
+        "format_instructions": "List and describe each grievance mechanism method, including the mandatory Continuous Input/Grievance Expression Process Book and Gold Standard contact (help@goldstandard.org). Describe each method in enough detail for readers to understand and use it.",
     },
     "F.1": {
         "title": "Eligibility and inclusion criteria for VPAs",
@@ -539,6 +591,8 @@ SUBSECTIONS: dict[str, dict] = {
             "supporting evidence not provided",
             "eligibility criteria modified from those set at real case VPA level",
         ],
+        "content_format": "prose",
+        "format_instructions": "Present the eligibility and inclusion criteria from the real case VPA. For each criterion, describe how it is met by this VPA and provide means of verification and supporting evidence. Confirm that criteria have not been changed from the real case VPA.",
     },
 }
 

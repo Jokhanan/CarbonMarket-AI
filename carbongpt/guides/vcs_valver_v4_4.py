@@ -26,6 +26,8 @@ SUBSECTIONS: dict[str, dict] = {
             "type of engagement (validation/verification/combined) not specified",
             "no reference to VCS Program rules",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write a clear introductory paragraph stating the engagement objective, project name and Verra ID, type of engagement (validation, verification, or combined), and the VCS Program rules under which the assessment is conducted.",
     },
     "1.2": {
         "title": "Scope and Criteria",
@@ -45,6 +47,8 @@ SUBSECTIONS: dict[str, dict] = {
             "monitoring period dates missing for verification",
             "sectoral scope not stated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the scope of the assessment, the criteria and standards used, monitoring period dates, and applicable sectoral scopes in clear paragraphs.",
     },
     "1.3": {
         "title": "Reasonableness of Assumptions and Level of Assurance",
@@ -64,6 +68,8 @@ SUBSECTIONS: dict[str, dict] = {
             "materiality threshold not referenced",
             "assumptions not assessed for reasonableness",
         ],
+        "content_format": "prose",
+        "format_instructions": "Write paragraphs addressing the level of assurance, inherent limitations of the assessment process, reasonableness of assumptions, and the materiality threshold applied.",
     },
     "1.4": {
         "title": "Summary Description of the Project",
@@ -84,6 +90,8 @@ SUBSECTIONS: dict[str, dict] = {
             "methodology not identified",
             "crediting period or project scale not stated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide a concise summary paragraph covering the project activity, GHG reduction mechanism, location, proponent, methodology, crediting period, and scale.",
     },
     "2.1": {
         "title": "Method and Criteria",
@@ -103,6 +111,8 @@ SUBSECTIONS: dict[str, dict] = {
             "audit team competencies not demonstrated",
             "criteria for assessment not clearly stated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the validation and verification methods, applicable auditing standards (e.g. ISO 14064-3), and audit team composition and competencies in structured paragraphs.",
     },
     "2.2": {
         "title": "Document Review",
@@ -122,6 +132,8 @@ SUBSECTIONS: dict[str, dict] = {
             "information gaps identified but not followed up",
             "generic statement without specific document references",
         ],
+        "content_format": "table",
+        "format_instructions": "Present the documents reviewed in a table with columns: Document Title | Version/Date | Description. Include all key project documents (PD, MR, calculation spreadsheets, supporting evidence). Note any information gaps identified.",
     },
     "2.3": {
         "title": "Interviews",
@@ -141,6 +153,8 @@ SUBSECTIONS: dict[str, dict] = {
             "dates of interviews not provided",
             "interviews not conducted with relevant project personnel",
         ],
+        "content_format": "table",
+        "format_instructions": "Present interviews in a table with columns: Person | Role | Date | Topics Covered. Follow the table with a brief summary of key information obtained from the interviews.",
     },
     "2.4": {
         "title": "Site Visits",
@@ -160,6 +174,8 @@ SUBSECTIONS: dict[str, dict] = {
             "observations and findings not documented",
             "site visit omitted without justification",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe site visit dates, locations, activities performed, and observations/findings. If no site visit was conducted, provide a justification for its omission.",
     },
     "2.5": {
         "title": "Resolution of Findings",
@@ -179,6 +195,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no summary of findings raised during assessment",
             "FARs not clearly identified with required timelines",
         ],
+        "content_format": "table",
+        "format_instructions": "Present all findings in a table with columns: Finding ID | Type (CAR/CL/FAR) | Description | Resolution | Status. Include an introductory sentence with the total count of findings, and a closing statement confirming all CARs and CLs are closed. List any outstanding FARs with required timelines.",
     },
     "3.1": {
         "title": "Project Details",
@@ -200,6 +218,8 @@ SUBSECTIONS: dict[str, dict] = {
             "ownership and right to claim reductions not assessed",
             "project boundary not verified",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide an assessment narrative covering project eligibility, start date verification, crediting period compliance, ownership rights, and project boundary findings.",
     },
     "3.2": {
         "title": "Project Activity Instances in Grouped Projects",
@@ -221,6 +241,8 @@ SUBSECTIONS: dict[str, dict] = {
             "section left blank for grouped projects",
             "no statement of non-applicability for non-grouped projects",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the assessment of grouped project activity instances, inclusion criteria, and geographic scope. If the project is not grouped, state explicitly that this section is not applicable.",
     },
     "3.3": {
         "title": "Safeguards",
@@ -242,6 +264,8 @@ SUBSECTIONS: dict[str, dict] = {
             "human rights considerations not addressed",
             "ecosystem health impacts not evaluated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the VVB's assessment of safeguards compliance, covering stakeholder engagement, environmental and social risks, human rights, and ecosystem health impacts.",
     },
     "3.4": {
         "title": "Application of Methodology",
@@ -265,6 +289,8 @@ SUBSECTIONS: dict[str, dict] = {
             "monitoring plan not assessed for compliance with methodology",
             "methodology deviations not evaluated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide a detailed assessment covering methodology appropriateness, applicability conditions, baseline scenario, additionality, monitoring plan design, and any methodology deviations with their justifications.",
     },
     "3.5": {
         "title": "Non-Permanence Risk Analysis",
@@ -284,6 +310,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no statement of non-applicability for non-AFOLU projects",
             "risk factors not individually assessed",
         ],
+        "content_format": "prose",
+        "format_instructions": "For AFOLU projects, describe the assessment of the non-permanence risk analysis, risk rating, and buffer pool contribution. For non-AFOLU projects, state explicitly that this section is not applicable.",
     },
     "4.1": {
         "title": "Project Implementation Status",
@@ -304,6 +332,8 @@ SUBSECTIONS: dict[str, dict] = {
             "deviations not identified or assessed for materiality",
             "no confirmation that project was operational during the monitoring period",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the assessment of project implementation status, comparing actual implementation against the validated design. Identify any deviations, assess their materiality, and confirm operational status during the monitoring period.",
     },
     "4.2": {
         "title": "Accuracy of Reduction and Removal Calculations",
@@ -325,6 +355,8 @@ SUBSECTIONS: dict[str, dict] = {
             "mathematical errors not identified or reported",
             "final verified quantity not clearly stated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the VVB's independent assessment of calculation accuracy, including formula verification against the methodology, input parameter tracing to source data, cross-checking of spreadsheets, and the final verified emission reductions or removals quantity.",
     },
     "4.3": {
         "title": "Quality of Evidence to Determine Reductions and Removals",
@@ -346,6 +378,8 @@ SUBSECTIONS: dict[str, dict] = {
             "data quality issues identified but not resolved",
             "monitoring report completeness not evaluated",
         ],
+        "content_format": "prose",
+        "format_instructions": "Describe the assessment of evidence quality, data management systems, QA/QC procedures, sampling approaches and statistical validity, monitoring report completeness, and any data quality issues and their resolution.",
     },
     "5.1": {
         "title": "Validation and Verification Summary",
@@ -365,6 +399,8 @@ SUBSECTIONS: dict[str, dict] = {
             "material findings not summarized",
             "incomplete review of documentation not acknowledged",
         ],
+        "content_format": "prose",
+        "format_instructions": "Provide a summary of overall validation and verification findings, the total verified emission reductions or removals, material findings and their resolution, and confirmation that all required documentation was reviewed.",
     },
     "5.2": {
         "title": "Validation Conclusion",
@@ -384,6 +420,8 @@ SUBSECTIONS: dict[str, dict] = {
             "methodology application not assessed in conclusion",
             "conditions or qualifications not clearly identified",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the formal validation opinion (positive, negative, or qualified), confirm compliance with VCS Program requirements, confirm correct methodology application, and identify any conditions or qualifications.",
     },
     "5.3": {
         "title": "Verification conclusion",
@@ -405,6 +443,8 @@ SUBSECTIONS: dict[str, dict] = {
             "material correctness of monitoring report not confirmed",
             "conditions or qualifications not clearly identified",
         ],
+        "content_format": "prose",
+        "format_instructions": "State the formal verification opinion (positive, negative, or qualified), the verified GHG emission reductions or removals for the monitoring period with start and end dates, confirmation of material correctness, and any conditions or qualifications.",
     },
     "5.4": {
         "title": "Ex-ante vs Ex-post ERR Comparison",
@@ -424,6 +464,8 @@ SUBSECTIONS: dict[str, dict] = {
             "no assessment of whether variances are systematic",
             "estimated and verified quantities not clearly presented",
         ],
+        "content_format": "table",
+        "format_instructions": "Present the ex-ante vs ex-post comparison in a table with columns: Parameter/Period | Ex-Ante Estimate (tCO2e) | Ex-Post Verified (tCO2e) | Variance (%) | Explanation. Follow the table with an assessment of whether variances indicate systematic issues.",
     },
 }
 
