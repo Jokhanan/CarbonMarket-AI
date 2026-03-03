@@ -16,8 +16,11 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "document_rep
 
 TEMPLATE_FILES = {
     ("GoldStandard", "pdd"): "gs_pdd_template_v1.5.docx",
+    ("GoldStandard", "vpa_dd"): "3cc2a088b5c942b3991a304da677b981_GS11319_GS 11319_AAHI_Kenya-VPA-Design-Document-v8-30-04-2024.docx",
+    ("GoldStandard", "poa_dd"): "e17d7499c3da43ffaa4c0ca369d307be_GS11253_GS 11253 POA-Design-Document V3.2_03-10-2023.docx",
     ("Verra", "pdd"): "ae547f753ee34b55927782d5243c4737_VCS-Project-Description-Template-v4.4-FINAL2_1772118270885.docx",
     ("Verra", "mr"): "a7eeb5a6d7264480ac6292ebbb308929_VCS-Monitoring-Report-Template-v4.4-FINAL2.docx",
+    ("Verra", "valver"): "344a508a729f444bb6168c6b32124d21_VCS-Joint-Validation-and-Verification-Template-v4.4.docx",
 }
 
 GS_SECTION_RE = re.compile(
@@ -455,6 +458,147 @@ def _remove_remaining_placeholders_gs(doc, sections_map):
                     break
 
 
+GS_VPA_DD_TITLE_MAP = {
+    "Purpose and general description": "A.1",
+    "Eligibility of the VPA under approved PoA": "A.1.1",
+    "Legal ownership of products": "A.1.2",
+    "Location of VPA": "A.2",
+    "Technologies and/or measures": "A.3",
+    "Scale of the VPA": "A.4",
+    "Funding sources of VPA": "A.5",
+    "Reference of approved methodology": "B.1",
+    "Applicability of methodology": "B.2",
+    "VPA boundary": "B.3",
+    "Establishment and description of baseline scenario": "B.4",
+    "Demonstration of additionality": "B.5",
+    "Prior Consideration": "B.5.1",
+    "Ongoing Financial Need": "B.5.2",
+    "Sustainable Development Goals": "B.6",
+    "Explanation of methodological choices": "B.6.1",
+    "Data and parameters fixed ex ante": "B.6.2",
+    "Ex ante estimation of SDG Impact": "B.6.3",
+    "Summary of ex ante estimates": "B.6.4",
+    "Monitoring plan": "B.7",
+    "Data and parameters to be monitored": "B.7.1",
+    "Sampling plan": "B.7.2",
+    "Other elements of monitoring plan": "B.7.3",
+    "Duration of project": "C.1",
+    "Start date of VPA": "C.1.1",
+    "Expected operational lifetime": "C.1.2",
+    "Crediting period": "C.2",
+    "Start date of crediting period": "C.2.1",
+    "Total length of crediting period": "C.2.2",
+    "Safeguarding Principles": "D.1",
+    "Assessment that project complies with GS4GG Gender": "D.2",
+    "Summary of stakeholder mitigation": "E.1",
+    "Final continuous input": "E.2",
+    "Eligibility and inclusion criteria": "F.1",
+}
+
+GS_POA_DD_TITLE_MAP = {
+    "Purpose and general description of the PoA": "A.1",
+    "Physical/ Geographical boundary": "A.2",
+    "Physical/Geographical boundary": "A.2",
+    "Technologies/measures": "A.3",
+    "Target/Indicator": "A.4",
+    "Coordinating/managing entity": "A.5",
+    "Funding sources of PoA": "A.6",
+    "Management System": "B.1",
+    "Application of methodologies": "B.2",
+    "Multiple technologies/measures": "B.2.1",
+    "Eligibility criteria for inclusion": "B.3",
+    "DEMONSTRATION OF ADDITIONALITY": "C.1",
+    "Date of first submission": "D.1",
+    "Duration of the PoA": "D.2",
+    "Summary of stakeholder consultation at PoA": "E.1",
+    "Consideration of stakeholder comments": "E.2",
+    "Final Continuous Input / Grievance Mechanism": "E.3",
+}
+
+
+def _match_gs_title_to_sid(text, title_map):
+    text_lower = text.lower().strip()
+    for prefix, sid in title_map.items():
+        if prefix.lower() in text_lower:
+            return sid
+    return None
+
+
+def _fill_gs_titled_template(doc, sections_map, project_info, title_map):
+    paragraphs = list(doc.paragraphs)
+
+    _fill_gs_kpi_table(doc, project_info)
+
+    filled_sids = set()
+
+    for i, para in enumerate(paragraphs):
+        style_name = para.style.name if para.style else ""
+        if style_name not in ("Section List", "Section List 2nd", "Section Title"):
+            continue
+
+        text = para.text.strip()
+        if not text or text == ">>":
+            continue
+
+        sid = _match_gs_title_to_sid(text, title_map)
+        if not sid:
+            continue
+
+        if style_name == "Section Title":
+            sid_for_section_title = _match_gs_title_to_sid(text, title_map)
+            if sid_for_section_title:
+                content = sections_map.get(sid_for_section_title, "")
+                if content and sid_for_section_title not in filled_sids:
+                    filled_sids.add(sid_for_section_title)
+                    j = i + 1
+                    while j < len(paragraphs):
+                        nt = paragraphs[j].text.strip()
+                        ns = paragraphs[j].style.name if paragraphs[j].style else ""
+                        if nt == ">>" or (nt == "" and ns not in ("Section List", "Section List 2nd", "Section Title")):
+                            para_el = paragraphs[j]._element
+                            parent = para_el.getparent()
+                            if parent is not None:
+                                parent.remove(para_el)
+                                j += 1
+                                continue
+                        break
+                    _insert_content_into_doc(doc, para._element, content, project_info, section_id=sid_for_section_title)
+            continue
+
+        content = sections_map.get(sid, "")
+        if not content:
+            continue
+        if sid in filled_sids:
+            j = i + 1
+            if j < len(paragraphs) and paragraphs[j].text.strip() == ">>":
+                para_el = paragraphs[j]._element
+                parent = para_el.getparent()
+                if parent is not None:
+                    parent.remove(para_el)
+            continue
+        filled_sids.add(sid)
+
+        j = i + 1
+        while j < len(paragraphs):
+            next_text = paragraphs[j].text.strip()
+            next_style = paragraphs[j].style.name if paragraphs[j].style else ""
+            if next_text == ">>" or (
+                next_text == ""
+                and next_style not in ("Section List", "Section List 2nd", "Section Title", "Heading 3", "Heading 4", "Heading 5")
+            ):
+                para_el = paragraphs[j]._element
+                parent = para_el.getparent()
+                if parent is not None:
+                    parent.remove(para_el)
+                    j += 1
+                    continue
+            break
+
+        _insert_content_into_doc(doc, para._element, content, project_info, section_id=sid)
+
+    _remove_remaining_placeholders_gs(doc, sections_map)
+
+
 def _fill_vcs_template(doc, sections_map, project_info):
     from docx.shared import Pt
 
@@ -536,7 +680,11 @@ def export_template_word(sections_content, project_info, template_type="pdd"):
     if template_path and sections_map:
         try:
             doc = Document(template_path)
-            if standard == "GoldStandard":
+            if standard == "GoldStandard" and template_type == "vpa_dd":
+                _fill_gs_titled_template(doc, sections_map, project_info, GS_VPA_DD_TITLE_MAP)
+            elif standard == "GoldStandard" and template_type == "poa_dd":
+                _fill_gs_titled_template(doc, sections_map, project_info, GS_POA_DD_TITLE_MAP)
+            elif standard == "GoldStandard":
                 _fill_gs_template(doc, sections_map, project_info)
             elif standard == "Verra":
                 _fill_vcs_template(doc, sections_map, project_info)
