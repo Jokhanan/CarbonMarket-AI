@@ -2482,8 +2482,16 @@ def _render_write_tab(project):
 
     std_label = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(standard, standard)
     doc_label = available_doc_types.get(selected_write_dt, selected_write_dt)
-    st.markdown(f"### {doc_label} - {std_label}")
-    st.caption(f"Project: {project.get('name', '')}")
+
+    with st.container(border=True):
+        st.markdown(
+            f"<div style='text-align:center; padding: 12px 0 4px 0;'>"
+            f"<span style='font-size:1.4em; font-weight:700;'>{doc_label}</span><br/>"
+            f"<span style='color:#666;'>{std_label}</span><br/>"
+            f"<span style='font-size:0.95em;'>{project.get('name', '')}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     current_parent = None
     for sec in sections:
@@ -2493,17 +2501,17 @@ def _render_write_tab(project):
 
         if parent and parent != current_parent:
             current_parent = parent
-            st.markdown(f"---\n#### {parent}")
+            st.markdown(f"#### {parent}")
 
         has_draft = sec_id in session_map
-        draft_text = session_map[sec_id].get("generated_text", "") if has_draft else ""
+        sess = session_map.get(sec_id, {})
+        draft_text = sess.get("user_text") or sess.get("generated_text") or ""
 
         with st.container(border=True):
-            header_col, action_col = st.columns([3, 1])
+            header_col, action_col1, action_col2 = st.columns([4, 1, 1])
             with header_col:
-                status_marker = "[Drafted]" if has_draft else "[Not drafted]"
-                st.markdown(f"**{sec_id} {sec_title}** &nbsp; `{status_marker}`")
-            with action_col:
+                st.markdown(f"**{sec_id} &mdash; {sec_title}**")
+            with action_col1:
                 btn_label = "Regenerate" if has_draft else "Generate"
                 if st.button(btn_label, key=f"gen_sec_{project_id}_{selected_write_dt}_{sec_id}", use_container_width=True):
                     with st.spinner(f"Generating {sec_id}..."):
@@ -2517,28 +2525,66 @@ def _render_write_tab(project):
                         )
                         if result:
                             st.rerun()
+            with action_col2:
+                with st.popover("Info"):
+                    st.markdown(f"**Requirements for {sec_id}:**")
+                    for req in sec.get("must_include", []):
+                        st.write(f"- {req}")
+                    explain_key = f"explain_{project_id}_{selected_write_dt}_{sec_id}"
+                    if st.button("Explain", key=f"explain_btn_{project_id}_{selected_write_dt}_{sec_id}"):
+                        with st.spinner("..."):
+                            expl_result = _fetch(
+                                f"/projects/{project_id}/explain?doc_type={selected_write_dt}",
+                                method="POST",
+                                json={"section_id": sec_id},
+                            )
+                            if expl_result:
+                                st.session_state[explain_key] = expl_result.get("explanation", "")
+                    explanation = st.session_state.get(explain_key)
+                    if explanation:
+                        st.info(explanation)
+
+            edit_key = f"edit_{project_id}_{selected_write_dt}_{sec_id}"
+            editing = st.session_state.get(edit_key, False)
 
             if has_draft and draft_text:
-                st.markdown(draft_text)
-            elif not has_draft:
-                st.caption("This section has not been drafted yet. Click Generate to create content.")
-
-            with st.expander("Section requirements", expanded=False):
-                for req in sec.get("must_include", []):
-                    st.write(f"- {req}")
-                explain_key = f"explain_{project_id}_{selected_write_dt}_{sec_id}"
-                if st.button("Explain this section", key=f"explain_btn_{project_id}_{selected_write_dt}_{sec_id}"):
-                    with st.spinner("Getting explanation..."):
-                        result = _fetch(
-                            f"/projects/{project_id}/explain?doc_type={selected_write_dt}",
-                            method="POST",
-                            json={"section_id": sec_id},
-                        )
-                        if result:
-                            st.session_state[explain_key] = result.get("explanation", "")
-                explanation = st.session_state.get(explain_key)
-                if explanation:
-                    st.info(explanation)
+                if editing:
+                    edited_text = st.text_area(
+                        f"Edit {sec_id}",
+                        value=draft_text,
+                        height=300,
+                        key=f"textarea_{project_id}_{selected_write_dt}_{sec_id}",
+                        label_visibility="collapsed",
+                    )
+                    save_col, cancel_col, _ = st.columns([1, 1, 4])
+                    with save_col:
+                        if st.button("Save", key=f"save_sec_{project_id}_{selected_write_dt}_{sec_id}", type="primary", use_container_width=True):
+                            _fetch(
+                                f"/projects/{project_id}/section-text",
+                                method="PATCH",
+                                json={
+                                    "section_id": sec_id,
+                                    "doc_type": selected_write_dt,
+                                    "text": edited_text,
+                                },
+                            )
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                    with cancel_col:
+                        if st.button("Cancel", key=f"cancel_sec_{project_id}_{selected_write_dt}_{sec_id}", use_container_width=True):
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                else:
+                    st.markdown(draft_text)
+                    if st.button("Edit", key=f"edit_btn_{project_id}_{selected_write_dt}_{sec_id}"):
+                        st.session_state[edit_key] = True
+                        st.rerun()
+            else:
+                st.markdown(
+                    "<span style='color:#999; font-style:italic;'>"
+                    "[This section has not been drafted yet]</span>",
+                    unsafe_allow_html=True,
+                )
 
 
 def _render_project_settings(project):

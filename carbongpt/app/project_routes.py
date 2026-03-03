@@ -49,6 +49,12 @@ class WriteAllRequest(BaseModel):
     user_instructions: str | None = None
 
 
+class UpdateSectionTextRequest(BaseModel):
+    section_id: str
+    doc_type: str = "pdd"
+    text: str
+
+
 class ExplainSectionRequest(BaseModel):
     section_id: str
 
@@ -406,6 +412,34 @@ def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "
         "total": len(results),
         "success_count": sum(1 for r in results if r["status"] == "success"),
     }
+
+
+@router.patch("/{project_id}/section-text")
+def update_section_text(project_id: int, data: UpdateSectionTextRequest):
+    from carbongpt.repository.store import get_user_project, save_write_session
+    from carbongpt.core.ai_writer import get_sections_for_doc_type
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    sections = get_sections_for_doc_type(project["standard"], data.doc_type) or []
+    section_title = ""
+    for s in sections:
+        if s["id"] == data.section_id:
+            section_title = s["title"]
+            break
+
+    session_id = save_write_session(
+        project_id=project_id,
+        doc_type=data.doc_type,
+        section_id=data.section_id,
+        section_title=section_title,
+        generated_text=data.text,
+        user_text=data.text,
+    )
+
+    return {"session_id": session_id, "section_id": data.section_id, "saved": True}
 
 
 @router.post("/{project_id}/explain")
