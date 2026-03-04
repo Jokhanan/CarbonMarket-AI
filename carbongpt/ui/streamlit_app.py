@@ -1648,8 +1648,15 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     if current_value and current_value not in shown_codes:
         current_meth = next((m for m in meths if m["code"] == current_value), None)
         if current_meth:
-            shown.append(current_meth)
-            shown_codes.add(current_value)
+            meth_std = current_meth.get("standard", "")
+            compatible = True
+            if standard == "GoldStandard" and meth_std not in ("GoldStandard", "CDM"):
+                compatible = False
+            elif standard == "Verra" and meth_std not in ("Verra", "CDM"):
+                compatible = False
+            if compatible:
+                shown.append(current_meth)
+                shown_codes.add(current_value)
 
     options = ["(none)"] + [m["code"] for m in shown]
     labels = {
@@ -3176,6 +3183,195 @@ def _render_write_tab(project):
                 )
 
 
+def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake):
+    meth_inputs = intake.get("methodology_parameters", {})
+    new_settings = dict(existing_settings)
+
+    context_dims = meth_parsed.get("context_dimensions", [])
+    calc_methods = meth_parsed.get("calculation_methods", [])
+    parameters = meth_parsed.get("parameters", [])
+    meth_name = meth_parsed.get("methodology_name", "")
+
+    project_input_params = [p for p in parameters if p.get("category") == "project_input"]
+    monitored_params = [p for p in parameters if p.get("category") == "monitored"]
+    default_params = [p for p in parameters if p.get("category") == "methodology_default"]
+    qualitative_params = [p for p in parameters if p.get("category") == "qualitative"]
+
+    if context_dims:
+        with st.container(border=True):
+            st.markdown("#### Methodology Choices")
+            st.caption("These selections determine which default values and equations apply to your project.")
+            for dim in context_dims:
+                dim_key = dim.get("dimension_key", "")
+                if not dim_key:
+                    continue
+                options = dim.get("options", [])
+                if not options:
+                    continue
+                current_val = existing_settings.get(dim_key, "")
+                idx = 0
+                if current_val in options:
+                    idx = options.index(current_val)
+                selected = st.selectbox(
+                    dim.get("label", dim_key),
+                    options,
+                    index=idx,
+                    key=f"meth_dim_{project_id}_{dim_key}",
+                    help=dim.get("description", ""),
+                )
+                new_settings[dim_key] = selected
+
+    if calc_methods:
+        with st.container(border=True):
+            st.markdown("#### Calculation Method")
+            st.caption("Select which quantification approach applies to your project.")
+            method_options = []
+            for cm in calc_methods:
+                mid = cm.get("method_id", "")
+                mname = cm.get("method_name", mid)
+                method_options.append((mid, mname))
+            if method_options:
+                current_method = existing_settings.get("calculation_method", "")
+                method_ids = [m[0] for m in method_options]
+                method_labels = {m[0]: m[1] for m in method_options}
+                idx = 0
+                if current_method in method_ids:
+                    idx = method_ids.index(current_method)
+                selected_method = st.selectbox(
+                    "Quantification method",
+                    method_ids,
+                    index=idx,
+                    format_func=lambda x: method_labels.get(x, x),
+                    key=f"meth_calcmethod_{project_id}",
+                )
+                new_settings["calculation_method"] = selected_method
+                selected_cm = next((cm for cm in calc_methods if cm.get("method_id") == selected_method), None)
+                if selected_cm:
+                    applicability = selected_cm.get("applicability", "")
+                    if applicability:
+                        st.caption(f"Applicability: {applicability[:300]}")
+
+    if project_input_params:
+        with st.container(border=True):
+            st.markdown("#### Project-Specific Parameters")
+            st.caption("Values specific to your project activity, required by the methodology.")
+            for param in project_input_params:
+                p_name = param.get("name", "")
+                p_symbol = param.get("symbol", "")
+                p_unit = param.get("unit", "")
+                p_source = param.get("source", "")
+                p_id = param.get("parameter_id", p_symbol or p_name)
+                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
+
+                label = p_name
+                if p_unit:
+                    label += f" [{p_unit}]"
+                if p_symbol and p_symbol != p_name:
+                    label = f"{p_symbol} - {label}"
+
+                current_val = meth_inputs.get(safe_key, "")
+                val = st.text_input(
+                    label,
+                    value=current_val,
+                    key=f"meth_pi_{project_id}_{safe_key}",
+                    placeholder=f"Source: {p_source[:80]}" if p_source else "",
+                )
+                meth_inputs[safe_key] = val
+
+    if qualitative_params:
+        with st.container(border=True):
+            st.markdown("#### Qualitative Requirements")
+            st.caption("Descriptive information required by the methodology.")
+            for param in qualitative_params:
+                p_name = param.get("name", "")
+                p_source = param.get("source", "")
+                p_id = param.get("parameter_id", p_name)
+                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
+                current_val = meth_inputs.get(safe_key, "")
+                val = st.text_area(
+                    p_name,
+                    value=current_val,
+                    key=f"meth_qual_{project_id}_{safe_key}",
+                    placeholder=f"Source: {p_source[:80]}" if p_source else "",
+                    height=80,
+                )
+                meth_inputs[safe_key] = val
+
+    if monitored_params:
+        with st.container(border=True):
+            st.markdown("#### Monitoring Parameters")
+            st.caption("These parameters must be monitored during the crediting period. Provide your planned approach or initial values.")
+            for param in monitored_params:
+                p_name = param.get("name", "")
+                p_symbol = param.get("symbol", "")
+                p_unit = param.get("unit", "")
+                p_source = param.get("source", "")
+                p_id = param.get("parameter_id", p_symbol or p_name)
+                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
+
+                label = p_name
+                if p_unit:
+                    label += f" [{p_unit}]"
+                if p_symbol and p_symbol != p_name:
+                    label = f"{p_symbol} - {label}"
+
+                current_val = meth_inputs.get(f"mon_{safe_key}", "")
+                val = st.text_input(
+                    label,
+                    value=current_val,
+                    key=f"meth_mon_{project_id}_{safe_key}",
+                    placeholder=f"Monitoring source: {p_source[:80]}" if p_source else "Describe your monitoring approach or enter initial/estimated value",
+                )
+                meth_inputs[f"mon_{safe_key}"] = val
+
+    if default_params:
+        with st.container(border=True):
+            st.markdown("#### Methodology Default Values")
+            st.caption("These values are defined by the methodology. Review and override only if your project has specific justification.")
+            for param in default_params:
+                p_name = param.get("name", "")
+                p_symbol = param.get("symbol", "")
+                p_unit = param.get("unit", "")
+                p_id = param.get("parameter_id", p_symbol or p_name)
+                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
+
+                default_val = param.get("default_value") or ""
+                if isinstance(default_val, (dict, list)):
+                    import json as _json
+                    default_val = _json.dumps(default_val)
+                default_val = str(default_val)
+
+                defaults_by_ctx = param.get("defaults_by_context", [])
+                resolved_default = default_val
+                if defaults_by_ctx and context_dims:
+                    for dbc in defaults_by_ctx:
+                        ctx_key = dbc.get("dimension_key", "")
+                        ctx_val = new_settings.get(ctx_key, "")
+                        if ctx_val:
+                            values_map = dbc.get("values", {})
+                            if isinstance(values_map, dict) and ctx_val in values_map:
+                                resolved_default = str(values_map[ctx_val])
+                                break
+
+                label = p_name
+                if p_unit:
+                    label += f" [{p_unit}]"
+                if p_symbol and p_symbol != p_name:
+                    label = f"{p_symbol} - {label}"
+
+                current_override = meth_inputs.get(f"def_{safe_key}", "")
+                placeholder = f"Default: {resolved_default[:100]}" if resolved_default else "No default specified"
+                val = st.text_input(
+                    label,
+                    value=current_override,
+                    key=f"meth_def_{project_id}_{safe_key}",
+                    placeholder=placeholder,
+                )
+                meth_inputs[f"def_{safe_key}"] = val
+
+    return new_settings, meth_inputs
+
+
 def _render_intake_by_type(project_id, project_type, intake):
     if project_type in ("standalone_pdd", ""):
         return _render_intake_pdd(project_id, intake)
@@ -3862,34 +4058,36 @@ def _render_project_settings(project):
             meth_parsed = meth_data.get("parsed")
 
     new_settings = dict(existing_settings)
-    context_dims = []
+    meth_layer_inputs = {}
     if meth_parsed:
-        context_dims = meth_parsed.get("context_dimensions", [])
-
-    if context_dims:
-        st.divider()
-        st.subheader("Methodology Parameters")
-        st.caption("These settings determine which default values are used in calculations.")
-
-        for dim in context_dims:
-            dim_key = dim["dimension_key"]
-            options = dim["options"]
-            current_val = existing_settings.get(dim_key, "")
-            idx = 0
-            if current_val in options:
-                idx = options.index(current_val)
-            selected = st.selectbox(
-                dim["label"],
-                options,
-                index=idx,
-                key=f"setup_dim_{project_id}_{dim_key}",
-                help=dim.get("description", ""),
+        has_params = meth_parsed.get("parameters") or meth_parsed.get("context_dimensions") or meth_parsed.get("calculation_methods")
+        if has_params:
+            st.divider()
+            st.subheader("Methodology-Specific Setup")
+            st.caption("These fields are derived from the selected methodology's requirements. They feed directly into the AI writer for accurate, methodology-compliant content.")
+            new_settings, meth_layer_inputs = _render_methodology_layer(
+                project_id, meth_parsed, existing_settings, intake
             )
-            new_settings[dim_key] = selected
+    elif methodology:
+        st.divider()
+        st.info("Methodology data is not yet available for this methodology. AI-trained methodologies will show their specific parameters, equations, and default values here.")
 
     st.divider()
 
     if st.button("Save All Changes", key=f"save_setup_{project_id}", type="primary"):
+        methodology_changed = new_methodology != project.get("methodology")
+        if methodology_changed:
+            intake_data["methodology_parameters"] = meth_layer_inputs if meth_layer_inputs else {}
+            dim_keys_to_keep = set()
+            if meth_parsed:
+                for dim in meth_parsed.get("context_dimensions", []):
+                    dk = dim.get("dimension_key", "")
+                    if dk:
+                        dim_keys_to_keep.add(dk)
+                dim_keys_to_keep.add("calculation_method")
+            new_settings = {k: v for k, v in new_settings.items() if k in dim_keys_to_keep}
+        elif meth_layer_inputs:
+            intake_data["methodology_parameters"] = meth_layer_inputs
         update_payload = {
             "name": new_name,
             "standard": new_standard,

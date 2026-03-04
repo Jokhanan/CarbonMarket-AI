@@ -350,6 +350,7 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": project.get("project_intake") or {},
+        "project_settings": project.get("project_settings") or {},
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
@@ -411,6 +412,7 @@ def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": project.get("project_intake") or {},
+        "project_settings": project.get("project_settings") or {},
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
@@ -524,6 +526,7 @@ def review_document(project_id: int, doc_id: int):
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": project.get("project_intake") or {},
+        "project_settings": project.get("project_settings") or {},
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc["doc_type"])
@@ -589,6 +592,7 @@ def review_draft(project_id: int, doc_type: str = "pdd"):
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": project.get("project_intake") or {},
+        "project_settings": project.get("project_settings") or {},
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)

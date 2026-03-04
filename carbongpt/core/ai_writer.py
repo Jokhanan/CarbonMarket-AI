@@ -117,6 +117,52 @@ def _format_project_context(project_info):
     return "### Detailed Project Data (from intake form):\n" + "\n\n".join(parts) + "\n"
 
 
+def _format_methodology_parameters_context(project_info):
+    intake = project_info.get("project_intake") or {}
+    meth_params = intake.get("methodology_parameters")
+    if not meth_params or not isinstance(meth_params, dict):
+        return ""
+
+    settings = project_info.get("project_settings") or {}
+
+    parts = []
+
+    settings_lines = []
+    for k, v in settings.items():
+        if v and k not in ("calculation_method",):
+            settings_lines.append(f"  - {k.replace('_', ' ').title()}: {v}")
+    if settings.get("calculation_method"):
+        settings_lines.append(f"  - Selected Calculation Method: {settings['calculation_method']}")
+    if settings_lines:
+        parts.append("**Methodology Choices:**\n" + "\n".join(settings_lines))
+
+    pi_lines = []
+    mon_lines = []
+    def_lines = []
+    qual_lines = []
+    for key, val in meth_params.items():
+        if not val or not str(val).strip():
+            continue
+        label = key.replace("_", " ").title()
+        if key.startswith("mon_"):
+            mon_lines.append(f"  - {label[4:]}: {val}")
+        elif key.startswith("def_"):
+            def_lines.append(f"  - {label[4:]}: {val}")
+        else:
+            pi_lines.append(f"  - {label}: {val}")
+
+    if pi_lines:
+        parts.append("**Project-Specific Parameters:**\n" + "\n".join(pi_lines))
+    if mon_lines:
+        parts.append("**Monitoring Parameters:**\n" + "\n".join(mon_lines))
+    if def_lines:
+        parts.append("**Methodology Default Overrides:**\n" + "\n".join(def_lines))
+
+    if not parts:
+        return ""
+    return "### Methodology-Specific Data (from methodology setup):\n" + "\n\n".join(parts) + "\n"
+
+
 def _get_relevant_intake_cards(section_id):
     for prefix in sorted(SECTION_INTAKE_MAP.keys(), key=len, reverse=True):
         if section_id == prefix or section_id.startswith(prefix + "."):
@@ -401,6 +447,10 @@ def generate_section_draft(
     intake_context = _format_filtered_project_context(project_info, section_id)
     if intake_context:
         user_prompt += intake_context + "\n"
+
+    meth_params_context = _format_methodology_parameters_context(project_info)
+    if meth_params_context:
+        user_prompt += meth_params_context + "\n"
 
     if existing_pdd_text:
         pdd_excerpt = existing_pdd_text[:6000]
