@@ -706,6 +706,14 @@ def run_methodology_sync(data: MethodologySyncRequest):
     return result
 
 
+@router.post("/methodology-enrich")
+def run_methodology_enrich():
+    from carbongpt.repository.methodology_db import enrich_from_verra_api, populate_methodologies_from_projects
+    repopulated = populate_methodologies_from_projects()
+    enriched = enrich_from_verra_api()
+    return {"repopulated": repopulated, "enriched_from_verra_api": enriched}
+
+
 @router.get("/methodology-sync/status")
 def get_sync_status():
     from carbongpt.repository.methodology_sync import _scheduler_started

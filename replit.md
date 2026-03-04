@@ -33,7 +33,7 @@ The application features a streamlined two-section navigation:
 -   **Web Intelligence:** Integrates real-time web search (`Serper.dev API`) for methodology status verification and knowledge refreshing.
 -   **Document Synchronization:** Automated downloading and ingestion of methodologies, program standards, guides, and project documents from public catalogs (Verra VCS, CDM/UNFCCC, Gold Standard).
 -   **Carbon Project Intelligence:** A dashboard providing analytics on carbon projects from Verra VCS and Gold Standard registries.
--   **Methodology Database:** A structured database of 192+ carbon methodologies used for selection, AI context injection, and deprecation warnings.
+-   **Methodology Database:** A structured database of 195 carbon methodologies (all with names/sectors) from CDM, Verra VCS, and Gold Standard. `methodology_db.py` holds canonical names. `enrich_from_verra_api()` can live-fetch missing names from Verra's WordPress API. Admin endpoint `POST /admin/methodology-enrich` re-populates and enriches. Methodology detail cards show code, version, name, standard, sector, category — null fields are hidden.
 -   **Project Workspace (My Projects):** User-facing project management with document upload, AI-powered review (with PDD-MR cross-referencing), and AI writing assistant.
 -   **AI Writing - Full Document Generation:** The Write/Draft tab supports both per-section and full document generation, displaying a template view with progress tracking.
 -   **AI Writing - Template View:** The Write/Draft tab displays the document as a structured template with section details, generated content, and requirements.

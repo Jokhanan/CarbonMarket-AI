@@ -34,27 +34,46 @@ CDM_METHODOLOGY_NAMES = {
     "ACM0016": ("Mass Rapid Transit Projects", "Transport"),
     "ACM0017": ("Production of biodiesel for use as fuel", "Energy industries (renewable sources)"),
     "ACM0018": ("Electricity generation from biomass in power-only plants", "Energy industries (renewable sources)"),
+    "ACM0019": ("N2O abatement from nitric acid production", "Chemical industries"),
+    "ACM0021": ("Reduction of emissions from charcoal production by improved kiln design and/or abatement of methane", "Manufacturing industries"),
     "ACM0022": ("Alternative waste treatment processes", "Waste handling and disposal"),
     "ACM0026": ("Fossil fuel based cogeneration for identified recipient facilities", "Energy industries"),
     "AM0001": ("Decomposition of fluoroform (HFC-23) waste streams", "Chemical industries"),
     "AM0007": ("Analysis of the least-cost fuel option for seasonally-operating biomass cogeneration plants", "Energy industries (renewable sources)"),
     "AM0009": ("Recovery and utilization of gas from oil wells that would otherwise be flared or vented", "Fugitive emissions from fuels"),
+    "AM0010": ("GHG emission reductions through fumigation of warehoused grain with carbon dioxide", "Agriculture"),
+    "AM0014": ("Natural gas-based package cogeneration", "Energy industries"),
+    "AM0016": ("Greenhouse gas mitigation from improved animal husbandry and manure management", "Agriculture"),
     "AM0019": ("Renewable energy project activities replacing part of the electricity production of one single fossil fuel fired power plant", "Energy industries (renewable sources)"),
     "AM0023": ("Leak reduction from a natural gas distribution grid", "Fugitive emissions from fuels"),
+    "AM0024": ("Methodology for greenhouse gas reductions through landfill gas thermal treatment", "Waste handling and disposal"),
     "AM0025": ("Avoided emissions from organic waste through alternative waste treatment", "Waste handling and disposal"),
+    "AM0026": ("Methodology for zero-emissions grid-connected electricity generation from renewable sources in Chile or in countries with merit order based dispatch", "Energy industries (renewable sources)"),
     "AM0028": ("Catalytic N2O destruction in the tail gas of Nitric Acid or Caprolactam production plants", "Chemical industries"),
     "AM0029": ("Grid-connected electricity generation from renewable sources (for baseload)", "Energy industries (renewable sources)"),
+    "AM0030": ("PFC emission reductions from anode effect mitigation at primary aluminium smelting facilities", "Manufacturing industries"),
+    "AM0031": ("Bus rapid transit projects", "Transport"),
+    "AM0034": ("Displacement of fossil fuel fired electricity generation through grid-connected electricity from biomass residues", "Energy industries (renewable sources)"),
     "AM0036": ("Fuel switch from fossil fuels to biomass residues in heat generation equipment", "Energy industries"),
+    "AM0046": ("Distribution of efficient light bulbs to households", "Energy demand"),
+    "AM0047": ("Production of biodiesel based on waste oils and/or waste fats from biogenic origin for use as fuel", "Energy industries (renewable sources)"),
     "AM0048": ("New cogeneration facilities supplying electricity and/or steam to multiple customers and displacing grid/off-grid electricity", "Energy industries"),
+    "AM0057": ("Avoided emissions from biomass wastes through use as feed stock in pulp and paper,ite orite plants", "Manufacturing industries"),
     "AM0058": ("Introduction of a new natural gas-based combined heat and power or cogeneration system", "Energy demand"),
+    "AM0059": ("GHG emission reductions through expansion of the area under sustainable forest management", "Agriculture Forestry and Other Land Use"),
+    "AM0064": ("Utilization of waste in limestone andite production", "Manufacturing industries"),
+    "AM0065": ("Replacement of SF6 with alternate cover gas in magnesium industry", "Manufacturing industries"),
     "AM0070": ("Manufacturing of energy efficient domestic refrigerators", "Energy demand"),
     "AM0072": ("Fossil fuel displacement by geothermal resources for space heating", "Energy industries (renewable sources)"),
     "AM0073": ("GHG emission reductions through multi-site manure collection and treatment in a central plant", "Agriculture"),
+    "AM0080": ("Mitigation of greenhouse gases emissions with treatment of wastewater in aerobic wastewater treatment plants", "Waste handling and disposal"),
     "AM0082": ("Switch from non-renewable biomass for thermal applications by the user", "Energy demand"),
     "AM0086": ("Distribution of efficient light bulbs to households", "Energy demand"),
     "AM0089": ("Production of diesel using a mixed feedstock of jatropha and fossil fuels", "Energy industries (renewable sources)"),
+    "AM0090": ("Modal shift in transportation of freight", "Transport"),
     "AM0110": ("Modal shift in transportation of cargo", "Transport"),
     "AM0121": ("Waste energy recovery and utilization at an existing industrial facility", "Energy industries"),
+    "AM0123": ("Fuel switch from fossil fuel to biomass residues in boilers for heat generation", "Energy industries"),
     "AMS-I.A.": ("Electricity generation by the user", "Energy industries (renewable sources)"),
     "AMS-I.B.": ("Mechanical energy for the user with or without electricity", "Energy industries (renewable sources)"),
     "AMS-I.C.": ("Thermal energy production with or without electricity", "Energy industries (renewable sources)"),
@@ -65,14 +84,20 @@ CDM_METHODOLOGY_NAMES = {
     "AMS-I.J.": ("Solar water heating systems", "Energy demand"),
     "AMS-I.K.": ("Solar cookers for households", "Energy demand"),
     "AMS-I.L.": ("Electrification of rural communities using renewable energy", "Energy industries (renewable sources)"),
+    "AMS-II.B.": ("Supply side energy efficiency improvements - generation", "Energy industries"),
     "AMS-II.C.": ("Demand-side energy efficiency activities for specific technologies", "Energy demand"),
     "AMS-II.D.": ("Energy efficiency and fuel switching measures for industrial facilities", "Energy demand"),
     "AMS-II.E.": ("Energy efficiency and fuel switching measures for buildings", "Energy demand"),
+    "AMS-II.F.": ("Energy efficiency and fuel switching measures for agricultural facilities and activities", "Agriculture"),
     "AMS-II.G.": ("Energy efficiency measures in thermal applications of non-renewable biomass", "Energy demand"),
+    "AMS-II.H.": ("Energy efficiency - loss reduction and/or fuel switching measures in existing industrial cogeneration systems", "Energy industries"),
     "AMS-II.J.": ("Demand-side activities for efficient lighting technologies", "Energy demand"),
     "AMS-II.L.": ("Demand-side activities for efficient outdoor and street lighting technologies", "Energy demand"),
     "AMS-II.M.": ("Demand-side energy efficiency activities for installation of low-flow hot water savings devices", "Energy demand"),
+    "AMS-II.S.": ("Energy efficiency in motor systems", "Energy demand"),
+    "AMS-III.AF.": ("Avoidance of methane emissions through excavating and composting partially decayed municipal solid waste", "Waste handling and disposal"),
     "AMS-III.AJ.": ("Recovery and recycling of materials from solid wastes", "Waste handling and disposal"),
+    "AMS-III.AK.": ("Biodiesel production and use for transport applications", "Transport"),
     "AMS-III.AO.": ("Methane recovery through controlled anaerobic digestion", "Waste handling and disposal"),
     "AMS-III.AQ.": ("Introduction of Bio-CNG in transportation applications", "Transport"),
     "AMS-III.AR.": ("Substituting fossil fuel based lighting with LED/CFL lighting systems", "Energy demand"),
@@ -81,6 +106,8 @@ CDM_METHODOLOGY_NAMES = {
     "AMS-III.AV.": ("Low greenhouse gas emitting water purification systems", "Energy demand"),
     "AMS-III.B.": ("Switching fossil fuels", "Energy industries"),
     "AMS-III.BA.": ("Recovery and recycling of materials from E-waste", "Waste handling and disposal"),
+    "AMS-III.BB.": ("Electrification of communities through grid extension or construction of new mini-grids", "Energy industries (renewable sources)"),
+    "AMS-III.BC.": ("Emission reductions through improved efficiency of vehicle fleets", "Transport"),
     "AMS-III.BF.": ("Reduction of electricity consumption by replacing electric lamps by LED", "Energy demand"),
     "AMS-III.BG.": ("Emission reduction through sustainable charcoal production and consumption", "Energy demand"),
     "AMS-III.BL.": ("Integrated methodology for electrification of communities", "Energy industries (renewable sources)"),
@@ -92,63 +119,102 @@ CDM_METHODOLOGY_NAMES = {
     "AMS-III.G.": ("Landfill methane recovery", "Waste handling and disposal"),
     "AMS-III.H.": ("Methane recovery in wastewater treatment", "Waste handling and disposal"),
     "AMS-III.I.": ("Avoidance of methane production in wastewater treatment through replacement of anaerobic systems by aerobic systems", "Waste handling and disposal"),
+    "AMS-III.J.": ("Avoidance of fossil fuel combustion for carbon dioxide production to be used as raw material for industrial processes", "Manufacturing industries"),
     "AMS-III.K.": ("Avoidance of methane release from charcoal production", "Waste handling and disposal"),
+    "AMS-III.L.": ("Avoidance of methane production from biomass decay through controlled pyrolysis", "Waste handling and disposal"),
+    "AMS-III.M.": ("Reduction in consumption of electricity by recovering soda from paper manufacturing process", "Manufacturing industries"),
     "AMS-III.Q.": ("Waste energy recovery", "Energy industries"),
     "AMS-III.R.": ("Methane recovery in agricultural activities at household/small farm level", "Agriculture"),
     "AMS-III.S.": ("Introduction of low-emission vehicles/technologies to commercial vehicle fleets", "Transport"),
+    "AMS-III.Y.": ("Methane avoidance through separation of solids from wastewater or manure treatment systems", "Waste handling and disposal"),
     "AMS-III.Z.": ("Fuel switch, process improvement and energy efficiency in brick manufacture", "Manufacturing industries"),
     "AR-ACM0001": ("Afforestation and reforestation of degraded land", "Agriculture Forestry and Other Land Use"),
     "AR-ACM0002": ("Afforestation or reforestation of degraded land without displacement of pre-project activities", "Agriculture Forestry and Other Land Use"),
     "AR-ACM0003": ("Afforestation and reforestation of lands except wetlands", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0002": ("Restoration of degraded lands through afforestation/reforestation", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0003": ("Afforestation and reforestation of degraded land through tree planting, assisted natural regeneration and control of animal grazing", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0005": ("Afforestation and reforestation project activities implemented for industrial and/or commercial uses", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0007": ("Afforestation and reforestation of land currently under agricultural or pastoral use", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0010": ("Afforestation and reforestation project activities implemented on unmanaged grassland in reserve/protected areas", "Agriculture Forestry and Other Land Use"),
+    "AR-AM0014": ("Afforestation and reforestation of degraded mangrove habitats", "Agriculture Forestry and Other Land Use"),
     "AR-AMS0001": ("Simplified baseline and monitoring methodology for small-scale CDM A/R project activities implemented on grasslands or croplands", "Agriculture Forestry and Other Land Use"),
+    "AR-AMS0002": ("Simplified baseline and monitoring methodology for small-scale CDM A/R project activities implemented on settlements", "Agriculture Forestry and Other Land Use"),
     "AR-AMS0003": ("Simplified baseline and monitoring methodology for small-scale CDM afforestation and reforestation project activities implemented on wetlands", "Agriculture Forestry and Other Land Use"),
+    "AR-AMS0004": ("Simplified baseline and monitoring methodology for small-scale agroforestry - afforestation and reforestation project activities under the CDM", "Agriculture Forestry and Other Land Use"),
+    "AR-AMS0005": ("Simplified baseline and monitoring methodology for small-scale afforestation and reforestation project activities under the CDM implemented on lands having low inherent potential to support living biomass", "Agriculture Forestry and Other Land Use"),
+    "AR-AMS0006": ("Simplified baseline and monitoring methodology for small-scale CDM A/R project activities implemented on lands with limited residual vegetation", "Agriculture Forestry and Other Land Use"),
     "AR-AMS0007": ("Simplified baseline and monitoring methodology for small-scale A/R CDM project activities implemented on lands having low inherent potential to support living biomass", "Agriculture Forestry and Other Land Use"),
 }
 
 VCS_METHODOLOGY_NAMES = {
-    "VM0001": ("Methodology for Infrared Automatic Refrigerant Leak Detection Efficiency", "Manufacturing industries"),
-    "VM0002": ("Methodology for Improved Electrical Energy Efficiency of an Existing Submerged Arc Furnace Used for the Production of Silicon and Manganese Metals", "Manufacturing industries"),
-    "VM0003": ("Methodology for Improved Forest Management through Extension of Rotation Age", "Agriculture Forestry and Other Land Use"),
-    "VM0004": ("Methodology for Conservation Projects that Avoid Planned Land Use Conversion in Peatlands", "Agriculture Forestry and Other Land Use"),
-    "VM0005": ("Methodology for Conversion of Low-productive Forest to High-productive Forest", "Agriculture Forestry and Other Land Use"),
-    "VM0006": ("Methodology for Carbon Accounting for Mosaic and Landscape-scale REDD Projects", "Agriculture Forestry and Other Land Use"),
+    "VM0001": ("Refrigerant Leak Detection Efficiency", "Manufacturing industries"),
+    "VM0002": ("New Cogeneration Facilities Supplying Less Carbon Intensive Electricity to Grid and Steam to Facilities", "Manufacturing industries"),
+    "VM0003": ("Improved Forest Management through Extension of Rotation Age", "Agriculture Forestry and Other Land Use"),
+    "VM0004": ("Avoided Planned Land Use Conversion in Peat Swamp Forests", "Agriculture Forestry and Other Land Use"),
+    "VM0005": ("Conversion of Low-Productive Forest to High-Productive Forest", "Agriculture Forestry and Other Land Use"),
+    "VM0006": ("Carbon Accounting for Mosaic and Landscape-scale REDD Projects", "Agriculture Forestry and Other Land Use"),
     "VM0007": ("REDD+ Methodology Framework (REDD+MF)", "Agriculture Forestry and Other Land Use"),
     "VM0008": ("Weatherization of Single Family and Multi-Family Buildings", "Energy demand"),
-    "VM0009": ("Methodology for Avoided Ecosystem Conversion", "Agriculture Forestry and Other Land Use"),
-    "VM0010": ("Methodology for Improved Forest Management: Conversion from Logged to Protected Forest", "Agriculture Forestry and Other Land Use"),
-    "VM0011": ("Methodology for Calculating GHG Benefits from Preventing Planned Degradation", "Agriculture Forestry and Other Land Use"),
+    "VM0009": ("Avoided Ecosystem Conversion", "Agriculture Forestry and Other Land Use"),
+    "VM0010": ("Improved Forest Management: Conversion from Logged to Protected Forest", "Agriculture Forestry and Other Land Use"),
+    "VM0011": ("Calculating GHG Benefits from Preventing Planned Degradation", "Agriculture Forestry and Other Land Use"),
     "VM0012": ("Improved Forest Management in Temperate and Boreal Forests (LtPF)", "Agriculture Forestry and Other Land Use"),
-    "VM0015": ("Methodology for Avoided Unplanned Deforestation", "Agriculture Forestry and Other Land Use"),
-    "VM0016": ("Recovery and Destruction of Ozone-Depleting Substances (ODS) from Products", "Chemical industries"),
+    "VM0013": ("Calculating Emission Reductions from Jet Engine Washing", "Transport"),
+    "VM0014": ("Interception and Destruction of Fugitive Methane from Coal Bed Methane (CBM) Seeps", "Fugitive emissions from fuels"),
+    "VM0015": ("Avoided Unplanned Deforestation", "Agriculture Forestry and Other Land Use"),
+    "VM0016": ("Destruction of Ozone-Depleting Substances and Hydrofluorocarbons", "Chemical industries"),
     "VM0017": ("Adoption of Sustainable Agricultural Land Management", "Agriculture Forestry and Other Land Use"),
-    "VM0018": ("Energy Efficiency and Fuel Switch Measures in Thermal Applications", "Energy demand"),
+    "VM0018": ("Energy Efficiency and Solid Waste Diversion Activities within a Sustainable Community", "Energy demand"),
     "VM0019": ("Fuel Switch from Gasoline to Ethanol in Flex-Fuel Vehicle Fleets", "Transport"),
+    "VM0020": ("Transport Energy Efficiency from Lightweight Pallets", "Transport"),
     "VM0021": ("Soil Carbon Quantification Methodology", "Agriculture Forestry and Other Land Use"),
-    "VM0022": ("Quantifying N2O Emission Reductions in Agricultural Crops through Nitrogen Management", "Agriculture"),
-    "VM0024": ("Methodology for Coastal Wetland Creation", "Agriculture Forestry and Other Land Use"),
+    "VM0022": ("Quantifying N2O Emissions Reductions in Agricultural Crops through Nitrogen Management", "Agriculture"),
+    "VM0023": ("Reduction of GHG Emissions in Propylene Oxide Production", "Chemical industries"),
+    "VM0024": ("Coastal Wetland Creation", "Agriculture Forestry and Other Land Use"),
     "VM0025": ("Campus Clean Energy and Energy Efficiency", "Energy demand"),
-    "VM0026": ("Methodology for Sustainable Grassland Management (SGM)", "Agriculture Forestry and Other Land Use"),
-    "VM0032": ("Methodology for the Adoption of Sustainable Grasslands through Adjustment of Fire and Grazing", "Agriculture Forestry and Other Land Use"),
-    "VM0033": ("Methodology for Tidal Wetland and Seagrass Restoration", "Agriculture Forestry and Other Land Use"),
+    "VM0026": ("Sustainable Grassland Management (SGM)", "Agriculture Forestry and Other Land Use"),
+    "VM0027": ("Rewetting Drained Tropical Peatlands", "Agriculture Forestry and Other Land Use"),
+    "VM0028": ("Carpooling", "Transport"),
+    "VM0029": ("Avoided Forest Degradation through Fire Management", "Agriculture Forestry and Other Land Use"),
+    "VM0030": ("Pavement Application using Sulphur Substitute", "Manufacturing industries"),
+    "VM0031": ("Precast Concrete Production using Sulphur Substitute", "Manufacturing industries"),
+    "VM0032": ("Adoption of Sustainable Grasslands through Adjustment of Fire and Grazing", "Agriculture Forestry and Other Land Use"),
+    "VM0033": ("Tidal Wetland and Seagrass Restoration", "Agriculture Forestry and Other Land Use"),
     "VM0034": ("Canadian Forest Carbon Offset Methodology", "Agriculture Forestry and Other Land Use"),
-    "VM0035": ("Methodology for Improved Forest Management through Reduced Impact Logging", "Agriculture Forestry and Other Land Use"),
-    "VM0036": ("Methodology for Rewetting Drained Temperate Peatlands", "Agriculture Forestry and Other Land Use"),
-    "VM0037": ("Methodology for Implementation of REDD+ Activities in Peat Swamp Forests", "Agriculture Forestry and Other Land Use"),
-    "VM0038": ("Methodology for Electric Vehicle Charging Systems", "Transport"),
-    "VM0039": ("Methodology for Use of Foam Blowing Agents with Lower Global Warming Potential", "Manufacturing industries"),
-    "VM0041": ("Methodology for the Reduction of Enteric Methane Emissions from Ruminants through the Use of Feed Ingredients", "Agriculture"),
-    "VM0042": ("Methodology for Improved Agricultural Land Management", "Agriculture Forestry and Other Land Use"),
-    "VM0043": ("Methodology for CO2 Utilization in Concrete Production", "Manufacturing industries"),
-    "VM0044": ("Methodology for Biochar Utilization in Soil and Non-Soil Applications", "Agriculture Forestry and Other Land Use"),
-    "VM0045": ("Improved Forest Management Methodology Using Dynamic Matched Baselines from National Forest Inventories", "Agriculture Forestry and Other Land Use"),
-    "VM0046": ("Methodology for Reducing Food Loss and Waste", "Waste handling and disposal"),
-    "VM0047": ("Afforestation, Reforestation, and Revegetation", "Agriculture Forestry and Other Land Use"),
+    "VM0035": ("Improved Forest Management through Reduced Impact Logging", "Agriculture Forestry and Other Land Use"),
+    "VM0036": ("Avoided Conversion of Temperate and Boreal Peatlands", "Agriculture Forestry and Other Land Use"),
+    "VM0037": ("Implementation of REDD+ Activities in Landscapes Affected by Mosaic Deforestation and Degradation", "Agriculture Forestry and Other Land Use"),
+    "VM0038": ("Electric Vehicle Charging Systems", "Transport"),
+    "VM0039": ("Use of Foam Stabilized Base and Emulsion Asphalt Mixtures in Pavement Application", "Manufacturing industries"),
+    "VM0040": ("Greenhouse Gas Capture and Utilization in Plastic Materials", "Manufacturing industries"),
+    "VM0041": ("Reduction of Enteric Methane Emissions from Ruminants through the Use of Feed Ingredients", "Agriculture"),
+    "VM0042": ("Improved Agricultural Land Management", "Agriculture Forestry and Other Land Use"),
+    "VM0043": ("CO2 Utilization in Concrete Production", "Manufacturing industries"),
+    "VM0044": ("Biochar Utilization in Soil and Non-Soil Applications", "Agriculture Forestry and Other Land Use"),
+    "VM0045": ("Improved Forest Management Using Dynamic Matched Baselines from National Forest Inventories", "Agriculture Forestry and Other Land Use"),
+    "VM0046": ("Reducing Food Loss and Waste", "Waste handling and disposal"),
+    "VM0047": ("Afforestation, Reforestation and Revegetation", "Agriculture Forestry and Other Land Use"),
     "VM0048": ("Reducing Emissions from Deforestation and Forest Degradation", "Agriculture Forestry and Other Land Use"),
+    "VM0049": ("Carbon Capture and Storage", "Energy industries"),
+    "VM0050": ("Energy Efficiency and Fuel-Switch Measures in Cookstoves", "Energy demand"),
+    "VM0051": ("Improved Management in Rice Production Systems", "Agriculture"),
+    "VM0052": ("Accelerated Retirement of Coal-Fired Power Plants Using a Just Transition Approach", "Energy industries"),
     "VMR0001": ("Revisions to ACM0002 to Include Renewable Energy CPA under a CDM PoA", "Energy industries (renewable sources)"),
     "VMR0002": ("Revisions to ACM0008 to Include Methane Capture and Destruction from Abandoned Mines", "Fugitive emissions from fuels"),
-    "VMR0003": ("Revisions to AMS-I.D. to Extend Applicability to Off-Grid Renewable Electricity Generation", "Energy industries (renewable sources)"),
-    "VMR0005": ("Methodology for Improved Forest Management (IFM)", "Agriculture Forestry and Other Land Use"),
-    "VMR0006": ("Methodology for Carbon Accounting for REDD+", "Agriculture Forestry and Other Land Use"),
+    "VMR0003": ("Revisions to AMS-III.Y to Include Use of Organic Bedding Material", "Agriculture"),
+    "VMR0004": ("Improved Efficiency of Fleet Vehicles", "Transport"),
+    "VMR0005": ("Installation of Low-Flow Water Devices", "Energy demand"),
+    "VMR0006": ("Energy Efficiency and Fuel Switch Measures in Thermal Applications", "Energy demand"),
+    "VMR0007": ("Recovery and Recycling of Materials from Solid Wastes (AMS-III.AJ. Revision)", "Waste handling and disposal"),
+    "VMR0008": ("Recovery and Recycling of Materials from E-waste (AMS-III.BA. Revision)", "Waste handling and disposal"),
+    "VMR0009": ("Avoided Emissions from Biomass Wastes through Use as Feedstock (AM0057 Revision)", "Energy industries"),
+    "VMR0010": ("Electricity Supply for Ships", "Transport"),
+    "VMR0011": ("Switch from Non-Renewable Biomass for Thermal Applications by the User", "Energy demand"),
+    "VMR0012": ("Production of Geopolymer Cement", "Manufacturing industries"),
+    "VMR0013": ("Lightweight Two- and Three-Wheeled Personal Transportation (AMS-III.BM. Revision)", "Transport"),
+    "VMR0014": ("Electric and Hybrid Vehicles and Mobile Machinery (AMS-III.C. Revision)", "Transport"),
+    "VMR0015": ("Low Greenhouse Gas Emitting Safe Drinking Water Production Systems (AMS-III.AV. Revision)", "Energy demand"),
+    "VMR0016": ("Flaring or Use of Landfill Gas (ACM0001 Revision)", "Waste handling and disposal"),
     "VMD0038": ("Leakage from Displacement of Cattle", "Agriculture Forestry and Other Land Use"),
 }
 
@@ -440,3 +506,51 @@ def populate_methodologies_from_projects():
 
     logger.info("Populated %d methodologies from project data", count)
     return count
+
+
+def enrich_from_verra_api():
+    try:
+        from carbongpt.repository.methodology_sync import fetch_verra_methodology_list_api
+    except ImportError:
+        logger.warning("Cannot import methodology_sync for enrichment")
+        return 0
+
+    api_results = fetch_verra_methodology_list_api()
+    if not api_results:
+        logger.info("No results from Verra API for enrichment")
+        return 0
+
+    verra_names = {}
+    for item in api_results:
+        code = item.get("code", "")
+        title = item.get("title", "")
+        if not code or not title:
+            continue
+        clean = re.sub(r'^(Revision to |Minor Revision to |Proposed Revision to |Major Revision to )', '', title)
+        clean = re.sub(r'^' + re.escape(code) + r'\s*', '', clean)
+        clean = re.sub(r',\s*v[\d.]+$', '', clean).strip()
+        if clean:
+            verra_names[code] = clean
+
+    updated = 0
+    with get_cursor() as cur:
+        cur.execute("SELECT code, name FROM methodologies WHERE standard = 'Verra'")
+        rows = cur.fetchall()
+
+    for row in rows:
+        code = row["code"]
+        existing_name = row["name"]
+        if existing_name and existing_name.strip():
+            continue
+        api_name = verra_names.get(code)
+        if api_name:
+            with get_cursor() as cur:
+                cur.execute(
+                    "UPDATE methodologies SET name = %s, updated_at = NOW() WHERE code = %s",
+                    (api_name, code),
+                )
+            updated += 1
+            logger.info("Enriched %s: %s", code, api_name)
+
+    logger.info("Enriched %d Verra methodologies from API", updated)
+    return updated
