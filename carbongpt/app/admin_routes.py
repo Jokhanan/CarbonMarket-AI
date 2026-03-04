@@ -706,6 +706,55 @@ def run_methodology_sync(data: MethodologySyncRequest):
     return result
 
 
+PRIORITY_METHODOLOGY_CODES = ["GS-TPDDTEC", "VM0050", "ACM0002", "AMS-I.D."]
+
+METHODOLOGY_KB_CODE_MAP = {
+    "GS-TPDDTEC": "TPDDTEC",
+}
+
+
+@router.get("/methodology-pipeline/status")
+def get_methodology_pipeline_status():
+    from carbongpt.repository.db import get_cursor
+    results = []
+    with get_cursor() as cur:
+        for code in PRIORITY_METHODOLOGY_CODES:
+            cur.execute("SELECT code, name, standard, sector FROM methodologies WHERE code = %s", (code,))
+            meth = cur.fetchone()
+
+            kb_code = METHODOLOGY_KB_CODE_MAP.get(code, code)
+
+            cur.execute("SELECT count(*) as cnt FROM methodology_knowledge WHERE methodology_code = %s", (kb_code,))
+            kb_count = cur.fetchone()["cnt"]
+
+            cur.execute("""
+                SELECT chunk_type, count(*) as cnt 
+                FROM methodology_knowledge 
+                WHERE methodology_code = %s 
+                GROUP BY chunk_type ORDER BY chunk_type
+            """, (kb_code,))
+            chunk_breakdown = {r["chunk_type"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute("SELECT parse_status, model_used, parsed_at FROM methodology_parsed WHERE methodology_code = %s", (kb_code,))
+            parsed = cur.fetchone()
+
+            results.append({
+                "code": code,
+                "name": meth["name"] if meth else None,
+                "standard": meth["standard"] if meth else None,
+                "kb_chunks": kb_count,
+                "chunk_breakdown": chunk_breakdown,
+                "parsed": parsed["parse_status"] if parsed else "not_parsed",
+                "model": parsed["model_used"] if parsed else None,
+                "parsed_at": str(parsed["parsed_at"]) if parsed and parsed["parsed_at"] else None,
+            })
+
+    return {
+        "priority_methodologies": results,
+        "total_kb_chunks": sum(r["kb_chunks"] for r in results),
+    }
+
+
 @router.post("/methodology-enrich")
 def run_methodology_enrich():
     from carbongpt.repository.methodology_db import enrich_from_verra_api, populate_methodologies_from_projects

@@ -1625,51 +1625,31 @@ def _load_methodologies(standard=None):
     return result or []
 
 
+PRIORITY_METHODOLOGIES = {
+    "GS-TPDDTEC": "GS TPDDTEC v4.0 - Technologies and Practices to Displace Decentralized Thermal Energy Consumption",
+    "VM0050": "VCS VM0050 v1.0 - Energy Efficiency and Fuel-Switch Measures in Cookstoves",
+    "ACM0002": "CDM ACM0002 - Grid-Connected Electricity Generation from Renewable Sources",
+    "AMS-I.D.": "CDM AMS-I.D. - Grid-Connected Renewable Electricity Generation (small-scale)",
+}
+
 def _methodology_selector(key_prefix, standard=None, current_value=None):
     meths = _load_methodologies()
-    search = st.text_input("Search methodology", key=f"{key_prefix}_meth_search",
-                            placeholder="Type to search (e.g., AMS-II.G, cookstove, REDD)...")
-    if search:
-        search_lower = search.lower()
-        filtered = [m for m in meths if
-                    search_lower in (m.get("code") or "").lower() or
-                    search_lower in (m.get("name") or "").lower() or
-                    search_lower in (m.get("sector") or "").lower()]
-    else:
-        filtered = meths
 
-    if standard and not search:
-        allowed_standards = {"CDM"}
+    priority_meths = [m for m in meths if m["code"] in PRIORITY_METHODOLOGIES]
+    if standard and standard != "CDM":
         if standard == "GoldStandard":
-            allowed_standards.add("GoldStandard")
+            priority_meths = [m for m in priority_meths if m.get("standard") in ("GoldStandard", "CDM")]
         elif standard == "Verra":
-            allowed_standards.add("Verra")
-        std_filtered = [m for m in filtered if m.get("standard") in allowed_standards]
-        if std_filtered:
-            filtered = std_filtered
+            priority_meths = [m for m in priority_meths if m.get("standard") in ("Verra", "CDM")]
 
-    if not search:
-        filtered = [m for m in filtered if (m.get("name") or "").strip()]
-
-    if standard and not search:
-        def _sort_key(m):
-            ms = m.get("standard", "")
-            if standard == "GoldStandard" and ms == "GoldStandard":
-                return (0, m.get("code", ""))
-            elif standard == "Verra" and ms == "Verra":
-                return (0, m.get("code", ""))
-            else:
-                return (1, m.get("code", ""))
-        filtered = sorted(filtered, key=_sort_key)
-
-    shown = filtered[:80]
+    shown = list(priority_meths)
     shown_codes = {m["code"] for m in shown}
+
     if current_value and current_value not in shown_codes:
         current_meth = next((m for m in meths if m["code"] == current_value), None)
         if current_meth:
-            shown.insert(0, current_meth)
-        else:
-            shown.insert(0, {"code": current_value, "name": current_value, "project_count": 0})
+            shown.append(current_meth)
+            shown_codes.add(current_value)
 
     options = ["(none)"] + [m["code"] for m in shown]
     labels = {
@@ -1677,20 +1657,25 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
     }
     std_short = {"CDM": "CDM", "Verra": "VCS", "GoldStandard": "GS"}
     for m in shown:
-        name = (m.get("name") or "").strip()
-        version = (m.get("version") or "").strip()
-        ms = std_short.get(m.get("standard", ""), "")
-        label = f"[{ms}] {m['code']}" if ms else m["code"]
-        if version:
-            label += f" v{version}"
-        if name:
-            label += f" - {name[:60]}"
-        labels[m["code"]] = label
+        code = m["code"]
+        if code in PRIORITY_METHODOLOGIES:
+            labels[code] = PRIORITY_METHODOLOGIES[code]
+        else:
+            name = (m.get("name") or "").strip()
+            version = (m.get("version") or "").strip()
+            ms = std_short.get(m.get("standard", ""), "")
+            label = f"[{ms}] {code}" if ms else code
+            if version:
+                label += f" v{version}"
+            if name:
+                label += f" - {name[:60]}"
+            labels[code] = label
 
     default_idx = 0
     if current_value and current_value in options:
         default_idx = options.index(current_value)
 
+    st.caption("Supported methodologies (AI-trained with full parameter and equation extraction)")
     selected = st.selectbox(
         "Methodology",
         options,
@@ -1698,6 +1683,8 @@ def _methodology_selector(key_prefix, standard=None, current_value=None):
         format_func=lambda x: labels.get(x, x),
         key=f"{key_prefix}_meth_select",
     )
+    if selected and selected != "(none)" and selected not in PRIORITY_METHODOLOGIES:
+        st.info("This methodology is not yet fully AI-trained. The AI writer and reviewer will have limited knowledge of its specific parameters, equations, and requirements. Priority methodologies have deeper AI support.")
     return selected if selected != "(none)" else None
 
 
