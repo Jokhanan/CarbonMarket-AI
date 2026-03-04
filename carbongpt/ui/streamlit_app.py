@@ -3797,14 +3797,25 @@ def _render_project_settings(project):
         if meth_detail:
             with st.container(border=True):
                 st.caption("Selected methodology")
-                st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
-                mc1, mc2, mc3 = st.columns(3)
-                with mc1:
-                    st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
-                with mc2:
-                    st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
-                with mc3:
-                    st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
+                meth_name = meth_detail.get("name") or ""
+                meth_code = meth_detail.get("code", "")
+                meth_version = meth_detail.get("version") or ""
+                header = f"**{meth_code}**"
+                if meth_version:
+                    header += f" v{meth_version}"
+                if meth_name:
+                    header += f" - {meth_name}"
+                st.markdown(header)
+                detail_parts = []
+                if meth_detail.get("standard"):
+                    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS", "CDM": "CDM"}.get(meth_detail["standard"], meth_detail["standard"])
+                    detail_parts.append(f"Standard: {std_display}")
+                if meth_detail.get("sector"):
+                    detail_parts.append(f"Sector: {meth_detail['sector']}")
+                if meth_detail.get("category"):
+                    detail_parts.append(f"Category: {meth_detail['category']}")
+                if detail_parts:
+                    st.markdown(" | ".join(detail_parts))
                 if meth_detail.get("applicability"):
                     st.markdown(f"Applicability: {meth_detail['applicability']}")
                 if meth_detail.get("status") == "deprecated":
@@ -3950,14 +3961,25 @@ def _render_project_settings_legacy(project):
     if meth_detail:
         with st.container(border=True):
             st.caption("Selected methodology")
-            st.markdown(f"**{meth_detail.get('code', '')}** - {meth_detail.get('name', 'N/A')}")
-            cols = st.columns(3)
-            with cols[0]:
-                st.markdown(f"Standard: {meth_detail.get('standard', 'N/A')}")
-            with cols[1]:
-                st.markdown(f"Sector: {meth_detail.get('sector', 'N/A')}")
-            with cols[2]:
-                st.markdown(f"Category: {meth_detail.get('category', 'N/A')}")
+            meth_name = meth_detail.get("name") or ""
+            meth_code = meth_detail.get("code", "")
+            meth_version = meth_detail.get("version") or ""
+            header = f"**{meth_code}**"
+            if meth_version:
+                header += f" v{meth_version}"
+            if meth_name:
+                header += f" - {meth_name}"
+            st.markdown(header)
+            detail_parts = []
+            if meth_detail.get("standard"):
+                std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS", "CDM": "CDM"}.get(meth_detail["standard"], meth_detail["standard"])
+                detail_parts.append(f"Standard: {std_display}")
+            if meth_detail.get("sector"):
+                detail_parts.append(f"Sector: {meth_detail['sector']}")
+            if meth_detail.get("category"):
+                detail_parts.append(f"Category: {meth_detail['category']}")
+            if detail_parts:
+                st.markdown(" | ".join(detail_parts))
             if meth_detail.get("applicability"):
                 st.markdown(f"Applicability: {meth_detail['applicability']}")
             if meth_detail.get("status") == "deprecated":
