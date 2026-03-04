@@ -615,6 +615,129 @@ def review_draft(project_id: int, doc_type: str = "pdd"):
     return review_result
 
 
+@router.post("/{project_id}/respond-to-finding")
+def respond_to_finding(project_id: int, data: dict):
+    from carbongpt.repository.store import get_user_project, get_write_sessions
+    from carbongpt.core.ai_writer import _call_openai
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    finding_text = data.get("finding_text", "")
+    finding_type = data.get("finding_type", "CL")
+    pdd_section = data.get("pdd_section", "")
+    doc_type = data.get("doc_type", "pdd")
+
+    if not finding_text:
+        raise HTTPException(status_code=400, detail="finding_text is required")
+
+    project_info = {
+        "name": project["name"],
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
+        "project_settings": project.get("project_settings") or {},
+    }
+
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
+
+    relevant_section_text = ""
+    if pdd_section:
+        sessions = get_write_sessions(project_id, doc_type=doc_type)
+        for sess in sessions:
+            if pdd_section.lower() in (sess.get("section_id", "") or "").lower():
+                relevant_section_text = sess.get("user_text") or sess.get("generated_text") or ""
+                break
+
+    from carbongpt.core.ai_writer import STANDARD_LABELS, DOC_TYPE_LABELS, get_guide_doc_type
+    std_label = STANDARD_LABELS.get(project["standard"], project["standard"])
+
+    system_prompt = (
+        f"You are an expert carbon project developer responding to a {finding_type} "
+        f"(finding) raised by a VVB or standard body ({std_label}) during validation/verification.\n\n"
+        "RULES:\n"
+        "- Draft a professional, detailed response that directly addresses the finding.\n"
+        "- Reference specific project data, methodology clauses, and evidence.\n"
+        "- If the PDD or document needs to be updated, clearly state what changes are needed.\n"
+        "- Follow the standard response format: acknowledge the issue, explain the resolution, cite evidence.\n"
+        "- Be thorough but concise. VVBs appreciate clear, well-structured responses.\n"
+        "- Format your response as JSON with keys: 'response_text', 'pdd_updates_needed' (array of {section, change_description}), "
+        "'evidence_to_provide' (array of strings), 'response_approach' (one of: pdd_update, clarification, evidence_provided, calculation_corrected, methodology_reference)"
+    )
+
+    user_prompt = f"## Finding to respond to:\n"
+    user_prompt += f"**Type:** {finding_type}\n"
+    user_prompt += f"**PDD Section:** {pdd_section or 'Not specified'}\n"
+    user_prompt += f"**Finding:**\n{finding_text}\n\n"
+
+    user_prompt += f"### Project Information:\n"
+    user_prompt += f"- Project: {project_info.get('name', 'Unknown')}\n"
+    user_prompt += f"- Standard: {std_label}\n"
+    user_prompt += f"- Methodology: {project_info.get('methodology', 'Not specified')}\n"
+    user_prompt += f"- Country: {project_info.get('country', 'Not specified')}\n\n"
+
+    if relevant_section_text:
+        user_prompt += (
+            f"### Current content of section {pdd_section}:\n"
+            f'"""\n{relevant_section_text[:4000]}\n"""\n\n'
+        )
+
+    if pdd_text:
+        user_prompt += (
+            "### PDD content for reference:\n"
+            f'"""\n{pdd_text[:4000]}\n"""\n\n'
+        )
+
+    findings_context = ""
+    try:
+        methodology = project_info.get("methodology", "")
+        if methodology:
+            from carbongpt.repository.store import get_findings_by_methodology
+            similar = get_findings_by_methodology(methodology, limit=20)
+            relevant_similar = [
+                f for f in similar
+                if f.get("resolution") and (
+                    (f.get("topic") or "").lower() in finding_text.lower()
+                    or (f.get("pdd_section") or "").lower() == (pdd_section or "").lower()
+                )
+            ][:5]
+            if relevant_similar:
+                findings_context = "### How similar findings were resolved on other projects:\n"
+                for sf in relevant_similar:
+                    findings_context += f"- [{sf['finding_type']}] {sf.get('topic', '')}: {sf.get('description', '')[:200]}\n"
+                    findings_context += f"  Resolution: {sf.get('resolution', '')[:200]}\n"
+                    findings_context += f"  Approach: {sf.get('resolution_approach', '')}\n\n"
+    except Exception as e:
+        logger.warning("Failed to get similar findings: %s", e)
+
+    if findings_context:
+        user_prompt += findings_context + "\n"
+
+    user_prompt += "Draft a professional response to this finding."
+
+    try:
+        import openai, json, os as _os
+        api_key = _os.getenv("OPENAI_API_KEY")
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=3000,
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result
+    except Exception as e:
+        logger.error("Finding response generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"AI response generation failed: {e}")
+
+
 @router.get("/{project_id}/write-sessions")
 def get_write_sessions_endpoint(project_id: int, doc_type: str = None):
     from carbongpt.repository.store import get_write_sessions

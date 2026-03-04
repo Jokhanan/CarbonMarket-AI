@@ -1228,6 +1228,112 @@ def delete_methodology_knowledge(methodology_code):
         cur.execute("DELETE FROM methodology_structure WHERE methodology_code = %s", (methodology_code,))
 
 
+def save_finding(source_document_id, methodology_code, finding_type, description,
+                  resolution=None, pdd_section=None, topic=None, severity="medium",
+                  resolution_approach=None, standard=None, doc_type=None,
+                  vvb_name=None, source_project_id=None, source_project_name=None,
+                  structured_data=None, extraction_method="ai_assisted", confidence=0.8):
+    import json as _json
+    with get_cursor() as cur:
+        cur.execute("""
+            INSERT INTO findings_knowledge
+                (source_document_id, methodology_code, finding_type, description,
+                 resolution, pdd_section, topic, severity, resolution_approach,
+                 standard, doc_type, vvb_name, source_project_id, source_project_name,
+                 structured_data, extraction_method, confidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            source_document_id, methodology_code, finding_type, description,
+            resolution, pdd_section, topic, severity, resolution_approach,
+            standard, doc_type, vvb_name, source_project_id, source_project_name,
+            _json.dumps(structured_data or {}), extraction_method, confidence
+        ))
+        return cur.fetchone()["id"]
+
+
+def get_findings_by_methodology(methodology_code, finding_type=None, pdd_section=None, limit=50):
+    with get_cursor() as cur:
+        query = "SELECT * FROM findings_knowledge WHERE methodology_code = %s"
+        params = [methodology_code]
+        if finding_type:
+            query += " AND finding_type = %s"
+            params.append(finding_type)
+        if pdd_section:
+            query += " AND pdd_section ILIKE %s"
+            params.append(f"%{pdd_section}%")
+        query += " ORDER BY created_at DESC LIMIT %s"
+        params.append(limit)
+        cur.execute(query, params)
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_findings_for_section(methodology_code, section_keywords, limit=10):
+    with get_cursor() as cur:
+        conditions = " OR ".join(["topic ILIKE %s" for _ in section_keywords])
+        query = f"""
+            SELECT * FROM findings_knowledge
+            WHERE methodology_code = %s AND ({conditions})
+            ORDER BY
+                CASE severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END,
+                created_at DESC
+            LIMIT %s
+        """
+        params = [methodology_code] + [f"%{kw}%" for kw in section_keywords] + [limit]
+        cur.execute(query, params)
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_findings_stats():
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT
+                methodology_code,
+                finding_type,
+                COUNT(*) as cnt
+            FROM findings_knowledge
+            GROUP BY methodology_code, finding_type
+            ORDER BY methodology_code, finding_type
+        """)
+        rows = cur.fetchall()
+        stats = {}
+        for r in rows:
+            mc = r["methodology_code"] or "unknown"
+            if mc not in stats:
+                stats[mc] = {}
+            stats[mc][r["finding_type"]] = r["cnt"]
+
+        cur.execute("SELECT COUNT(*) as total FROM findings_knowledge")
+        total = cur.fetchone()["total"]
+
+        cur.execute("""
+            SELECT topic, COUNT(*) as cnt
+            FROM findings_knowledge
+            WHERE topic IS NOT NULL
+            GROUP BY topic
+            ORDER BY cnt DESC
+            LIMIT 20
+        """)
+        top_topics = [{"topic": r["topic"], "count": r["cnt"]} for r in cur.fetchall()]
+
+        return {"by_methodology": stats, "total": total, "top_topics": top_topics}
+
+
+def get_findings_by_document(source_document_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM findings_knowledge WHERE source_document_id = %s ORDER BY id",
+            (source_document_id,)
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
 def save_methodology_structure(document_id, methodology_code, detected_format, section_map):
     import json as _json
     with get_cursor() as cur:

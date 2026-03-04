@@ -479,6 +479,22 @@ def generate_section_draft(
             f"{knowledge_context}\n\n"
         )
 
+    findings_context = ""
+    try:
+        methodology = project_info.get("methodology", "")
+        if methodology:
+            from carbongpt.core.findings_extractor import get_findings_context_for_section
+            findings_context = get_findings_context_for_section(methodology, subsection["title"])
+    except Exception as e:
+        logger.warning("Findings context retrieval failed: %s", e)
+
+    if findings_context:
+        user_prompt += (
+            findings_context + "\n"
+            "Address these known VVB concern areas proactively in your writing. "
+            "Ensure the content you produce would not trigger these findings.\n\n"
+        )
+
     if user_instructions:
         user_prompt += f"### Additional instructions from the user:\n{user_instructions}\n\n"
 
@@ -649,6 +665,22 @@ def review_with_context(
         user_prompt += (
             "### Additional reference documents:\n"
             f'"""\n{ref_excerpt}\n"""\n\n'
+        )
+
+    findings_review_context = ""
+    try:
+        methodology = project_info.get("methodology", "")
+        if methodology:
+            from carbongpt.core.findings_extractor import get_findings_review_context
+            findings_review_context = get_findings_review_context(methodology)
+    except Exception as e:
+        logger.warning("Findings review context retrieval failed: %s", e)
+
+    if findings_review_context:
+        user_prompt += (
+            findings_review_context + "\n"
+            "Use these known VVB finding patterns to identify similar issues in the document being reviewed. "
+            "Flag any sections that would likely trigger these findings during validation/verification.\n\n"
         )
 
     user_prompt += (

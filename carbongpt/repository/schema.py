@@ -303,6 +303,34 @@ CREATE TABLE IF NOT EXISTS methodology_structure (
 
 CREATE INDEX IF NOT EXISTS idx_ms_methodology_code ON methodology_structure(methodology_code);
 
+CREATE TABLE IF NOT EXISTS findings_knowledge (
+    id SERIAL PRIMARY KEY,
+    source_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    methodology_code VARCHAR(100),
+    finding_type VARCHAR(20) NOT NULL CHECK (finding_type IN ('CAR', 'CL', 'FAR', 'observation', 'comment', 'prr_comment')),
+    severity VARCHAR(20) DEFAULT 'medium' CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
+    pdd_section VARCHAR(100),
+    topic VARCHAR(200),
+    description TEXT NOT NULL,
+    resolution TEXT,
+    resolution_approach VARCHAR(50),
+    standard VARCHAR(50),
+    doc_type VARCHAR(50),
+    vvb_name VARCHAR(200),
+    source_project_id VARCHAR(100),
+    source_project_name VARCHAR(300),
+    structured_data JSONB DEFAULT '{}',
+    extraction_method VARCHAR(30) DEFAULT 'ai_assisted' CHECK (extraction_method IN ('programmatic', 'ai_assisted', 'manual')),
+    confidence REAL DEFAULT 0.8,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fk_methodology ON findings_knowledge(methodology_code);
+CREATE INDEX IF NOT EXISTS idx_fk_finding_type ON findings_knowledge(finding_type);
+CREATE INDEX IF NOT EXISTS idx_fk_pdd_section ON findings_knowledge(pdd_section);
+CREATE INDEX IF NOT EXISTS idx_fk_source_doc ON findings_knowledge(source_document_id);
+CREATE INDEX IF NOT EXISTS idx_fk_topic ON findings_knowledge(topic);
+
 INSERT INTO standards (name, slug, description) VALUES
     ('Gold Standard', 'goldstandard', 'Gold Standard for the Global Goals - carbon credit certification'),
     ('Verra VCS', 'verra', 'Verified Carbon Standard by Verra - voluntary carbon market')

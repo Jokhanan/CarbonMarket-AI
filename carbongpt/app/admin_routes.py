@@ -845,6 +845,59 @@ def get_scraped_doc_statistics():
     return get_scraped_doc_stats()
 
 
+@router.post("/extract-findings")
+def extract_findings_from_documents(max_documents: int = 20, background: bool = True):
+    from carbongpt.core.findings_extractor import extract_findings_from_all_fvr_valver
+
+    if background:
+        def _run():
+            try:
+                result = extract_findings_from_all_fvr_valver(max_documents=max_documents)
+                logger.info(
+                    "Findings extraction complete: %d processed, %d findings, %d errors",
+                    result["processed"], result["total_findings"], result["errors"],
+                )
+            except Exception as e:
+                logger.error("Findings extraction failed: %s", e)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {
+            "status": "started",
+            "max_documents": max_documents,
+            "message": "Background findings extraction started. Check logs for progress.",
+        }
+    else:
+        return extract_findings_from_all_fvr_valver(max_documents=max_documents)
+
+
+@router.post("/extract-findings/{document_id}")
+def extract_findings_single(document_id: int):
+    from carbongpt.repository.store import list_documents
+    from carbongpt.core.findings_extractor import process_document_for_findings
+
+    all_docs = list_documents() or []
+    doc = next((d for d in all_docs if d["id"] == document_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.get("file_path"):
+        raise HTTPException(status_code=400, detail="Document has no file path")
+
+    return process_document_for_findings(document_id, doc["file_path"])
+
+
+@router.get("/findings/stats")
+def get_findings_statistics():
+    from carbongpt.repository.store import get_findings_stats
+    return get_findings_stats()
+
+
+@router.get("/findings/{methodology_code}")
+def get_findings_for_methodology(methodology_code: str, finding_type: str = None, limit: int = 50):
+    from carbongpt.repository.store import get_findings_by_methodology
+    return get_findings_by_methodology(methodology_code, finding_type=finding_type, limit=limit)
+
+
 @router.get("/methodology-sync/status")
 def get_sync_status():
     from carbongpt.repository.methodology_sync import _scheduler_started

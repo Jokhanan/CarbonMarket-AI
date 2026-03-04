@@ -2114,7 +2114,7 @@ def _render_project_workspace(project_id):
             st.session_state.selected_project_id = None
             st.rerun()
 
-    tabs = st.tabs(["Project Setup", "Documents", "Write / Draft", "Review", "Export"])
+    tabs = st.tabs(["Project Setup", "Documents", "Write / Draft", "Review", "Respond to Findings", "Export"])
 
     with tabs[0]:
         _render_project_settings(project)
@@ -2125,6 +2125,8 @@ def _render_project_workspace(project_id):
     with tabs[3]:
         _render_review_tab(project)
     with tabs[4]:
+        _render_findings_response_tab(project)
+    with tabs[5]:
         _render_export_tab(project)
 
 
@@ -2483,6 +2485,261 @@ def _render_calc_results(project, calc_result):
                 )
             else:
                 st.error("Failed to generate Excel file.")
+
+
+def _render_findings_response_tab(project):
+    project_id = project["id"]
+    standard = project.get("standard", "GoldStandard")
+    methodology = project.get("methodology", "")
+    project_type = project.get("project_type", "standalone_pdd")
+
+    st.subheader("Respond to Findings")
+
+    st.markdown(
+        "Upload VVB findings or PRR comments, and the AI will draft responses "
+        "based on your project data, methodology, and how similar findings were resolved on other projects."
+    )
+
+    response_tabs = st.tabs(["Enter Findings Manually", "Upload Findings Document", "Findings Intelligence"])
+
+    with response_tabs[0]:
+        _render_manual_finding_entry(project)
+
+    with response_tabs[1]:
+        _render_findings_upload(project)
+
+    with response_tabs[2]:
+        _render_findings_intelligence(project)
+
+
+def _render_manual_finding_entry(project):
+    project_id = project["id"]
+    project_type = project.get("project_type", "standalone_pdd")
+
+    default_doc_type_map = {
+        "standalone_pdd": "pdd",
+        "poa_programme": "poa_dd",
+        "vpa_component": "vpa_dd",
+        "monitoring_report": "mr",
+        "valver_report": "valver",
+    }
+    default_dt = default_doc_type_map.get(project_type, "pdd")
+
+    st.markdown("#### Enter a finding to get an AI-drafted response")
+
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            finding_type = st.selectbox(
+                "Finding type",
+                ["CL", "CAR", "FAR", "prr_comment", "observation"],
+                format_func=lambda x: {
+                    "CL": "Clarification Request (CL)",
+                    "CAR": "Corrective Action Request (CAR)",
+                    "FAR": "Forward Action Request (FAR)",
+                    "prr_comment": "PRR Comment (Verra/GS Review)",
+                    "observation": "General Observation",
+                }.get(x, x),
+                key=f"finding_type_{project_id}",
+            )
+        with col2:
+            pdd_section = st.text_input(
+                "PDD/MR section reference",
+                placeholder="e.g., 1.12, 2.1, 4.3, Monitoring Plan",
+                key=f"finding_section_{project_id}",
+            )
+        with col3:
+            doc_type = st.selectbox(
+                "Document type",
+                ["pdd", "mr", "poa_dd", "vpa_dd", "valver"],
+                index=["pdd", "mr", "poa_dd", "vpa_dd", "valver"].index(default_dt),
+                format_func=lambda x: {
+                    "pdd": "PDD",
+                    "mr": "Monitoring Report",
+                    "poa_dd": "PoA-DD",
+                    "vpa_dd": "VPA-DD",
+                    "valver": "Validation/Verification Report",
+                }.get(x, x),
+                key=f"finding_doctype_{project_id}",
+            )
+
+        finding_text = st.text_area(
+            "Finding / question text",
+            height=150,
+            placeholder="Paste the VVB's finding, clarification request, or PRR comment here...",
+            key=f"finding_text_{project_id}",
+        )
+
+        if st.button("Generate Response", key=f"gen_response_{project_id}", type="primary", disabled=not finding_text):
+            with st.spinner("Drafting response based on project data and past findings..."):
+                try:
+                    result = _fetch(
+                        f"/projects/{project_id}/respond-to-finding",
+                        method="POST",
+                        json_data={
+                            "finding_text": finding_text,
+                            "finding_type": finding_type,
+                            "pdd_section": pdd_section,
+                            "doc_type": doc_type,
+                        },
+                    )
+                    if result:
+                        st.session_state[f"finding_response_{project_id}"] = result
+                except Exception as e:
+                    st.error(f"Failed to generate response: {e}")
+
+    response = st.session_state.get(f"finding_response_{project_id}")
+    if response:
+        st.markdown("---")
+        st.markdown("#### AI-Drafted Response")
+
+        with st.container(border=True):
+            approach = response.get("response_approach", "")
+            approach_labels = {
+                "pdd_update": "PDD Update Required",
+                "clarification": "Clarification Only",
+                "evidence_provided": "Evidence to Provide",
+                "calculation_corrected": "Calculation Correction",
+                "methodology_reference": "Methodology Reference",
+            }
+            if approach:
+                st.markdown(f"**Approach:** {approach_labels.get(approach, approach)}")
+
+            st.markdown("**Response:**")
+            st.markdown(response.get("response_text", ""))
+
+        pdd_updates = response.get("pdd_updates_needed", [])
+        if pdd_updates:
+            with st.container(border=True):
+                st.markdown("**PDD Sections to Update:**")
+                for update in pdd_updates:
+                    section = update.get("section", "")
+                    change = update.get("change_description", "")
+                    st.markdown(f"- **Section {section}:** {change}")
+
+        evidence = response.get("evidence_to_provide", [])
+        if evidence:
+            with st.container(border=True):
+                st.markdown("**Evidence to Provide:**")
+                for ev in evidence:
+                    st.markdown(f"- {ev}")
+
+
+def _render_findings_upload(project):
+    project_id = project["id"]
+
+    st.markdown("#### Upload a findings document")
+    st.markdown(
+        "Upload a VVB findings log, PRR comment sheet, or validation/verification report. "
+        "The AI will extract individual findings and draft responses for each."
+    )
+
+    uploaded = st.file_uploader(
+        "Upload findings document (PDF)",
+        type=["pdf"],
+        key=f"findings_upload_{project_id}",
+    )
+
+    if uploaded:
+        st.info(
+            "Findings document upload and batch response generation will be available in the next release. "
+            "For now, copy individual findings into the manual entry tab to get AI-drafted responses."
+        )
+        st.markdown("**Uploaded:** " + uploaded.name)
+        st.markdown(f"**Size:** {uploaded.size / 1024:.1f} KB")
+
+
+def _render_findings_intelligence(project):
+    project_id = project["id"]
+    methodology = project.get("methodology", "")
+
+    st.markdown("#### Findings Intelligence")
+    st.markdown(
+        "View common VVB findings patterns for your methodology. "
+        "These patterns are extracted from real validation and verification reports."
+    )
+
+    if not methodology:
+        st.info("Select a methodology in Project Setup to see findings intelligence.")
+        return
+
+    try:
+        stats = _fetch("/admin/findings/stats")
+    except Exception:
+        stats = None
+
+    if not stats or stats.get("total", 0) == 0:
+        with st.container(border=True):
+            st.markdown("**No findings data available yet.**")
+            st.markdown(
+                "The findings knowledge base needs to be populated by extracting findings from "
+                "validation and verification reports. This can be triggered from the admin panel."
+            )
+        return
+
+    total = stats.get("total", 0)
+    by_meth = stats.get("by_methodology", {})
+    top_topics = stats.get("top_topics", [])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Findings in Knowledge Base", total)
+    with col2:
+        meth_findings = by_meth.get(methodology, {})
+        meth_total = sum(meth_findings.values()) if meth_findings else 0
+        st.metric(f"Findings for {methodology}", meth_total)
+
+    if meth_findings:
+        with st.container(border=True):
+            st.markdown(f"**Findings breakdown for {methodology}:**")
+            for ftype, count in sorted(meth_findings.items()):
+                label = {
+                    "CAR": "Corrective Action Requests",
+                    "CL": "Clarification Requests",
+                    "FAR": "Forward Action Requests",
+                    "observation": "Observations",
+                    "prr_comment": "PRR Comments",
+                }.get(ftype, ftype)
+                st.markdown(f"- {label}: **{count}**")
+
+    if top_topics:
+        with st.container(border=True):
+            st.markdown("**Most common finding topics (all methodologies):**")
+            for item in top_topics[:10]:
+                st.markdown(f"- {item['topic']}: {item['count']} findings")
+
+    try:
+        findings = _fetch(f"/admin/findings/{methodology}?limit=20")
+    except Exception:
+        findings = []
+
+    if findings:
+        st.markdown(f"#### Recent findings for {methodology}")
+        for f in findings[:10]:
+            ftype = f.get("finding_type", "CL")
+            topic = f.get("topic", "")
+            severity = f.get("severity", "medium")
+            desc = f.get("description", "")[:300]
+            resolution = f.get("resolution", "")
+
+            severity_color = {
+                "critical": "red", "high": "orange",
+                "medium": "blue", "low": "gray",
+            }.get(severity, "gray")
+
+            with st.container(border=True):
+                hcol1, hcol2, hcol3 = st.columns([1, 2, 1])
+                with hcol1:
+                    st.markdown(f"**{ftype}**")
+                with hcol2:
+                    st.markdown(f"*{topic}*" if topic else "")
+                with hcol3:
+                    st.markdown(f"Severity: {severity}")
+
+                st.markdown(desc)
+                if resolution:
+                    with st.expander("Resolution"):
+                        st.markdown(resolution[:500])
 
 
 def _render_export_tab(project):
