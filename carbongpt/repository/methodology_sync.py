@@ -967,6 +967,262 @@ def _safe_ingest(doc_id, file_path, api_key):
         logger.error("Ingestion failed for doc %s: %s", doc_id, e)
 
 
+def discover_verra_projects_by_methodology(
+    methodology_code: str,
+    max_projects: int = 50,
+    status_filter: list[str] | None = None,
+) -> list[tuple[int, str, str]]:
+    search_url = "https://registry.verra.org/uiapi/resource/resource/search"
+    try:
+        resp = requests.post(
+            search_url,
+            json={"program": "VCS"},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("value", [])
+    except Exception as e:
+        logger.error("Verra search API error: %s", e)
+        return []
+
+    if status_filter is None:
+        status_filter = ["Registered", "Under validation", "Under development", "Registration requested"]
+
+    matches = []
+    for item in items:
+        protocols = item.get("protocols", "") or ""
+        if methodology_code not in protocols:
+            continue
+        status = item.get("resourceStatus", "")
+        if status_filter and status not in status_filter:
+            continue
+        pid_str = item.get("resourceIdentifier", "")
+        try:
+            pid = int(pid_str)
+        except (ValueError, TypeError):
+            continue
+        name = item.get("resourceName", f"VCS Project {pid_str}")
+        matches.append((pid, name[:100], status))
+        if len(matches) >= max_projects:
+            break
+
+    logger.info(
+        "Found %d Verra projects using methodology %s (from %d total VCS)",
+        len(matches), methodology_code, len(items),
+    )
+    return matches
+
+
+def scrape_verra_methodology_docs(
+    methodology_code: str,
+    max_projects: int = 30,
+    doc_types: set[str] | None = None,
+    status_filter: list[str] | None = None,
+    ingest: bool = True,
+) -> dict:
+    if doc_types is None:
+        doc_types = {"example_pdd", "example_mr", "example_fvr", "example_valver"}
+
+    results = {
+        "methodology": methodology_code,
+        "projects_checked": 0,
+        "documents_found": 0,
+        "already_stored": 0,
+        "newly_downloaded": 0,
+        "ingestion_started": 0,
+        "errors": 0,
+        "projects": [],
+    }
+
+    projects = discover_verra_projects_by_methodology(
+        methodology_code, max_projects=max_projects, status_filter=status_filter
+    )
+    results["projects_checked"] = len(projects)
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    for pid, pname, pstatus in projects:
+        time.sleep(RATE_LIMIT_DELAY)
+        docs = _fetch_verra_registry_project_docs(pid, pname)
+        relevant = [d for d in docs if d["category"] in doc_types]
+
+        project_result = {
+            "project_id": pid,
+            "project_name": pname,
+            "status": pstatus,
+            "total_docs": len(docs),
+            "relevant_docs": len(relevant),
+            "downloaded": [],
+            "skipped": [],
+        }
+
+        for doc_info in relevant:
+            code = doc_info["code"]
+            title = doc_info["title"]
+            pdf_url = doc_info["pdf_url"]
+            category = doc_info["category"]
+            reference_id = code
+
+            results["documents_found"] += 1
+
+            existing = _is_already_stored(reference_id)
+            if existing:
+                results["already_stored"] += 1
+                project_result["skipped"].append({
+                    "code": code, "category": category, "reason": "already_stored",
+                })
+                continue
+
+            ext = "docx" if pdf_url.lower().endswith(".docx") else "pdf"
+            filename = f"{reference_id}.{ext}"
+            dest_path = REPO_DIR / filename
+
+            if dest_path.exists():
+                results["already_stored"] += 1
+                project_result["skipped"].append({
+                    "code": code, "category": category, "reason": "file_exists",
+                })
+                continue
+
+            time.sleep(RATE_LIMIT_DELAY)
+            if not _download_file(pdf_url, dest_path):
+                results["errors"] += 1
+                project_result["skipped"].append({
+                    "code": code, "category": category, "reason": "download_failed",
+                })
+                continue
+
+            results["newly_downloaded"] += 1
+
+            try:
+                from carbongpt.repository.store import create_document, list_standard_versions
+
+                sv_id = None
+                versions = list_standard_versions()
+                for v in versions:
+                    if v.get("standard_slug") == "verra" or "verra" in (v.get("standard_name", "") or "").lower():
+                        sv_id = v["id"]
+                        break
+
+                doc_id = create_document(
+                    standard_version_id=sv_id,
+                    category=category,
+                    title=title,
+                    file_path=str(dest_path),
+                    file_type=ext,
+                    reference_id=reference_id,
+                    doc_version=None,
+                    file_size_bytes=dest_path.stat().st_size,
+                )
+
+                project_result["downloaded"].append({
+                    "code": code, "category": category, "doc_id": doc_id,
+                })
+
+                if ingest and api_key and ext == "pdf":
+                    import threading
+                    thread = threading.Thread(
+                        target=_safe_ingest,
+                        args=(doc_id, str(dest_path), api_key),
+                        daemon=True,
+                    )
+                    thread.start()
+                    results["ingestion_started"] += 1
+
+            except Exception as e:
+                logger.error("Failed to store doc %s: %s", code, e)
+                results["errors"] += 1
+
+        results["projects"].append(project_result)
+        logger.info(
+            "Methodology %s: project %d (%s) — %d docs found, %d relevant, %d downloaded",
+            methodology_code, pid, pname, len(docs), len(relevant),
+            len(project_result["downloaded"]),
+        )
+
+    return results
+
+
+PRIORITY_METHODOLOGY_CODES_VERRA = ["VM0050", "ACM0002", "AMS-I.D."]
+
+def scrape_all_priority_methodology_docs(
+    max_projects_per_meth: int = 20,
+    doc_types: set[str] | None = None,
+) -> dict:
+    overall = {
+        "methodologies_scraped": [],
+        "total_projects_checked": 0,
+        "total_documents_found": 0,
+        "total_newly_downloaded": 0,
+        "total_already_stored": 0,
+        "total_errors": 0,
+        "total_ingestion_started": 0,
+    }
+
+    for meth_code in PRIORITY_METHODOLOGY_CODES_VERRA:
+        logger.info("Scraping Verra documents for methodology %s...", meth_code)
+        result = scrape_verra_methodology_docs(
+            methodology_code=meth_code,
+            max_projects=max_projects_per_meth,
+            doc_types=doc_types,
+        )
+        overall["methodologies_scraped"].append(result)
+        overall["total_projects_checked"] += result["projects_checked"]
+        overall["total_documents_found"] += result["documents_found"]
+        overall["total_newly_downloaded"] += result["newly_downloaded"]
+        overall["total_already_stored"] += result["already_stored"]
+        overall["total_errors"] += result["errors"]
+        overall["total_ingestion_started"] += result["ingestion_started"]
+
+    return overall
+
+
+def get_scraped_doc_stats() -> dict:
+    try:
+        from carbongpt.repository.db import get_cursor
+        stats = {}
+        with get_cursor() as cur:
+            for meth_code in PRIORITY_METHODOLOGY_CODES_VERRA:
+                pattern = f"%{meth_code}%"
+                cur.execute("""
+                    SELECT category, COUNT(*) as cnt
+                    FROM documents
+                    WHERE (title ILIKE %s OR reference_id ILIKE %s)
+                      AND category LIKE 'example_%%'
+                    GROUP BY category
+                    ORDER BY category
+                """, (pattern, pattern))
+                rows = cur.fetchall()
+                meth_stats = {}
+                for r in rows:
+                    meth_stats[r["category"]] = r["cnt"]
+                stats[meth_code] = meth_stats
+
+            cur.execute("""
+                SELECT category, COUNT(*) as cnt
+                FROM documents
+                WHERE category LIKE 'example_%%'
+                GROUP BY category
+                ORDER BY category
+            """)
+            rows = cur.fetchall()
+            total_stats = {}
+            for r in rows:
+                total_stats[r["category"]] = r["cnt"]
+            stats["_total"] = total_stats
+
+        return stats
+    except Exception as e:
+        logger.error("Failed to get scraped doc stats: %s", e)
+        return {}
+
+
 _scheduler_started = False
 
 
@@ -1007,6 +1263,18 @@ def start_weekly_sync():
                 )
             except Exception as e:
                 logger.error("Scheduled sync failed: %s", e)
+
+            logger.info("Running scheduled priority methodology doc scrape...")
+            try:
+                scrape_result = scrape_all_priority_methodology_docs(max_projects_per_meth=20)
+                logger.info(
+                    "Priority doc scrape complete: %d projects checked, %d new docs, %d errors",
+                    scrape_result["total_projects_checked"],
+                    scrape_result["total_newly_downloaded"],
+                    scrape_result["total_errors"],
+                )
+            except Exception as e:
+                logger.error("Priority doc scrape failed: %s", e)
 
     thread = threading.Thread(target=_run_periodic, daemon=True)
     thread.start()

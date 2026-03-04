@@ -763,6 +763,88 @@ def run_methodology_enrich():
     return {"repopulated": repopulated, "enriched_from_verra_api": enriched}
 
 
+@router.post("/scrape-verra-docs/{methodology_code}")
+def scrape_verra_docs_for_methodology(
+    methodology_code: str,
+    max_projects: int = 20,
+    background: bool = True,
+):
+    from carbongpt.repository.methodology_sync import scrape_verra_methodology_docs
+
+    if background:
+        def _run():
+            try:
+                result = scrape_verra_methodology_docs(
+                    methodology_code=methodology_code,
+                    max_projects=max_projects,
+                )
+                logger.info(
+                    "Verra doc scrape for %s complete: %d projects, %d new docs, %d errors",
+                    methodology_code,
+                    result["projects_checked"],
+                    result["newly_downloaded"],
+                    result["errors"],
+                )
+            except Exception as e:
+                logger.error("Verra doc scrape failed for %s: %s", methodology_code, e)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {
+            "status": "started",
+            "methodology": methodology_code,
+            "max_projects": max_projects,
+            "message": f"Background scrape started for {methodology_code}. Check logs for progress.",
+        }
+    else:
+        result = scrape_verra_methodology_docs(
+            methodology_code=methodology_code,
+            max_projects=max_projects,
+        )
+        return result
+
+
+@router.post("/scrape-verra-docs-all")
+def scrape_all_priority_docs(
+    max_projects_per_meth: int = 20,
+    background: bool = True,
+):
+    from carbongpt.repository.methodology_sync import scrape_all_priority_methodology_docs
+
+    if background:
+        def _run():
+            try:
+                result = scrape_all_priority_methodology_docs(
+                    max_projects_per_meth=max_projects_per_meth,
+                )
+                logger.info(
+                    "Full priority doc scrape complete: %d projects, %d new docs, %d errors",
+                    result["total_projects_checked"],
+                    result["total_newly_downloaded"],
+                    result["total_errors"],
+                )
+            except Exception as e:
+                logger.error("Full priority doc scrape failed: %s", e)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {
+            "status": "started",
+            "max_projects_per_meth": max_projects_per_meth,
+            "message": "Background scrape started for all priority methodologies.",
+        }
+    else:
+        return scrape_all_priority_methodology_docs(
+            max_projects_per_meth=max_projects_per_meth,
+        )
+
+
+@router.get("/scrape-verra-docs/stats")
+def get_scraped_doc_statistics():
+    from carbongpt.repository.methodology_sync import get_scraped_doc_stats
+    return get_scraped_doc_stats()
+
+
 @router.get("/methodology-sync/status")
 def get_sync_status():
     from carbongpt.repository.methodology_sync import _scheduler_started
