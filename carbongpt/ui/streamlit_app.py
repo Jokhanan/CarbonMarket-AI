@@ -9,327 +9,762 @@ st.set_page_config(page_title="CarbonGPT", layout="wide", page_icon="C")
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+        --brand-primary: #0d9488;
+        --brand-primary-light: #14b8a6;
+        --brand-primary-dark: #0f766e;
+        --brand-primary-50: #f0fdfa;
+        --brand-primary-100: #ccfbf1;
+        --brand-primary-200: #99f6e4;
+        --brand-gradient: linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #2dd4bf 100%);
+        --brand-glow: 0 0 20px rgba(13, 148, 136, 0.15);
+
+        --surface-base: #f8fafb;
+        --surface-raised: #ffffff;
+        --surface-sunken: #f1f5f9;
+        --surface-overlay: rgba(255,255,255,0.95);
+
+        --border-subtle: #e8ecf1;
+        --border-default: #e2e8f0;
+        --border-strong: #cbd5e1;
+
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --text-tertiary: #94a3b8;
+        --text-inverse: #ffffff;
+
+        --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+        --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+        --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+        --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.04);
+
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-full: 9999px;
+
+        --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+        --gold-standard: #b8860b;
+        --gold-standard-bg: #fef9ee;
+        --verra-blue: #2563eb;
+        --verra-blue-bg: #eff6ff;
+    }
+
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
     .stApp {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        background: linear-gradient(180deg, #f8f9fb 0%, #f0f2f5 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--surface-base);
+        color: var(--text-primary);
     }
 
+    /* ── Sidebar ── */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0c1821 0%, #162837 100%);
+        background: linear-gradient(180deg, #0a0f1a 0%, #111827 40%, #0f172a 100%);
         border-right: 1px solid rgba(255,255,255,0.06);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.12);
     }
     section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stMarkdown li,
+    section[data-testid="stSidebar"] .stMarkdown span {
+        color: #cbd5e1;
+        font-size: 0.88rem;
+    }
     section[data-testid="stSidebar"] .stMarkdown h1,
     section[data-testid="stSidebar"] .stMarkdown h2,
     section[data-testid="stSidebar"] .stMarkdown h3 {
-        color: #e8edf2;
+        color: #f1f5f9;
+    }
+    section[data-testid="stSidebar"] .stRadio > div {
+        gap: 2px;
     }
     section[data-testid="stSidebar"] .stRadio label {
-        color: #c0cad8 !important;
+        color: #94a3b8 !important;
+        font-size: 0.88rem !important;
+        font-weight: 500 !important;
+        padding: 0.55rem 0.85rem !important;
+        border-radius: var(--radius-sm) !important;
+        transition: all var(--transition-fast) !important;
+        margin: 0 !important;
     }
     section[data-testid="stSidebar"] .stRadio label:hover {
-        color: #ffffff !important;
+        color: #f1f5f9 !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+    section[data-testid="stSidebar"] .stRadio label[data-checked="true"],
+    section[data-testid="stSidebar"] .stRadio [aria-checked="true"] + label,
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label:has(input:checked) {
+        color: #f0fdfa !important;
+        background: rgba(13,148,136,0.18) !important;
+        font-weight: 600 !important;
     }
     section[data-testid="stSidebar"] hr {
-        border-color: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.06) !important;
+        margin: 0.75rem 0 !important;
+    }
+    section[data-testid="stSidebar"] .stCaption {
+        color: #475569 !important;
     }
 
+    /* ── Sidebar Brand ── */
     .brand-header {
-        padding: 0.5rem 0 1.2rem 0;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-        margin-bottom: 1rem;
+        padding: 0.4rem 0 1.4rem 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        margin-bottom: 0.8rem;
+    }
+    .brand-logo-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+    .brand-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--brand-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 800;
+        color: white;
+        letter-spacing: -0.5px;
+        box-shadow: 0 2px 8px rgba(13,148,136,0.3);
+        flex-shrink: 0;
     }
     .brand-header h2 {
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
         margin: 0;
-        background: linear-gradient(135deg, #4ecdc4, #45b7d1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #f1f5f9;
     }
     .brand-tagline {
-        font-size: 0.72rem;
-        color: #7a8a9e;
-        letter-spacing: 0.08em;
+        font-size: 0.68rem;
+        color: #64748b;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
+        font-weight: 500;
+        margin-top: 2px;
+        padding-left: 44px;
+    }
+
+    .sidebar-section-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #475569;
+        padding: 0.6rem 0.85rem 0.3rem;
+        margin-top: 0.3rem;
+    }
+    .sidebar-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0.55rem 0.85rem;
+        border-radius: var(--radius-sm);
+        color: #94a3b8;
+        font-size: 0.88rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        margin: 1px 0;
+    }
+    .sidebar-nav-item:hover {
+        color: #f1f5f9;
+        background: rgba(255,255,255,0.06);
+    }
+    .sidebar-nav-item.active {
+        color: #f0fdfa;
+        background: rgba(13,148,136,0.18);
+        font-weight: 600;
+    }
+    .sidebar-nav-icon {
+        width: 18px;
+        height: 18px;
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+    .sidebar-footer {
+        padding: 0.8rem 0.85rem;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        margin-top: 0.5rem;
+    }
+    .sidebar-footer-text {
+        font-size: 0.7rem;
+        color: #475569;
+        font-weight: 400;
+    }
+    .sidebar-footer-version {
+        font-size: 0.65rem;
+        color: #334155;
+        font-weight: 400;
         margin-top: 2px;
     }
 
+    /* ── Page Headers ── */
     .page-header {
-        padding: 0 0 1.5rem 0;
-        margin-bottom: 0.5rem;
+        padding: 0.25rem 0 1.8rem 0;
+        margin-bottom: 0.25rem;
     }
     .page-header h1 {
-        font-size: 1.75rem;
+        font-size: 1.8rem;
         font-weight: 700;
-        letter-spacing: -0.02em;
-        color: #1a1a2e;
-        margin-bottom: 0.25rem;
+        letter-spacing: -0.025em;
+        color: var(--text-primary);
+        margin-bottom: 0.3rem;
+        line-height: 1.2;
     }
     .page-subtitle {
         font-size: 0.92rem;
-        color: #64748b;
+        color: var(--text-secondary);
         line-height: 1.5;
+        font-weight: 400;
     }
 
+    /* ── Metrics ── */
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #ffffff, #f8fafc);
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 1rem 1.2rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.1rem 1.3rem;
+        box-shadow: var(--shadow-xs);
+        transition: all var(--transition-base);
+    }
+    div[data-testid="stMetric"]:hover {
+        box-shadow: var(--shadow-sm);
+        border-color: var(--border-default);
     }
     div[data-testid="stMetric"] label {
-        color: #64748b;
-        font-size: 0.78rem;
+        color: var(--text-tertiary);
+        font-size: 0.72rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
         font-weight: 600;
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        font-size: 1.6rem;
+        font-size: 1.7rem;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text-primary);
+        letter-spacing: -0.02em;
     }
 
+    /* ── Cards / Containers ── */
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 14px;
-        border-color: #e2e8f0;
-        background: #ffffff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-        transition: all 0.2s ease;
+        border-radius: var(--radius-md);
+        border-color: var(--border-subtle);
+        background: var(--surface-raised);
+        box-shadow: var(--shadow-xs);
+        transition: all var(--transition-base);
     }
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #cbd5e1;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        border-color: var(--border-default);
+        box-shadow: var(--shadow-md);
         transform: translateY(-1px);
     }
 
+    /* ── Buttons ── */
     .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #4ecdc4, #44a8b3);
+        background: var(--brand-gradient);
         border: none;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
         font-weight: 600;
+        font-size: 0.85rem;
         letter-spacing: 0.01em;
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(78,205,196,0.2);
+        transition: all var(--transition-base);
+        box-shadow: 0 1px 3px rgba(13,148,136,0.2), 0 1px 2px rgba(13,148,136,0.12);
+        color: white;
     }
     .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #44b8b0, #3d9aa5);
-        box-shadow: 0 4px 12px rgba(78,205,196,0.35);
+        box-shadow: 0 4px 14px rgba(13,148,136,0.3), 0 2px 4px rgba(13,148,136,0.15);
         transform: translateY(-1px);
+        filter: brightness(1.05);
+    }
+    .stButton > button[kind="primary"]:active {
+        transform: translateY(0);
+        filter: brightness(0.97);
     }
     .stButton > button[kind="secondary"] {
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
         font-weight: 500;
-        transition: all 0.2s ease;
+        font-size: 0.85rem;
+        transition: all var(--transition-fast);
+        border-color: var(--border-default);
     }
     .stButton > button[kind="secondary"]:hover {
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        box-shadow: var(--shadow-sm);
+        border-color: var(--border-strong);
         transform: translateY(-1px);
     }
 
+    /* ── Tabs ── */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 4px;
-        border-bottom: 2px solid #e2e8f0;
+        gap: 0;
+        border-bottom: 1px solid var(--border-default);
         background: transparent;
-        padding: 0 0 0 0;
+        padding: 0;
     }
     .stTabs [data-baseweb="tab"] {
         font-weight: 500;
-        font-size: 0.88rem;
-        padding: 0.7rem 1.4rem;
-        border-radius: 10px 10px 0 0;
-        color: #64748b;
-        transition: all 0.2s ease;
+        font-size: 0.85rem;
+        padding: 0.75rem 1.2rem;
+        border-radius: 0;
+        color: var(--text-tertiary);
+        transition: all var(--transition-fast);
         background: transparent;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
     }
     .stTabs [data-baseweb="tab"]:hover {
-        color: #334155;
-        background: rgba(78,205,196,0.06);
+        color: var(--text-secondary);
+        background: var(--brand-primary-50);
     }
     .stTabs [aria-selected="true"] {
-        color: #1e293b !important;
+        color: var(--brand-primary-dark) !important;
         font-weight: 600 !important;
-        border-bottom: 3px solid #4ecdc4 !important;
-        background: rgba(78,205,196,0.04) !important;
+        border-bottom: 2px solid var(--brand-primary) !important;
+        background: transparent !important;
     }
 
+    /* ── Expanders ── */
     .streamlit-expanderHeader {
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.88rem;
+        color: var(--text-primary);
     }
 
+    /* ── Data Frames ── */
     .stDataFrame {
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        box-shadow: var(--shadow-xs);
     }
 
+    /* ── Status Badges ── */
     .status-badge {
-        display: inline-block;
-        padding: 0.2rem 0.7rem;
-        border-radius: 20px;
-        font-size: 0.73rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0.2rem 0.65rem;
+        border-radius: var(--radius-full);
+        font-size: 0.72rem;
         font-weight: 600;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
+    }
+    .status-badge::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
     }
     .status-draft { background: #f1f5f9; color: #64748b; }
+    .status-draft::before { background: #94a3b8; }
     .status-active { background: #ecfdf5; color: #059669; }
+    .status-active::before { background: #10b981; }
     .status-review { background: #eff6ff; color: #2563eb; }
+    .status-review::before { background: #3b82f6; }
     .status-complete { background: #f0fdf4; color: #16a34a; }
+    .status-complete::before { background: #22c55e; }
+    .status-inprogress { background: #eff6ff; color: #2563eb; }
+    .status-inprogress::before { background: #3b82f6; }
 
+    /* ── Project Type Badges ── */
     .project-type-badge {
-        display: inline-block;
-        padding: 0.15rem 0.6rem;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.18rem 0.55rem;
         border-radius: 6px;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         font-weight: 700;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
     }
     .badge-pdd { background: #dbeafe; color: #1d4ed8; }
-    .badge-mr { background: #fef3c7; color: #b45309; }
-    .badge-poa { background: #ede9fe; color: #7c3aed; }
+    .badge-mr { background: #fef3c7; color: #92400e; }
+    .badge-poa { background: #ede9fe; color: #6d28d9; }
     .badge-vpa { background: #e0e7ff; color: #4338ca; }
     .badge-valver { background: #fce7f3; color: #be185d; }
 
+    /* ── Project Cards ── */
+    .project-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.1rem 1.3rem;
+        margin-bottom: 0.5rem;
+        transition: all var(--transition-base);
+        cursor: default;
+        position: relative;
+    }
+    .project-card:hover {
+        border-color: var(--border-default);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
     .project-card-gs {
-        border-left: 4px solid #d4a843 !important;
+        border-left: 3px solid var(--gold-standard) !important;
     }
     .project-card-verra {
-        border-left: 4px solid #3b82f6 !important;
+        border-left: 3px solid var(--verra-blue) !important;
+    }
+    .project-card-inner {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .project-card-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .project-card-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        line-height: 1.3;
+    }
+    .project-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
+    .project-card-meta-item {
+        font-size: 0.78rem;
+        color: var(--text-tertiary);
+        font-weight: 400;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .project-card-meta-sep {
+        color: var(--border-strong);
+        font-size: 0.6rem;
+    }
+    .project-card-stats {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-shrink: 0;
+    }
+    .project-card-stat {
+        text-align: center;
+        min-width: 50px;
+    }
+    .project-card-stat-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .project-card-stat-label {
+        font-size: 0.65rem;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 500;
+    }
+    .project-card-indent {
+        margin-left: 24px;
+        border-left-color: var(--border-default) !important;
+        opacity: 0.95;
+    }
+    .project-card-indent::before {
+        content: '';
+        position: absolute;
+        left: -14px;
+        top: 50%;
+        width: 10px;
+        height: 1px;
+        background: var(--border-default);
     }
 
-    .section-card-drafted {
-        border-left: 4px solid #22c55e !important;
-    }
-    .section-card-empty {
-        border-left: 4px solid #e2e8f0 !important;
-    }
-    .section-card-revision {
-        border-left: 4px solid #f59e0b !important;
-    }
+    /* ── Section Status Cards ── */
+    .section-card-drafted { border-left: 3px solid #22c55e !important; }
+    .section-card-empty { border-left: 3px solid var(--border-default) !important; }
+    .section-card-revision { border-left: 3px solid #f59e0b !important; }
 
+    /* ── Step Indicator ── */
     .step-indicator {
         display: flex;
         gap: 0;
         align-items: center;
-        padding: 0.6rem 0;
+        padding: 0.5rem 0;
     }
     .step-item {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 0.3rem 0.8rem;
-        font-size: 0.75rem;
+        gap: 5px;
+        padding: 0.3rem 0.7rem;
+        font-size: 0.72rem;
         font-weight: 500;
-        color: #94a3b8;
-        border-radius: 20px;
+        color: var(--text-tertiary);
+        border-radius: var(--radius-full);
+        transition: all var(--transition-fast);
     }
     .step-item.active {
-        background: rgba(78,205,196,0.1);
-        color: #0f766e;
+        background: var(--brand-primary-50);
+        color: var(--brand-primary-dark);
         font-weight: 600;
     }
-    .step-item.done {
-        color: #22c55e;
-    }
+    .step-item.done { color: #16a34a; }
     .step-arrow {
-        color: #cbd5e1;
-        font-size: 0.75rem;
-        margin: 0 2px;
+        color: var(--border-strong);
+        font-size: 0.7rem;
+        margin: 0 1px;
     }
 
+    /* ── Document Toggle Cards ── */
     .doc-toggle-card {
         display: flex;
         align-items: center;
-        padding: 0.8rem 1rem;
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        margin-bottom: 0.5rem;
-        transition: all 0.15s ease;
+        padding: 0.75rem 1rem;
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.4rem;
+        transition: all var(--transition-fast);
     }
     .doc-toggle-card:hover {
-        border-color: #cbd5e1;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        border-color: var(--border-default);
+        box-shadow: var(--shadow-sm);
     }
 
+    /* ── Type Selector Cards ── */
     .type-selector-card {
-        padding: 1.2rem 1rem;
-        border: 2px solid #e2e8f0;
-        border-radius: 14px;
+        padding: 1.3rem 1rem;
+        border: 2px solid var(--border-default);
+        border-radius: var(--radius-md);
         text-align: center;
         cursor: pointer;
-        transition: all 0.2s ease;
-        background: #ffffff;
+        transition: all var(--transition-base);
+        background: var(--surface-raised);
     }
     .type-selector-card:hover {
-        border-color: #4ecdc4;
-        box-shadow: 0 4px 12px rgba(78,205,196,0.15);
+        border-color: var(--brand-primary-light);
+        box-shadow: 0 4px 14px rgba(13,148,136,0.12);
         transform: translateY(-2px);
     }
     .type-selector-card.selected {
-        border-color: #4ecdc4;
-        background: rgba(78,205,196,0.04);
-        box-shadow: 0 4px 12px rgba(78,205,196,0.15);
+        border-color: var(--brand-primary);
+        background: var(--brand-primary-50);
+        box-shadow: 0 4px 14px rgba(13,148,136,0.12);
     }
 
+    /* ── Form Inputs ── */
     .stButton > button, .stSelectbox, .stTextInput input {
-        transition: all 0.15s ease;
+        transition: all var(--transition-fast);
     }
-
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {
-        border-radius: 10px !important;
+        border-radius: var(--radius-sm) !important;
+        border-color: var(--border-default) !important;
+        font-size: 0.88rem;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--brand-primary) !important;
+        box-shadow: 0 0 0 3px rgba(13,148,136,0.1) !important;
     }
 
+    /* ── Dividers ── */
     hr {
-        border-color: #e2e8f0 !important;
+        border-color: var(--border-subtle) !important;
         margin: 1rem 0 !important;
     }
 
+    /* ── Hide fullscreen button ── */
     div[data-testid="stMetric"] button[title="View fullscreen"] {
         display: none;
     }
 
+    /* ── Empty State ── */
     .empty-state {
         text-align: center;
-        padding: 3rem 2rem;
-        background: linear-gradient(135deg, #ffffff, #f8fafc);
-        border-radius: 16px;
-        border: 1px dashed #cbd5e1;
-        margin: 1rem 0;
+        padding: 3.5rem 2rem;
+        background: var(--surface-raised);
+        border-radius: var(--radius-lg);
+        border: 1px dashed var(--border-strong);
+        margin: 1.5rem 0;
+    }
+    .empty-state-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        opacity: 0.4;
     }
     .empty-state-title {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 600;
-        color: #1e293b;
+        color: var(--text-primary);
         margin-bottom: 0.5rem;
     }
     .empty-state-desc {
         font-size: 0.88rem;
-        color: #64748b;
-        line-height: 1.5;
+        color: var(--text-secondary);
+        line-height: 1.6;
+        max-width: 480px;
+        margin: 0 auto;
     }
+
+    /* ── Workspace Header ── */
+    .workspace-header {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem 1.8rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-xs);
+    }
+    .workspace-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .workspace-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+        margin: 4px 0 6px;
+        line-height: 1.2;
+    }
+    .workspace-header-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
+    .workspace-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        font-weight: 400;
+    }
+    .workspace-meta-dot {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--border-strong);
+    }
+    .workspace-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.35rem 0.75rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+    }
+    .workspace-badge-gs {
+        background: var(--gold-standard-bg);
+        color: var(--gold-standard);
+        border: 1px solid rgba(184,134,11,0.15);
+    }
+    .workspace-badge-verra {
+        background: var(--verra-blue-bg);
+        color: var(--verra-blue);
+        border: 1px solid rgba(37,99,235,0.15);
+    }
+
+    /* ── AI Powered Badge ── */
+    .ai-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0.2rem 0.6rem;
+        border-radius: var(--radius-full);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        background: linear-gradient(135deg, rgba(13,148,136,0.08), rgba(45,212,191,0.08));
+        color: var(--brand-primary-dark);
+        border: 1px solid rgba(13,148,136,0.12);
+    }
+
+    /* ── Stat Cards (used in project list) ── */
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0.2rem 0.55rem;
+        border-radius: var(--radius-full);
+        font-size: 0.72rem;
+        font-weight: 500;
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+    }
+
+    /* ── Progress Bar override ── */
+    .stProgress > div > div > div {
+        background: var(--brand-gradient) !important;
+        border-radius: var(--radius-full);
+    }
+    .stProgress > div > div {
+        background: var(--surface-sunken);
+        border-radius: var(--radius-full);
+    }
+
+    /* ── Toast / Success / Info ── */
+    .stAlert {
+        border-radius: var(--radius-sm) !important;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-full); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 </style>
 """, unsafe_allow_html=True)
 
 PAGES = ["Workspace", "Admin"]
 
+SVG_ICONS = {
+    "projects": '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>',
+    "intelligence": '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+    "admin": '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+    "docs": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>',
+    "globe": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
+    "methodology": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+}
+
 with st.sidebar:
-    st.markdown("""
+    st.markdown(f"""
     <div class="brand-header">
-        <h2>CarbonGPT</h2>
+        <div class="brand-logo-row">
+            <div class="brand-icon">C</div>
+            <h2>CarbonGPT</h2>
+        </div>
         <div class="brand-tagline">AI Carbon Intelligence</div>
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sidebar-section-label">Navigation</div>', unsafe_allow_html=True)
     page = st.radio("Navigation", PAGES, key="nav_page", label_visibility="collapsed")
-    st.divider()
-    st.caption("CarbonGPT v1.0")
+
+    st.markdown(f"""
+    <div class="sidebar-footer">
+        <div class="sidebar-footer-text">CarbonGPT Platform</div>
+        <div class="sidebar-footer-version">v1.0 -- AI-Powered</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def _render_ai_result(ai_result):
@@ -478,7 +913,7 @@ CATEGORY_OPTIONS = list(CATEGORY_LABELS.keys())
 def render_repository():
     st.markdown("""
     <div class="page-header">
-        <h1>Admin</h1>
+        <h1>Administration</h1>
         <div class="page-subtitle">Document repository, compliance rules, knowledge base, and sync tools</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1784,7 +2219,7 @@ def _render_home():
     </div>
     """, unsafe_allow_html=True)
 
-    home_tabs = st.tabs(["My Projects", "Carbon Intelligence"])
+    home_tabs = st.tabs(["Projects", "Carbon Intelligence"])
     with home_tabs[0]:
         _render_project_list()
     with home_tabs[1]:
@@ -1798,9 +2233,9 @@ def _render_project_list():
     col_left, col_right = st.columns([4, 1])
     with col_left:
         if projects:
-            st.caption(f"{len(projects)} project{'s' if len(projects) != 1 else ''}")
+            st.markdown(f'<span class="stat-pill">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>', unsafe_allow_html=True)
     with col_right:
-        if st.button("+ New Project", key="new_proj_btn", type="primary"):
+        if st.button("New Project", key="new_proj_btn", type="primary", use_container_width=True):
             st.session_state["show_new_project"] = True
 
     if st.session_state.get("show_new_project"):
@@ -1810,6 +2245,7 @@ def _render_project_list():
     if not projects:
         st.markdown("""
         <div class="empty-state">
+            <div class="empty-state-icon">&#9670;</div>
             <div class="empty-state-title">No projects yet</div>
             <div class="empty-state-desc">Create your first carbon project to start drafting PDDs, Monitoring Reports, and other documents with AI assistance.</div>
         </div>
@@ -1842,41 +2278,54 @@ def _render_project_card(proj, indent=False, child_count=0):
     pid = proj["id"]
     status = proj.get("status", "draft")
     status_label = STATUS_LABELS.get(status, status)
-    status_color = STATUS_COLORS.get(status, "gray")
     doc_count = proj.get("doc_count", 0)
     project_type = proj.get("project_type", "standalone_pdd")
     type_info = PROJECT_TYPE_INFO.get(project_type, PROJECT_TYPE_INFO["standalone_pdd"])
     badge_class = type_info.get("badge_class", "badge-pdd")
 
+    std_raw = proj.get("standard", "")
+    card_border_class = "project-card-gs" if std_raw == "GoldStandard" else "project-card-verra" if std_raw == "Verra" else ""
+    indent_class = "project-card-indent" if indent else ""
+    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(std_raw, std_raw)
+
+    meta_parts = []
+    if std_display:
+        meta_parts.append(f'<span class="project-card-meta-item">{SVG_ICONS.get("globe", "")} {std_display}</span>')
+    if proj.get("methodology"):
+        meta_parts.append(f'<span class="project-card-meta-item">{SVG_ICONS.get("methodology", "")} {proj["methodology"]}</span>')
+    if proj.get("country"):
+        meta_parts.append(f'<span class="project-card-meta-item">{proj["country"]}</span>')
+    meta_html = '<span class="project-card-meta-sep">&bull;</span>'.join(meta_parts)
+
+    child_html = ""
+    if child_count > 0:
+        child_html = f'<span class="stat-pill" style="margin-left:8px;">{child_count} VPA{"s" if child_count != 1 else ""}</span>'
+
+    status_class = f"status-{status.replace('_', '')}"
+
     with st.container(border=True):
-        if indent:
-            c0, c1, c2, c3, c4 = st.columns([0.3, 3.2, 1.2, 0.8, 0.8])
-            with c0:
-                st.markdown("<span style='color:#cbd5e1;'>|--</span>", unsafe_allow_html=True)
-        else:
-            c1, c2, c3, c4 = st.columns([3.5, 1.2, 0.8, 0.8])
-
-        with c1:
-            type_badge = f"<span class='project-type-badge {badge_class}'>{type_info['short']}</span>"
-            st.markdown(f"{type_badge} **{proj['name']}**", unsafe_allow_html=True)
-            details = []
-            if proj.get("standard"):
-                std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(proj["standard"], proj["standard"])
-                details.append(std_display)
-            if proj.get("methodology"):
-                details.append(proj["methodology"])
-            if proj.get("country"):
-                details.append(proj["country"])
-            if details:
-                st.caption(" / ".join(details))
-            if child_count > 0:
-                st.caption(f"{child_count} VPA{'s' if child_count != 1 else ''}")
-
-        with c2:
-            st.markdown(f":{status_color}[{status_label}]")
-        with c3:
-            st.caption(f"{doc_count} doc{'s' if doc_count != 1 else ''}")
-        with c4:
+        col_main, col_stats, col_action = st.columns([4, 1.5, 0.8])
+        with col_main:
+            st.markdown(f"""
+            <div class="project-card-content" style="{'margin-left:20px;' if indent else ''}">
+                <div class="project-card-title">
+                    <span class="project-type-badge {badge_class}">{type_info['short']}</span>
+                    {proj['name']}{child_html}
+                </div>
+                <div class="project-card-meta">{meta_html}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_stats:
+            st.markdown(f"""
+            <div style="display:flex;align-items:center;gap:16px;justify-content:flex-end;padding-top:4px;">
+                <div class="project-card-stat">
+                    <div class="project-card-stat-value">{doc_count}</div>
+                    <div class="project-card-stat-label">Docs</div>
+                </div>
+                <span class="status-badge {status_class}">{status_label}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_action:
             if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
                 st.session_state.selected_project_id = pid
                 st.rerun()
@@ -2052,42 +2501,57 @@ def _render_project_workspace(project_id):
         st.rerun()
         return
 
-    if st.button("< Back to Projects", key="back_to_projects"):
+    if st.button("Back to Projects", key="back_to_projects"):
         st.session_state.selected_project_id = None
         st.rerun()
 
     status = project.get("status", "draft")
     status_label = STATUS_LABELS.get(status, status)
-    status_color = STATUS_COLORS.get(status, "gray")
     project_type = project.get("project_type", "standalone_pdd")
     type_info = PROJECT_TYPE_INFO.get(project_type, PROJECT_TYPE_INFO["standalone_pdd"])
     badge_class = type_info.get("badge_class", "badge-pdd")
+    status_class = f"status-{status.replace('_', '')}"
 
-    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(project.get("standard", ""), project.get("standard", ""))
+    std_raw = project.get("standard", "")
+    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(std_raw, std_raw)
+    std_badge_class = "workspace-badge-gs" if std_raw == "GoldStandard" else "workspace-badge-verra"
 
-    st.markdown(f"""
-    <div class="page-header">
-        <h1>
-            <span class="project-type-badge {badge_class}">{type_info['short']}</span>
-            {project['name']}
-        </h1>
-        <div class="page-subtitle">
-            {std_display}
-            {(' / ' + project['methodology']) if project.get('methodology') else ''}
-            {(' / ' + project['country']) if project.get('country') else ''}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    meta_items = []
+    if project.get("methodology"):
+        meta_items.append(f'<span class="workspace-meta-item">{project["methodology"]}</span>')
+    if project.get("country"):
+        meta_items.append(f'<span class="workspace-meta-item">{project["country"]}</span>')
+    meta_html = '<span class="workspace-meta-dot"></span>'.join(meta_items)
 
+    parent_html = ""
     if project.get("parent_project_id"):
         parent = _fetch(f"/projects/{project['parent_project_id']}")
         if parent:
             parent_type_info = PROJECT_TYPE_INFO.get(parent.get("project_type", ""), {})
             parent_short = parent_type_info.get("short", "Project")
-            st.caption(f"Linked to: {parent_short} - {parent['name']}")
+            parent_html = f'<div style="margin-top:8px;"><span class="stat-pill">Linked to {parent_short}: {parent["name"]}</span></div>'
 
+    desc_html = ""
     if project.get("description"):
-        st.caption(project["description"])
+        desc_html = f'<div style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary);">{project["description"]}</div>'
+
+    st.markdown(f"""
+    <div class="workspace-header">
+        <div class="workspace-header-top">
+            <div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span class="project-type-badge {badge_class}">{type_info['short']}</span>
+                    <span class="workspace-header-badge {std_badge_class}">{std_display}</span>
+                    <span class="status-badge {status_class}">{status_label}</span>
+                </div>
+                <h1>{project['name']}</h1>
+                <div class="workspace-header-meta">{meta_html}</div>
+                {parent_html}
+                {desc_html}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     if project_type == "poa_programme":
         children = _fetch(f"/projects/{project_id}/children") or []
