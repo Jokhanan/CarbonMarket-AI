@@ -18,12 +18,34 @@ STANDARD_LABELS = {
 }
 
 SECTION_INTAKE_MAP = {
-    "A": ["project_overview", "technology", "location"],
-    "B": ["baseline_additionality", "emission_reductions", "monitoring"],
+    "A": ["proponent", "project_overview", "crediting_dates", "technology", "location", "prior_consideration", "legal_compliance"],
+    "A.1": ["proponent", "project_overview", "crediting_dates"],
+    "A.2": ["technology", "location"],
+    "A.3": ["technology"],
+    "A.4": ["project_overview", "crediting_dates"],
+    "A.5": ["prior_consideration"],
+    "B": ["baseline_additionality", "emission_reductions", "monitoring", "prior_consideration", "legal_compliance"],
+    "B.5": ["baseline_additionality", "prior_consideration"],
     "B.6": ["sdgs"],
-    "C": ["project_overview"],
+    "C": ["project_overview", "crediting_dates"],
     "D": ["safeguards"],
-    "E": ["stakeholders"],
+    "E": ["stakeholders", "proponent"],
+    "1": ["proponent", "project_overview", "crediting_dates", "legal_compliance"],
+    "1.6": ["proponent"],
+    "1.7": ["proponent"],
+    "1.8": ["legal_compliance"],
+    "1.9": ["crediting_dates"],
+    "1.15": ["legal_compliance"],
+    "1.16": ["legal_compliance"],
+    "2": ["baseline_additionality", "technology"],
+    "3": ["emission_reductions", "monitoring"],
+    "4": ["monitoring"],
+    "programme": ["programme", "management_system", "eligibility"],
+    "vpa_details": ["vpa_details", "technology", "location"],
+    "monitoring_period": ["monitoring_period", "implementation_status", "data_collection", "calibration_data_quality"],
+    "forward_action_requests": ["forward_action_requests"],
+    "deviations": ["deviations"],
+    "results": ["results", "emission_reductions"],
 }
 
 
@@ -35,12 +57,28 @@ def _format_project_context(project_info):
     parts = []
 
     card_formatters = {
+        "proponent": ("Project Developer / Proponent", [
+            ("organization_name", "Organization Name"),
+            ("contact_person", "Contact Person"),
+            ("email", "Email"),
+            ("phone", "Phone"),
+            ("address", "Address"),
+            ("other_entities", "Other Entities Involved"),
+        ]),
         "project_overview": ("Project Overview", [
             ("objective", "Project Objective"),
             ("summary", "Project Summary"),
             ("start_date", "Start Date"),
             ("scale", "Project Scale"),
             ("num_units", "Number of Units"),
+            ("activity_type", "Activity Type"),
+            ("sectoral_scope", "Sectoral Scope"),
+        ]),
+        "crediting_dates": ("Crediting Period & Project Dates", [
+            ("crediting_start", "Crediting Period Start"),
+            ("crediting_length_years", "Crediting Period Length (years)"),
+            ("crediting_end", "Crediting Period End"),
+            ("operational_lifetime", "Operational Lifetime (years)"),
         ]),
         "technology": ("Technology & Approach", [
             ("description", "Technology Description"),
@@ -61,6 +99,18 @@ def _format_project_context(project_info):
             ("additionality_justification", "Additionality Justification"),
             ("barriers", "Barriers"),
             ("common_practice", "Common Practice Analysis"),
+        ]),
+        "prior_consideration": ("Prior Consideration & Financial Need", [
+            ("awareness_date", "Date of Awareness of Carbon Finance"),
+            ("evidence", "Prior Consideration Evidence"),
+            ("financial_need", "Financial Need / Investment Barrier"),
+            ("funding_sources", "Funding Sources"),
+        ]),
+        "legal_compliance": ("Legal & Compliance", [
+            ("ownership", "GHG Emission Reduction Ownership"),
+            ("regulatory_compliance", "Regulatory Compliance"),
+            ("double_counting", "Double Counting Declaration"),
+            ("audit_history", "Audit History"),
         ]),
         "monitoring": ("Monitoring Plan", [
             ("monitoring_approach", "Monitoring Approach"),
@@ -86,6 +136,78 @@ def _format_project_context(project_info):
             ("environmental_safeguards", "Environmental Safeguards"),
             ("social_safeguards", "Social Safeguards"),
             ("do_no_harm", "Do No Harm Assessment"),
+        ]),
+        "programme": ("Programme Description (PoA)", [
+            ("objective", "Programme Objective"),
+            ("geographic_scope", "Geographic Scope"),
+            ("cme_name", "CME Name"),
+            ("cme_details", "CME Details"),
+            ("target_vpas", "Target Number of VPAs"),
+            ("duration", "Programme Duration"),
+            ("first_submission_date", "Date of First Submission"),
+        ]),
+        "management_system": ("Management System (PoA)", [
+            ("description", "Management System Description"),
+            ("multiple_technologies", "Multiple Technologies / Measures"),
+            ("qa_qc", "Programme-Level QA/QC"),
+        ]),
+        "eligibility": ("Eligibility & Inclusion (PoA)", [
+            ("criteria", "Eligibility Criteria"),
+            ("inclusion_process", "Inclusion Process"),
+            ("approval_mechanism", "Approval Mechanism"),
+        ]),
+        "vpa_details": ("VPA Details", [
+            ("eligibility_justification", "Eligibility Justification"),
+            ("start_date", "VPA Start Date"),
+            ("baseline_scenario", "VPA Baseline Scenario"),
+        ]),
+        "monitoring_period": ("Monitoring Period", [
+            ("start_date", "Period Start"),
+            ("end_date", "Period End"),
+            ("period_number", "Period Number"),
+        ]),
+        "implementation_status": ("Implementation Status", [
+            ("status_description", "Status Description"),
+            ("units_active", "Active Units"),
+            ("units_decommissioned", "Decommissioned Units"),
+            ("training_activities", "Training Activities"),
+        ]),
+        "forward_action_requests": ("Forward Action Requests", [
+            ("previous_fars", "FARs from Previous Verification"),
+            ("response", "Response to FARs"),
+        ]),
+        "data_collection": ("Data Collection", [
+            ("num_units", "Number of Units"),
+            ("collection_summary", "Collection Summary"),
+            ("data_highlights", "Data Highlights"),
+        ]),
+        "calibration_data_quality": ("Calibration & Data Quality", [
+            ("calibration_records", "Calibration Records"),
+            ("data_sources", "Data Sources"),
+        ]),
+        "deviations": ("Deviations & Changes", [
+            ("methodology_deviations", "Methodology Deviations"),
+            ("period_changes", "Period Changes"),
+        ]),
+        "results": ("Emission Reduction Results", [
+            ("baseline_emissions", "Baseline Emissions"),
+            ("project_emissions", "Project Emissions"),
+            ("leakage", "Leakage"),
+            ("net_er", "Net Emission Reductions"),
+        ]),
+        "scope": ("Assessment Scope (ValVer)", [
+            ("assessment_type", "Assessment Type"),
+            ("scope_description", "Scope Description"),
+        ]),
+        "assessment": ("Assessment Methodology (ValVer)", [
+            ("methodology", "Assessment Methodology"),
+            ("site_visit", "Site Visit"),
+            ("interviews", "Interviews"),
+        ]),
+        "findings": ("Key Findings (ValVer)", [
+            ("summary", "Findings Summary"),
+            ("cars", "CARs"),
+            ("cls", "CLs"),
         ]),
     }
 

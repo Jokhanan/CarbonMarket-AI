@@ -270,6 +270,8 @@ def _fill_gs_kpi_table(doc, project_info):
         return
 
     intake = project_info.get("intake", {})
+    proponent = intake.get("proponent", {})
+    overview = intake.get("project_overview", {})
 
     for row in kpi_table.rows:
         label = row.cells[0].text.strip().lower()
@@ -282,15 +284,17 @@ def _fill_gs_kpi_table(doc, project_info):
         elif "methodology" in label and "applied" in label:
             cell.text = project_info.get("methodology", "")
         elif "project developer" in label and "participant" not in label:
-            dev_name = intake.get("developer_name", "")
+            dev_name = proponent.get("organization_name", "") or proponent.get("contact_person", "") or intake.get("developer_name", "")
             if dev_name:
                 cell.text = dev_name
         elif "scale of the project" in label:
-            scale = intake.get("project_scale", "")
+            scale = overview.get("scale", "") or intake.get("project_scale", "")
             if scale:
-                _check_checkbox_in_cell(cell._element, scale, ns)
+                scale_map = {"Micro-scale": "Micro", "Small-scale": "Small", "Large-scale": "Large"}
+                scale_val = scale_map.get(scale, scale)
+                _check_checkbox_in_cell(cell._element, scale_val, ns)
         elif "activity requirements" in label:
-            activity_type = intake.get("activity_type", "")
+            activity_type = overview.get("activity_type", "") or intake.get("activity_type", "")
             if activity_type:
                 _check_checkbox_in_cell(cell._element, activity_type, ns)
         elif "product requirements" in label:
