@@ -2627,26 +2627,333 @@ def _render_manual_finding_entry(project):
 
 def _render_findings_upload(project):
     project_id = project["id"]
+    project_type = project.get("project_type", "standalone_pdd")
+
+    default_doc_type_map = {
+        "standalone_pdd": "pdd",
+        "poa_programme": "poa_dd",
+        "vpa_component": "vpa_dd",
+        "monitoring_report": "mr",
+        "valver_report": "valver",
+    }
+    default_dt = default_doc_type_map.get(project_type, "pdd")
 
     st.markdown("#### Upload a findings document")
     st.markdown(
-        "Upload a VVB findings log, PRR comment sheet, or validation/verification report. "
+        "Upload a VVB findings log, PRR comment sheet, or validation/verification report (PDF or Word). "
         "The AI will extract individual findings and draft responses for each."
     )
 
     uploaded = st.file_uploader(
-        "Upload findings document (PDF)",
-        type=["pdf"],
+        "Choose a findings document",
+        type=["pdf", "docx"],
         key=f"findings_upload_{project_id}",
     )
 
     if uploaded:
-        st.info(
-            "Findings document upload and batch response generation will be available in the next release. "
-            "For now, copy individual findings into the manual entry tab to get AI-drafted responses."
-        )
-        st.markdown("**Uploaded:** " + uploaded.name)
-        st.markdown(f"**Size:** {uploaded.size / 1024:.1f} KB")
+        with st.container(border=True):
+            fc1, fc2 = st.columns([2, 1])
+            with fc1:
+                st.markdown(f"**File:** {uploaded.name}")
+                st.markdown(f"**Size:** {uploaded.size / 1024:.1f} KB")
+            with fc2:
+                doc_type_for_response = st.selectbox(
+                    "Your document type",
+                    ["pdd", "mr", "poa_dd", "vpa_dd", "valver"],
+                    index=["pdd", "mr", "poa_dd", "vpa_dd", "valver"].index(default_dt),
+                    format_func=lambda x: {
+                        "pdd": "PDD",
+                        "mr": "Monitoring Report",
+                        "poa_dd": "PoA-DD",
+                        "vpa_dd": "VPA-DD",
+                        "valver": "Val/Ver Report",
+                    }.get(x, x),
+                    key=f"batch_doctype_{project_id}",
+                )
+
+            if st.button(
+                "Extract Findings from Document",
+                key=f"extract_findings_btn_{project_id}",
+                type="primary",
+            ):
+                with st.spinner("Parsing document and extracting findings with AI..."):
+                    try:
+                        import requests
+                        api_base = st.session_state.get("api_base", "http://localhost:3000")
+                        files_payload = {"file": (uploaded.name, uploaded.getvalue())}
+                        resp = requests.post(
+                            f"{api_base}/projects/{project_id}/parse-findings-document",
+                            files=files_payload,
+                            timeout=120,
+                        )
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            findings_list = result.get("findings", [])
+                            st.session_state[f"extracted_findings_{project_id}"] = findings_list
+                            st.session_state[f"extracted_doc_name_{project_id}"] = result.get("document_name", uploaded.name)
+                            st.session_state[f"batch_doc_type_{project_id}"] = doc_type_for_response
+                            st.session_state[f"selected_findings_{project_id}"] = [True] * len(findings_list)
+                            st.session_state.pop(f"batch_responses_{project_id}", None)
+                            chunks_failed = result.get("chunks_failed", 0)
+                            msg = f"Extracted {result.get('total', 0)} findings from {result.get('chunks_processed', 1)} document section(s)."
+                            if chunks_failed > 0:
+                                msg += f" Warning: {chunks_failed} section(s) failed to process."
+                            st.success(msg)
+                            warnings = result.get("warnings", [])
+                            if warnings:
+                                for w in warnings[:3]:
+                                    st.warning(w)
+                            st.rerun()
+                        else:
+                            error_detail = resp.json().get("detail", resp.text) if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+                            st.error(f"Extraction failed: {error_detail}")
+                    except Exception as e:
+                        st.error(f"Failed to extract findings: {e}")
+
+    extracted = st.session_state.get(f"extracted_findings_{project_id}", [])
+    if extracted:
+        doc_name = st.session_state.get(f"extracted_doc_name_{project_id}", "Document")
+        st.markdown("---")
+        st.markdown(f"#### Extracted Findings from {doc_name}")
+
+        type_counts = {}
+        for f in extracted:
+            ft = f.get("finding_type", "unknown")
+            type_counts[ft] = type_counts.get(ft, 0) + 1
+
+        summary_parts = [f"{count} {ft}{'s' if count > 1 else ''}" for ft, count in sorted(type_counts.items())]
+        st.markdown(f"**{len(extracted)} findings found:** " + ", ".join(summary_parts))
+
+        selected_key = f"selected_findings_{project_id}"
+        if selected_key not in st.session_state:
+            st.session_state[selected_key] = [True] * len(extracted)
+
+        sel_all_col, desel_col, _ = st.columns([1, 1, 3])
+        with sel_all_col:
+            if st.button("Select All", key=f"sel_all_{project_id}"):
+                st.session_state[selected_key] = [True] * len(extracted)
+                st.rerun()
+        with desel_col:
+            if st.button("Deselect All", key=f"desel_all_{project_id}"):
+                st.session_state[selected_key] = [False] * len(extracted)
+                st.rerun()
+
+        for idx, finding in enumerate(extracted):
+            ftype = finding.get("finding_type", "CL")
+            fid = finding.get("finding_id", f"#{idx + 1}")
+            topic = finding.get("topic", "")
+            section = finding.get("pdd_section", "")
+            desc = finding.get("description", "")
+
+            with st.container(border=True):
+                hc1, hc2 = st.columns([0.3, 4.7])
+                with hc1:
+                    checked = st.checkbox(
+                        "Include",
+                        value=st.session_state[selected_key][idx],
+                        key=f"finding_check_{project_id}_{idx}",
+                        label_visibility="collapsed",
+                    )
+                    st.session_state[selected_key][idx] = checked
+                with hc2:
+                    header_parts = [f"**{ftype} {fid}**"]
+                    if topic:
+                        header_parts.append(f"*{topic}*")
+                    if section:
+                        header_parts.append(f"(Section {section})")
+                    st.markdown(" -- ".join(header_parts))
+                    if desc:
+                        preview = desc[:300] + ("..." if len(desc) > 300 else "")
+                        st.caption(preview)
+
+        selected_count = sum(st.session_state.get(selected_key, []))
+        st.markdown(f"**{selected_count} of {len(extracted)} findings selected for response generation**")
+
+        bc1, bc2 = st.columns([1, 2])
+        with bc1:
+            if st.button(
+                f"Generate Responses ({selected_count})",
+                key=f"batch_respond_btn_{project_id}",
+                type="primary",
+                disabled=selected_count == 0,
+            ):
+                selected_findings = [
+                    f for i, f in enumerate(extracted)
+                    if st.session_state.get(selected_key, [])[i]
+                ]
+                batch_dt = st.session_state.get(f"batch_doc_type_{project_id}", default_dt)
+
+                progress_bar = st.progress(0, text="Generating responses...")
+                try:
+                    result = _fetch(
+                        f"/projects/{project_id}/batch-respond-to-findings",
+                        method="POST",
+                        json_data={
+                            "findings": selected_findings,
+                            "doc_type": batch_dt,
+                        },
+                    )
+                    if result:
+                        st.session_state[f"batch_responses_{project_id}"] = result
+                        progress_bar.progress(100, text="All responses generated.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Batch response generation failed: {e}")
+                    progress_bar.empty()
+        with bc2:
+            if st.button("Clear Extracted Findings", key=f"clear_findings_{project_id}"):
+                st.session_state.pop(f"extracted_findings_{project_id}", None)
+                st.session_state.pop(f"extracted_doc_name_{project_id}", None)
+                st.session_state.pop(selected_key, None)
+                st.session_state.pop(f"batch_responses_{project_id}", None)
+                st.rerun()
+
+    batch_result = st.session_state.get(f"batch_responses_{project_id}")
+    if batch_result:
+        responses = batch_result.get("responses", [])
+        successful = batch_result.get("successful", 0)
+        failed = batch_result.get("failed", 0)
+
+        st.markdown("---")
+        st.markdown("#### AI-Drafted Responses")
+        st.markdown(f"**{successful} successful**, **{failed} failed** out of {batch_result.get('total', 0)} findings")
+
+        for resp in responses:
+            fid = resp.get("finding_id", "")
+            ftype = resp.get("finding_type", "CL")
+            status = resp.get("status", "error")
+
+            with st.container(border=True):
+                rc1, rc2, rc3 = st.columns([1.5, 1, 0.5])
+                with rc1:
+                    st.markdown(f"**{ftype} {fid}**")
+                    if resp.get("topic"):
+                        st.caption(resp["topic"])
+                with rc2:
+                    approach = resp.get("response_approach", "")
+                    approach_labels = {
+                        "pdd_update": "PDD Update Required",
+                        "clarification": "Clarification Only",
+                        "evidence_provided": "Evidence to Provide",
+                        "calculation_corrected": "Calculation Correction",
+                        "methodology_reference": "Methodology Reference",
+                    }
+                    if approach:
+                        st.markdown(approach_labels.get(approach, approach))
+                with rc3:
+                    if status == "success":
+                        st.markdown(":green[OK]")
+                    else:
+                        st.markdown(":red[Failed]")
+
+                if status == "success":
+                    with st.expander("View Finding"):
+                        st.markdown(resp.get("finding_text", ""))
+
+                    st.markdown("**Response:**")
+                    st.markdown(resp.get("response_text", ""))
+
+                    pdd_updates = resp.get("pdd_updates_needed", [])
+                    if pdd_updates:
+                        st.markdown("**PDD Updates Needed:**")
+                        for upd in pdd_updates:
+                            st.markdown(f"- **Section {upd.get('section', '')}:** {upd.get('change_description', '')}")
+
+                    evidence = resp.get("evidence_to_provide", [])
+                    if evidence:
+                        st.markdown("**Evidence to Provide:**")
+                        for ev in evidence:
+                            st.markdown(f"- {ev}")
+                else:
+                    st.error(f"Failed: {resp.get('error', 'Unknown error')}")
+
+        _render_batch_export(project_id, responses)
+
+
+def _render_batch_export(project_id, responses):
+    successful = [r for r in responses if r.get("status") == "success"]
+    if not successful:
+        return
+
+    st.markdown("---")
+    st.markdown("#### Export Responses")
+
+    export_col1, export_col2 = st.columns(2)
+    with export_col1:
+        if st.button("Copy All Responses as Text", key=f"copy_responses_{project_id}"):
+            text_output = ""
+            for r in successful:
+                text_output += f"{'=' * 60}\n"
+                text_output += f"{r.get('finding_type', 'CL')} {r.get('finding_id', '')}\n"
+                text_output += f"Topic: {r.get('topic', '')}\n"
+                text_output += f"Section: {r.get('pdd_section', '')}\n"
+                text_output += f"{'=' * 60}\n\n"
+                text_output += f"FINDING:\n{r.get('finding_text', '')}\n\n"
+                text_output += f"RESPONSE:\n{r.get('response_text', '')}\n\n"
+                updates = r.get("pdd_updates_needed", [])
+                if updates:
+                    text_output += "PDD UPDATES NEEDED:\n"
+                    for u in updates:
+                        text_output += f"  - Section {u.get('section', '')}: {u.get('change_description', '')}\n"
+                    text_output += "\n"
+                evidence = r.get("evidence_to_provide", [])
+                if evidence:
+                    text_output += "EVIDENCE TO PROVIDE:\n"
+                    for e in evidence:
+                        text_output += f"  - {e}\n"
+                    text_output += "\n"
+                text_output += "\n"
+            st.text_area(
+                "Response text (select all and copy)",
+                value=text_output,
+                height=300,
+                key=f"responses_text_{project_id}",
+            )
+
+    with export_col2:
+        try:
+            import io
+            import csv
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow([
+                "Finding ID", "Type", "Section", "Topic", "Finding Text",
+                "Response", "Approach", "PDD Updates", "Evidence"
+            ])
+            for r in successful:
+                updates_str = "; ".join(
+                    f"Section {u.get('section', '')}: {u.get('change_description', '')}"
+                    for u in r.get("pdd_updates_needed", [])
+                )
+                evidence_str = "; ".join(r.get("evidence_to_provide", []))
+                approach_labels = {
+                    "pdd_update": "PDD Update",
+                    "clarification": "Clarification",
+                    "evidence_provided": "Evidence",
+                    "calculation_corrected": "Calculation Fix",
+                    "methodology_reference": "Methodology Ref",
+                }
+                writer.writerow([
+                    r.get("finding_id", ""),
+                    r.get("finding_type", ""),
+                    r.get("pdd_section", ""),
+                    r.get("topic", ""),
+                    r.get("finding_text", ""),
+                    r.get("response_text", ""),
+                    approach_labels.get(r.get("response_approach", ""), r.get("response_approach", "")),
+                    updates_str,
+                    evidence_str,
+                ])
+            csv_bytes = buf.getvalue().encode("utf-8")
+            st.download_button(
+                "Download Responses as CSV",
+                data=csv_bytes,
+                file_name=f"findings_responses_project_{project_id}.csv",
+                mime="text/csv",
+                key=f"download_csv_{project_id}",
+            )
+        except Exception as e:
+            st.warning(f"CSV export error: {e}")
 
 
 def _render_findings_intelligence(project):

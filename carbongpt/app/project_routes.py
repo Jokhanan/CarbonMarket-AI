@@ -738,6 +738,288 @@ def respond_to_finding(project_id: int, data: dict):
         raise HTTPException(status_code=500, detail=f"AI response generation failed: {e}")
 
 
+@router.post("/{project_id}/parse-findings-document")
+def parse_findings_document(
+    project_id: int,
+    file: UploadFile = File(...),
+):
+    from carbongpt.repository.store import get_user_project
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in ("pdf", "docx"):
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
+
+    MAX_FILE_SIZE = 20 * 1024 * 1024
+    import tempfile
+    content = file.file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)} MB.")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+    tmp.write(content)
+    tmp.close()
+
+    parsed_text = ""
+    try:
+        if ext == "pdf":
+            import pdfplumber
+            text_parts = []
+            with pdfplumber.open(tmp.name) as pdf:
+                for page in pdf.pages:
+                    t = page.extract_text()
+                    if t:
+                        text_parts.append(t)
+            parsed_text = "\n".join(text_parts)
+        elif ext == "docx":
+            from carbongpt.tools.parse_docx import parse_docx
+            result = parse_docx(tmp.name)
+            sections = result.get("sections", {})
+            parsed_text = "\n\n".join(
+                f"### {k}\n{v}" if k != "__PREAMBLE__" else v
+                for k, v in sections.items() if v
+            )
+    except Exception as e:
+        logger.error("Failed to parse findings document: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to parse document: {e}")
+    finally:
+        os.unlink(tmp.name)
+
+    if not parsed_text or len(parsed_text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Could not extract meaningful text from the document.")
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.")
+
+    max_chunk_chars = 12000
+    chunks = []
+    words = parsed_text.split()
+    current_chunk = []
+    current_len = 0
+    for word in words:
+        current_chunk.append(word)
+        current_len += len(word) + 1
+        if current_len >= max_chunk_chars:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = []
+            current_len = 0
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    extraction_prompt = (
+        "You are an expert carbon credit auditor. Extract ALL individual findings "
+        "(CARs, CLs, FARs, observations, PRR comments) from the document text below.\n\n"
+        "For each finding, provide:\n"
+        "- finding_type: 'CAR' | 'CL' | 'FAR' | 'observation' | 'prr_comment'\n"
+        "- finding_id: the original ID from the document (e.g., 'CAR #1', 'CL 05')\n"
+        "- pdd_section: which PDD/MR section this relates to\n"
+        "- description: the VVB's or reviewer's question/concern (the actual finding text)\n"
+        "- topic: short categorization (e.g., 'baseline scenario', 'monitoring parameters')\n\n"
+        "Return JSON: {\"findings\": [...]}. If no findings found, return {\"findings\": []}.\n"
+        "Be thorough - extract EVERY finding including minor clarifications.\n\n"
+        "Document text:\n"
+    )
+
+    all_findings = []
+    failed_chunks = []
+    import openai, json
+    client = openai.OpenAI(api_key=api_key)
+
+    for i, chunk in enumerate(chunks):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": extraction_prompt},
+                    {"role": "user", "content": chunk},
+                ],
+                max_tokens=4000,
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            result = json.loads(response.choices[0].message.content)
+            chunk_findings = result.get("findings", [])
+            all_findings.extend(chunk_findings)
+            logger.info("Chunk %d/%d: extracted %d findings", i + 1, len(chunks), len(chunk_findings))
+        except Exception as e:
+            logger.warning("Findings extraction failed for chunk %d: %s", i + 1, e)
+            failed_chunks.append({"chunk": i + 1, "error": str(e)})
+
+    if failed_chunks and not all_findings:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI extraction failed for all {len(chunks)} document sections. First error: {failed_chunks[0]['error']}"
+        )
+
+    seen = set()
+    unique_findings = []
+    for f in all_findings:
+        key = (f.get("finding_id", ""), f.get("description", "")[:80])
+        if key not in seen:
+            seen.add(key)
+            unique_findings.append(f)
+
+    return {
+        "findings": unique_findings,
+        "total": len(unique_findings),
+        "document_name": file.filename,
+        "text_length": len(parsed_text),
+        "chunks_processed": len(chunks),
+        "chunks_failed": len(failed_chunks),
+        "warnings": [f"Chunk {fc['chunk']} failed: {fc['error'][:100]}" for fc in failed_chunks] if failed_chunks else [],
+    }
+
+
+@router.post("/{project_id}/batch-respond-to-findings")
+def batch_respond_to_findings(project_id: int, data: dict):
+    from carbongpt.repository.store import get_user_project, get_write_sessions
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    findings = data.get("findings", [])
+    doc_type = data.get("doc_type", "pdd")
+
+    if not findings:
+        raise HTTPException(status_code=400, detail="No findings provided.")
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.")
+
+    project_info = {
+        "name": project["name"],
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
+    }
+
+    pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
+
+    sessions = get_write_sessions(project_id, doc_type=doc_type)
+    session_map = {}
+    for sess in sessions:
+        sid = (sess.get("section_id") or "").lower()
+        session_map[sid] = sess.get("user_text") or sess.get("generated_text") or ""
+
+    from carbongpt.core.ai_writer import STANDARD_LABELS
+    std_label = STANDARD_LABELS.get(project["standard"], project["standard"])
+
+    findings_context = ""
+    try:
+        methodology = project_info.get("methodology", "")
+        if methodology:
+            from carbongpt.repository.store import get_findings_by_methodology
+            similar = get_findings_by_methodology(methodology, limit=30)
+            if similar:
+                findings_context = "### How similar findings were resolved on other projects:\n"
+                for sf in similar[:10]:
+                    if sf.get("resolution"):
+                        findings_context += f"- [{sf['finding_type']}] {sf.get('topic', '')}: {sf.get('description', '')[:150]}\n"
+                        findings_context += f"  Resolution: {sf.get('resolution', '')[:150]}\n\n"
+    except Exception:
+        pass
+
+    responses = []
+    import openai, json
+    client = openai.OpenAI(api_key=api_key)
+
+    for idx, finding in enumerate(findings):
+        finding_text = finding.get("description", "")
+        finding_type = finding.get("finding_type", "CL")
+        finding_id = finding.get("finding_id", f"Finding {idx + 1}")
+        pdd_section = finding.get("pdd_section", "")
+
+        relevant_section_text = ""
+        if pdd_section:
+            for sid, text in session_map.items():
+                if pdd_section.lower() in sid:
+                    relevant_section_text = text
+                    break
+
+        system_prompt = (
+            f"You are an expert carbon project developer responding to a {finding_type} "
+            f"raised by a VVB or standard body ({std_label}).\n\n"
+            "RULES:\n"
+            "- Draft a professional, detailed response that directly addresses the finding.\n"
+            "- Reference specific project data, methodology clauses, and evidence.\n"
+            "- If the PDD/document needs updating, clearly state what changes are needed.\n"
+            "- Be thorough but concise.\n"
+            "- Format response as JSON with keys: 'response_text', 'pdd_updates_needed' (array of {section, change_description}), "
+            "'evidence_to_provide' (array of strings), 'response_approach' (one of: pdd_update, clarification, evidence_provided, calculation_corrected, methodology_reference)"
+        )
+
+        user_prompt = f"## Finding: {finding_id}\n"
+        user_prompt += f"**Type:** {finding_type}\n"
+        user_prompt += f"**PDD Section:** {pdd_section or 'Not specified'}\n"
+        user_prompt += f"**Finding:**\n{finding_text}\n\n"
+        user_prompt += f"### Project Information:\n"
+        user_prompt += f"- Project: {project_info.get('name', 'Unknown')}\n"
+        user_prompt += f"- Standard: {std_label}\n"
+        user_prompt += f"- Methodology: {project_info.get('methodology', 'Not specified')}\n"
+        user_prompt += f"- Country: {project_info.get('country', 'Not specified')}\n\n"
+
+        if relevant_section_text:
+            user_prompt += f"### Current content of section {pdd_section}:\n\"\"\"\n{relevant_section_text[:3000]}\n\"\"\"\n\n"
+        if pdd_text:
+            user_prompt += f"### PDD content:\n\"\"\"\n{pdd_text[:3000]}\n\"\"\"\n\n"
+        if findings_context:
+            user_prompt += findings_context + "\n"
+
+        user_prompt += "Draft a professional response."
+
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=2500,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            ai_result = json.loads(resp.choices[0].message.content)
+            responses.append({
+                "finding_id": finding_id,
+                "finding_type": finding_type,
+                "finding_text": finding_text,
+                "pdd_section": pdd_section,
+                "topic": finding.get("topic", ""),
+                "status": "success",
+                **ai_result,
+            })
+            logger.info("Generated response for %s (%d/%d)", finding_id, idx + 1, len(findings))
+        except Exception as e:
+            logger.warning("Failed to generate response for %s: %s", finding_id, e)
+            responses.append({
+                "finding_id": finding_id,
+                "finding_type": finding_type,
+                "finding_text": finding_text,
+                "pdd_section": pdd_section,
+                "topic": finding.get("topic", ""),
+                "status": "error",
+                "error": str(e),
+                "response_text": "",
+                "pdd_updates_needed": [],
+                "evidence_to_provide": [],
+                "response_approach": "",
+            })
+
+    return {
+        "responses": responses,
+        "total": len(findings),
+        "successful": sum(1 for r in responses if r["status"] == "success"),
+        "failed": sum(1 for r in responses if r["status"] == "error"),
+    }
+
+
 @router.get("/{project_id}/write-sessions")
 def get_write_sessions_endpoint(project_id: int, doc_type: str = None):
     from carbongpt.repository.store import get_write_sessions
