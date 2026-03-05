@@ -960,3 +960,211 @@ def extract_document_intelligence(parsed_text, file_name, doc_type):
                 continue
             logger.warning("Document intelligence extraction failed for %s: %s", file_name, e)
             raise
+
+
+INTAKE_FIELD_SCHEMA = {
+    "proponent": {
+        "organization_name": "Organization / company name of the project developer or proponent",
+        "contact_person": "Name of the primary contact person",
+        "email": "Contact email address",
+        "phone": "Contact phone number",
+        "address": "Physical address of the organization",
+        "other_entities": "Other entities or organizations involved and their roles",
+    },
+    "project_overview": {
+        "start_date": "Project start date (YYYY-MM-DD format)",
+        "scale": "Project scale (Micro-scale, Small-scale, or Large-scale)",
+        "num_units": "Number of units, devices, or installations",
+        "activity_type": "Type of activity (Greenfield, Switch from existing, Capacity addition, Energy efficiency)",
+        "sectoral_scope": "Sectoral scope number and description",
+    },
+    "technology": {
+        "description": "Technology or measure description",
+        "manufacturer": "Manufacturer or supplier name",
+        "model": "Model name or number",
+        "fuel_baseline": "Baseline fuel type or energy source",
+        "fuel_project": "Project fuel type or energy source",
+        "distribution_method": "Distribution or deployment method",
+    },
+    "location": {
+        "regions": "Geographic regions, provinces, or districts",
+        "coordinates": "GPS coordinates or geographic boundaries",
+        "target_population": "Target population or community description",
+        "beneficiaries": "Number of beneficiaries or households",
+    },
+    "baseline_additionality": {
+        "baseline_scenario": "Description of the baseline scenario",
+        "additionality_justification": "Additionality justification or barriers",
+        "barriers": "Barriers to implementation without carbon finance",
+    },
+    "emission_reductions": {
+        "annual_er_estimate": "Estimated annual emission reductions (tCO2e/year)",
+        "total_er_estimate": "Total estimated emission reductions over crediting period",
+        "calculation_approach": "Approach used for ER calculations",
+    },
+    "monitoring": {
+        "monitoring_approach": "Overall monitoring approach or plan description",
+        "key_parameters": "Key monitored parameters and their data sources",
+        "sampling_approach": "Sampling methodology and sample size",
+    },
+    "stakeholders": {
+        "consultation_summary": "Summary of stakeholder consultations conducted",
+        "grievance_mechanism": "Grievance redress mechanism description",
+    },
+    "safeguards": {
+        "environmental_safeguards": "Environmental and social safeguard measures",
+        "gender_considerations": "Gender-related considerations and impacts",
+    },
+    "prior_consideration": {
+        "awareness_date": "Date of awareness of carbon finance (YYYY-MM-DD)",
+        "funding_sources": "Other funding sources and financial need justification",
+    },
+    "legal_compliance": {
+        "regulatory_compliance": "Regulatory approvals and compliance status",
+        "host_country_authorization": "Host country authorization or letter of approval",
+    },
+    "monitoring_period": {
+        "monitoring_period_start": "Start date of the monitoring period",
+        "monitoring_period_end": "End date of the monitoring period",
+        "implementation_status": "Implementation status during monitoring period",
+        "active_units": "Number of active units or installations during the period",
+        "deviations": "Deviations from the registered PDD methodology",
+    },
+    "emission_factors": {
+        "fnrb": "Fraction of non-renewable biomass (fNRB) value",
+        "ncv_baseline": "Net calorific value of baseline fuel",
+        "ncv_project": "Net calorific value of project fuel",
+        "ef_baseline": "Emission factor for baseline scenario",
+        "ef_project": "Emission factor for project scenario",
+        "thermal_efficiency_baseline": "Thermal efficiency of baseline device/system",
+        "thermal_efficiency_project": "Thermal efficiency of project device/system",
+    },
+    "test_results": {
+        "wbt_results": "Water Boiling Test results and key metrics",
+        "kpt_results": "Kitchen Performance Test results and key metrics",
+        "cct_results": "Controlled Cooking Test results and key metrics",
+        "sfc_baseline": "Specific fuel consumption - baseline",
+        "sfc_project": "Specific fuel consumption - project",
+    },
+}
+
+
+def extract_structured_intelligence(parsed_text, file_name, doc_type):
+    if not parsed_text or not parsed_text.strip():
+        return None
+
+    field_descriptions = []
+    for category, fields in INTAKE_FIELD_SCHEMA.items():
+        for field_key, description in fields.items():
+            field_descriptions.append(f'  - category: "{category}", field_key: "{field_key}", description: "{description}"')
+    fields_list = "\n".join(field_descriptions)
+
+    DOC_TYPE_LABELS = {
+        "pdd": "Project Design Document (PDD)",
+        "mr": "Monitoring Report",
+        "poa_dd": "Programme of Activities Design Document",
+        "vpa_dd": "VPA Design Document",
+        "valver": "Validation/Verification Report",
+        "reference": "Reference Document",
+        "research": "Research Paper/Report",
+        "field_data": "Field Data / Survey / Test Report",
+        "other": "Supporting Document",
+    }
+    doc_label = DOC_TYPE_LABELS.get(doc_type, "Document")
+
+    system_prompt = (
+        "You are a carbon project data extraction specialist. Your job is to extract specific, "
+        "structured data points from project documents and map them to predefined fields.\n\n"
+        "You MUST return valid JSON — an array of objects. Each object has:\n"
+        '  - "category": the category key (string)\n'
+        '  - "field_key": the field key (string)\n'
+        '  - "value": the extracted value (string — always a string, even for numbers)\n'
+        '  - "confidence": "high", "medium", or "low"\n\n'
+        "Rules:\n"
+        "- Only extract data points you can find explicitly stated in the document\n"
+        "- Use exact values from the document — numbers, dates, names, measurements\n"
+        "- Set confidence to 'high' when the value is clearly stated, 'medium' when inferred from context, "
+        "'low' when uncertain or partially available\n"
+        "- Do NOT make up or infer values that are not in the document\n"
+        "- For numeric fields, include units (e.g., '50,000 stoves', '35.2%', '1.5 tCO2e/year')\n"
+        "- Return ONLY the JSON array — no markdown, no explanation, no code fences\n"
+    )
+
+    chunk_size = 30000
+    text = parsed_text.strip()
+    if len(text) > chunk_size:
+        half = chunk_size // 2
+        text_to_process = text[:half] + "\n\n[... middle section omitted ...]\n\n" + text[-half:]
+    else:
+        text_to_process = text
+
+    user_prompt = (
+        f"Extract structured data from this {doc_label} (file: {file_name}).\n\n"
+        f"Map each extracted value to one of these fields:\n{fields_list}\n\n"
+        "Return a JSON array of objects. Example:\n"
+        '[{"category": "technology", "field_key": "description", "value": "Improved biomass cookstove", "confidence": "high"}]\n\n'
+        f'Document text:\n"""\n{text_to_process}\n"""'
+    )
+
+    import time as _time
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            result = _call_openai(system_prompt, user_prompt, max_tokens=4000)
+            if not result:
+                return None
+
+            cleaned = result.strip()
+            if cleaned.startswith("```"):
+                lines = cleaned.split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                cleaned = "\n".join(lines)
+
+            data = json.loads(cleaned)
+            if not isinstance(data, list):
+                logger.warning("Structured extraction for %s returned non-list: %s", file_name, type(data))
+                return None
+
+            validated = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                cat = item.get("category", "")
+                fkey = item.get("field_key", "")
+                val = item.get("value", "")
+                conf = item.get("confidence", "medium")
+                if not cat or not fkey or not val:
+                    continue
+                if cat not in INTAKE_FIELD_SCHEMA:
+                    continue
+                if fkey not in INTAKE_FIELD_SCHEMA[cat]:
+                    continue
+                if conf not in ("high", "medium", "low"):
+                    conf = "medium"
+                validated.append({
+                    "category": cat,
+                    "field_key": fkey,
+                    "value": str(val).strip(),
+                    "confidence": conf,
+                    "source": file_name,
+                })
+
+            logger.info("Structured extraction for %s: %d data points", file_name, len(validated))
+            return validated
+
+        except json.JSONDecodeError as e:
+            logger.warning("JSON parse failed for structured extraction of %s: %s", file_name, e)
+            if attempt < max_retries:
+                _time.sleep(2)
+                continue
+            return None
+        except Exception as e:
+            err_str = str(e)
+            is_rate_limit = "429" in err_str or "rate" in err_str.lower()
+            if is_rate_limit and attempt < max_retries:
+                wait = (attempt + 1) * 5
+                logger.info("Rate limited on structured extraction for %s, retrying in %ds", file_name, wait)
+                _time.sleep(wait)
+                continue
+            logger.warning("Structured intelligence extraction failed for %s: %s", file_name, e)
+            return None

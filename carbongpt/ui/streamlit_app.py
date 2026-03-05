@@ -3725,6 +3725,121 @@ def _render_documents_tab(project):
     elif not documents:
         pass
 
+    _render_intelligence_review(project_id)
+
+
+def _render_intelligence_review(project_id):
+    suggestions_data = _fetch(f"/projects/{project_id}/intelligence-suggestions")
+    if not suggestions_data:
+        return
+    suggestions = suggestions_data.get("suggestions", [])
+    total = suggestions_data.get("total_count", 0)
+    if total == 0:
+        return
+
+    st.markdown("---")
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:1.15rem;font-weight:600;color:var(--text-primary, #1a1a2e);">Intelligence Review</span>
+        <span style="background:var(--brand-primary, #0d9488);color:#fff;font-size:0.75rem;font-weight:600;
+              padding:2px 10px;border-radius:12px;">{total} suggestion{'s' if total != 1 else ''}</span>
+    </div>
+    <p style="color:var(--text-secondary, #6b7280);font-size:0.85rem;margin-bottom:12px;">
+        Data points extracted from your documents. Confirm to populate your Project Setup, or dismiss to hide.
+    </p>
+    """, unsafe_allow_html=True)
+
+    for cat_group in suggestions:
+        cat = cat_group["category"]
+        cat_label = cat_group["category_label"]
+        fields = cat_group["fields"]
+        count = cat_group["count"]
+
+        with st.expander(f"{cat_label} — {count} data point{'s' if count != 1 else ''}", expanded=False):
+            confirm_all_items = []
+
+            for field in fields:
+                fkey = field["field_key"]
+                label = field["label"]
+                values = field["values"]
+                current = field.get("current_value", "")
+
+                best_value = values[0] if values else {}
+                val = best_value.get("value", "")
+                confidence = best_value.get("confidence", "medium")
+                source = best_value.get("source", "")
+
+                conf_colors = {"high": "#059669", "medium": "#d97706", "low": "#9ca3af"}
+                conf_color = conf_colors.get(confidence, "#9ca3af")
+
+                has_conflict = len(values) > 1
+                has_current = bool(current.strip()) if current else False
+
+                with st.container(border=True):
+                    fc1, fc2, fc3 = st.columns([3, 1.5, 1])
+                    with fc1:
+                        st.markdown(f"**{label}**")
+                        if has_conflict:
+                            for i, v in enumerate(values):
+                                src = v.get("source", "")
+                                st.markdown(f"""<div style="font-size:0.85rem;margin:2px 0;">
+                                    <span style="color:var(--text-primary, #1a1a2e);">{v['value']}</span>
+                                    <span style="color:#9ca3af;font-size:0.75rem;margin-left:6px;">from {src}</span>
+                                </div>""", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""<div style="font-size:0.9rem;">
+                                <span style="color:var(--text-primary, #1a1a2e);">{val}</span>
+                                <span style="color:{conf_color};font-size:0.7rem;font-weight:500;margin-left:8px;
+                                      text-transform:uppercase;">{confidence}</span>
+                            </div>""", unsafe_allow_html=True)
+                            if source:
+                                st.markdown(f'<span style="color:#9ca3af;font-size:0.75rem;">from {source}</span>', unsafe_allow_html=True)
+
+                    with fc2:
+                        if has_current:
+                            st.markdown(f"""<div style="font-size:0.8rem;">
+                                <span style="color:#9ca3af;">Current:</span>
+                                <span style="color:var(--text-secondary, #6b7280);font-weight:500;">{current}</span>
+                            </div>""", unsafe_allow_html=True)
+
+                    with fc3:
+                        confirm_label = "Replace" if has_current else "Confirm"
+                        bc1, bc2 = st.columns(2)
+                        with bc1:
+                            if st.button(confirm_label, key=f"intel_confirm_{cat}_{fkey}_{project_id}", type="primary", use_container_width=True):
+                                result = _fetch(
+                                    f"/projects/{project_id}/intelligence-confirm",
+                                    method="POST",
+                                    json={"items": [{"category": cat, "field_key": fkey, "value": val, "source": source, "force": has_current}]},
+                                )
+                                if result:
+                                    st.success(f"Updated: {label}")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                        with bc2:
+                            if st.button("Dismiss", key=f"intel_dismiss_{cat}_{fkey}_{project_id}", use_container_width=True):
+                                _fetch(
+                                    f"/projects/{project_id}/intelligence-dismiss",
+                                    method="POST",
+                                    json={"items": [{"category": cat, "field_key": fkey}]},
+                                )
+                                time.sleep(0.3)
+                                st.rerun()
+
+                confirm_all_items.append({"category": cat, "field_key": fkey, "value": val, "source": source})
+
+            if len(confirm_all_items) > 1:
+                if st.button(f"Confirm all {cat_label}", key=f"intel_confirm_all_{cat}_{project_id}", type="primary"):
+                    result = _fetch(
+                        f"/projects/{project_id}/intelligence-confirm",
+                        method="POST",
+                        json={"items": confirm_all_items},
+                    )
+                    if result:
+                        st.success(result.get("message", "Fields updated."))
+                        time.sleep(0.5)
+                        st.rerun()
+
 
 def _render_document_card(project_id, doc):
     doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
@@ -4447,6 +4562,18 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
     return new_settings, meth_inputs
 
 
+def _intel_source_label(intake, category, field_key):
+    sources = intake.get("_intelligence_sources", {})
+    key = f"{category}.{field_key}"
+    src = sources.get(key, "")
+    if src:
+        st.markdown(
+            f'<span style="font-size:0.7rem;color:#0d9488;font-style:italic;" data-testid="intel-source-{category}-{field_key}">'
+            f'from {src}</span>',
+            unsafe_allow_html=True,
+        )
+
+
 def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard"):
     if project_type in ("standalone_pdd", ""):
         return _render_intake_pdd(project_id, intake, standard)
@@ -4474,25 +4601,31 @@ def _render_proponent_card(project_id, intake, standard, prefix=""):
             prop_org = st.text_input("Organization name", value=prop.get("organization_name", ""),
                                       key=f"setup_prop_org{sfx}_{project_id}",
                                       placeholder="e.g., CleanCook Ltd.")
+            _intel_source_label(intake, "proponent", "organization_name")
             prop_email = st.text_input("Email", value=prop.get("email", ""),
                                         key=f"setup_prop_email{sfx}_{project_id}",
                                         placeholder="contact@example.com")
+            _intel_source_label(intake, "proponent", "email")
         with pc2:
             prop_contact = st.text_input("Contact person", value=prop.get("contact_person", ""),
                                           key=f"setup_prop_contact{sfx}_{project_id}",
                                           placeholder="Full name of primary contact")
+            _intel_source_label(intake, "proponent", "contact_person")
             prop_phone = st.text_input("Phone", value=prop.get("phone", ""),
                                         key=f"setup_prop_phone{sfx}_{project_id}",
                                         placeholder="+1 234 567 8900")
+            _intel_source_label(intake, "proponent", "phone")
         prop_address = st.text_input("Address", value=prop.get("address", ""),
                                       key=f"setup_prop_address{sfx}_{project_id}",
                                       placeholder="Street, City, Country")
+        _intel_source_label(intake, "proponent", "address")
         prop_other = ""
         if standard == "Verra":
             prop_other = st.text_area("Other entities involved", value=prop.get("other_entities", ""),
                                        key=f"setup_prop_other{sfx}_{project_id}",
                                        placeholder="Other organizations involved, their roles, and contact details...",
                                        height=68)
+            _intel_source_label(intake, "proponent", "other_entities")
 
     return {
         "organization_name": prop_org,
@@ -4531,6 +4664,7 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
             po_start_date = st.text_input("Project start date", value=po.get("start_date", ""),
                                            key=f"setup_po_start_{project_id}",
                                            placeholder="YYYY-MM-DD")
+            _intel_source_label(intake, "project_overview", "start_date")
         with pc2:
             current_scale = po.get("scale", "")
             scale_idx = SCALE_OPTIONS.index(current_scale) if current_scale in SCALE_OPTIONS else 0
@@ -4538,10 +4672,12 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                      index=scale_idx,
                                      key=f"setup_po_scale_{project_id}",
                                      format_func=lambda x: x if x else "Select scale...")
+            _intel_source_label(intake, "project_overview", "scale")
         with pc3:
             po_num_units = st.text_input("Number of units", value=po.get("num_units", ""),
                                           key=f"setup_po_num_units_{project_id}",
                                           placeholder="e.g., 50,000 stoves")
+            _intel_source_label(intake, "project_overview", "num_units")
         ac1, ac2 = st.columns(2)
         with ac1:
             current_activity = po.get("activity_type", "")
@@ -4561,24 +4697,30 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                   key=f"setup_tech_desc_{project_id}",
                                   placeholder="e.g., Distribution of improved biomass cookstoves to replace traditional three-stone fires...",
                                   height=80)
+        _intel_source_label(intake, "technology", "description")
         tc1, tc2 = st.columns(2)
         with tc1:
             tech_manufacturer = st.text_input("Manufacturer / supplier", value=tech.get("manufacturer", ""),
                                                key=f"setup_tech_mfr_{project_id}",
                                                placeholder="e.g., BioLite, Tesla, Vestas")
+            _intel_source_label(intake, "technology", "manufacturer")
             tech_baseline_scenario = st.text_input("Baseline practice / fuel", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
                                                 key=f"setup_tech_fuel_bl_{project_id}",
                                                 placeholder="e.g., Wood, Diesel, Grid electricity")
+            _intel_source_label(intake, "technology", "fuel_baseline")
         with tc2:
             tech_model = st.text_input("Model / specification", value=tech.get("model", ""),
                                         key=f"setup_tech_model_{project_id}",
                                         placeholder="e.g., HomeStove 2, V150-4.2MW")
+            _intel_source_label(intake, "technology", "model")
             tech_project_scenario = st.text_input("Project practice / fuel", value=tech.get("fuel_project", tech.get("project_scenario", "")),
                                                key=f"setup_tech_fuel_pj_{project_id}",
                                                placeholder="e.g., LPG, Solar PV, Improved cookstove")
+            _intel_source_label(intake, "technology", "fuel_project")
         tech_distribution = st.text_input("Distribution / implementation method", value=tech.get("distribution_method", ""),
                                            key=f"setup_tech_dist_{project_id}",
                                            placeholder="e.g., Direct sales, Lease model, Government programme")
+        _intel_source_label(intake, "technology", "distribution_method")
 
     with st.container(border=True):
         st.markdown("#### Location & Beneficiaries")
@@ -4587,16 +4729,20 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
             loc_regions = st.text_input("Regions / provinces", value=loc.get("regions", ""),
                                          key=f"setup_loc_regions_{project_id}",
                                          placeholder="e.g., Northern Region, Ashanti Region")
+            _intel_source_label(intake, "location", "regions")
             loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
                                         key=f"setup_loc_target_{project_id}",
                                         placeholder="e.g., Rural households")
+            _intel_source_label(intake, "location", "target_population")
         with lc2:
             loc_coords = st.text_input("Coordinates (lat, lon)", value=loc.get("coordinates", ""),
                                         key=f"setup_loc_coords_{project_id}",
                                         placeholder="e.g., 7.9465, -1.0232")
+            _intel_source_label(intake, "location", "coordinates")
             loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
                                                key=f"setup_loc_bene_{project_id}",
                                                placeholder="e.g., 250,000 people")
+            _intel_source_label(intake, "location", "beneficiaries")
 
     with st.container(border=True):
         st.markdown("#### Emission Reductions")
@@ -4605,10 +4751,12 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
             er_annual = st.text_input("Annual ER estimate (tCO2e)", value=er.get("annual_er_estimate", ""),
                                        key=f"setup_er_annual_{project_id}",
                                        placeholder="e.g., 150,000")
+            _intel_source_label(intake, "emission_reductions", "annual_er_estimate")
         with ec2:
             er_total = st.text_input("Total ER estimate (tCO2e)", value=er.get("total_er_estimate", ""),
                                       key=f"setup_er_total_{project_id}",
                                       placeholder="e.g., 1,050,000")
+            _intel_source_label(intake, "emission_reductions", "total_er_estimate")
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 

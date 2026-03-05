@@ -1075,10 +1075,13 @@ def get_project_document(doc_id):
 
 
 def update_project_document(doc_id, **kwargs):
-    allowed = {"parsed_text", "parsed_sections", "status", "review_result", "notes", "ai_extracted_summary"}
+    import psycopg2.extras as _pg_extras
+    allowed = {"parsed_text", "parsed_sections", "status", "review_result", "notes", "ai_extracted_summary", "ai_extracted_data"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return
+    if "ai_extracted_data" in updates and isinstance(updates["ai_extracted_data"], (dict, list)):
+        updates["ai_extracted_data"] = _pg_extras.Json(updates["ai_extracted_data"])
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values = list(updates.values()) + [doc_id]
     with get_cursor() as cur:

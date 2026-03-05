@@ -273,12 +273,22 @@ def upload_project_document(
         except Exception as e:
             logger.warning("AI extraction failed for %s: %s", file.filename, e)
 
+        structured_data = None
+        try:
+            from carbongpt.core.ai_writer import extract_structured_intelligence
+            structured_data = extract_structured_intelligence(parsed_text, file.filename, doc_type)
+            if structured_data:
+                update_project_document(doc_id, ai_extracted_data=structured_data)
+        except Exception as e:
+            logger.warning("Structured extraction failed for %s: %s", file.filename, e)
+
     return {
         "id": doc_id,
         "file_name": file.filename,
         "doc_type": doc_type,
         "parsed": parsed_text is not None,
         "ai_extracted": ai_summary is not None,
+        "structured_extracted": structured_data is not None,
         "message": "Document uploaded successfully.",
     }
 
@@ -310,7 +320,18 @@ def extract_document_intel(project_id: int, doc_id: int):
         summary = extract_document_intelligence(doc["parsed_text"], doc["file_name"], doc["doc_type"])
         if summary:
             update_project_document(doc_id, ai_extracted_summary=summary)
-            return {"message": "Intelligence extracted.", "summary": summary}
+
+        structured_data = None
+        try:
+            from carbongpt.core.ai_writer import extract_structured_intelligence
+            structured_data = extract_structured_intelligence(doc["parsed_text"], doc["file_name"], doc["doc_type"])
+            if structured_data:
+                update_project_document(doc_id, ai_extracted_data=structured_data)
+        except Exception as e2:
+            logger.warning("Structured extraction failed for doc %s: %s", doc_id, e2)
+
+        if summary:
+            return {"message": "Intelligence extracted.", "summary": summary, "structured_count": len(structured_data) if structured_data else 0}
         return {"message": "Extraction returned no results."}
     except Exception as e:
         err_str = str(e)
@@ -318,6 +339,189 @@ def extract_document_intel(project_id: int, doc_id: int):
         if "429" in err_str or "rate" in err_str.lower():
             raise HTTPException(status_code=429, detail="OpenAI rate limit reached. Please wait a minute and try again.")
         raise HTTPException(status_code=500, detail="Intelligence extraction failed. Please try again.")
+
+
+@router.get("/{project_id}/intelligence-suggestions")
+def get_intelligence_suggestions(project_id: int):
+    from carbongpt.repository.store import get_user_project, get_project_documents_for_ai
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    docs = get_project_documents_for_ai(project_id)
+    intake = project.get("project_intake") or {}
+    dismissed = intake.get("_dismissed_suggestions", [])
+
+    all_items = []
+    for doc in docs:
+        raw = doc.get("ai_extracted_data")
+        if not raw:
+            continue
+        import json as _json
+        if isinstance(raw, str):
+            try:
+                items = _json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+        else:
+            items = raw
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item.setdefault("source", doc.get("file_name", ""))
+            all_items.append(item)
+
+    grouped = {}
+    for item in all_items:
+        cat = item.get("category", "")
+        fkey = item.get("field_key", "")
+        if not cat or not fkey:
+            continue
+        dismiss_key = f"{cat}.{fkey}"
+        if dismiss_key in dismissed:
+            continue
+
+        if cat not in grouped:
+            grouped[cat] = {}
+        if fkey not in grouped[cat]:
+            grouped[cat][fkey] = {
+                "field_key": fkey,
+                "values": [],
+                "current_value": "",
+            }
+            cat_data = intake.get(cat, {})
+            if isinstance(cat_data, dict):
+                grouped[cat][fkey]["current_value"] = str(cat_data.get(fkey, ""))
+
+        grouped[cat][fkey]["values"].append({
+            "value": item.get("value", ""),
+            "confidence": item.get("confidence", "medium"),
+            "source": item.get("source", ""),
+        })
+
+    CONF_RANK = {"high": 0, "medium": 1, "low": 2}
+    for cat in grouped:
+        for fkey in grouped[cat]:
+            grouped[cat][fkey]["values"].sort(key=lambda v: CONF_RANK.get(v.get("confidence", "medium"), 1))
+
+    from carbongpt.core.ai_writer import INTAKE_FIELD_SCHEMA
+    CATEGORY_LABELS = {
+        "proponent": "Project Developer / Proponent",
+        "project_overview": "Project Facts",
+        "technology": "Technology",
+        "location": "Location",
+        "baseline_additionality": "Baseline & Additionality",
+        "emission_reductions": "Emission Reductions",
+        "monitoring": "Monitoring",
+        "stakeholders": "Stakeholders",
+        "safeguards": "Safeguards",
+        "prior_consideration": "Prior Consideration",
+        "legal_compliance": "Legal & Compliance",
+        "monitoring_period": "Monitoring Period",
+        "emission_factors": "Emission Factors & Parameters",
+        "test_results": "Test Results",
+    }
+
+    result = []
+    for cat, fields in grouped.items():
+        cat_label = CATEGORY_LABELS.get(cat, cat.replace("_", " ").title())
+        field_list = []
+        schema_fields = INTAKE_FIELD_SCHEMA.get(cat, {})
+        for fkey, fdata in fields.items():
+            field_label = schema_fields.get(fkey, fkey.replace("_", " ").title())
+            field_list.append({
+                "field_key": fkey,
+                "label": field_label,
+                "values": fdata["values"],
+                "current_value": fdata["current_value"],
+            })
+        result.append({
+            "category": cat,
+            "category_label": cat_label,
+            "fields": field_list,
+            "count": len(field_list),
+        })
+
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return {"suggestions": result, "total_count": sum(c["count"] for c in result)}
+
+
+class IntelligenceConfirmRequest(BaseModel):
+    items: list[dict]
+
+
+@router.post("/{project_id}/intelligence-confirm")
+def confirm_intelligence(project_id: int, body: IntelligenceConfirmRequest):
+    from carbongpt.repository.store import get_user_project, update_user_project
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    intake = dict(project.get("project_intake") or {})
+    sources = intake.get("_intelligence_sources", {})
+
+    confirmed_count = 0
+    skipped_count = 0
+    for item in body.items:
+        cat = item.get("category", "")
+        fkey = item.get("field_key", "")
+        val = item.get("value", "")
+        source = item.get("source", "")
+        force = item.get("force", False)
+        if not cat or not fkey:
+            continue
+        if cat not in intake:
+            intake[cat] = {}
+        if isinstance(intake[cat], dict):
+            existing = str(intake[cat].get(fkey, "")).strip()
+            if existing and not force:
+                skipped_count += 1
+                continue
+            intake[cat][fkey] = val
+            sources[f"{cat}.{fkey}"] = source
+            confirmed_count += 1
+
+    intake["_intelligence_sources"] = sources
+    update_user_project(project_id, project_intake=intake)
+    msg = f"{confirmed_count} field(s) updated in Project Setup."
+    if skipped_count > 0:
+        msg += f" {skipped_count} field(s) skipped (already have values)."
+    return {"message": msg, "confirmed": confirmed_count, "skipped": skipped_count}
+
+
+class IntelligenceDismissRequest(BaseModel):
+    items: list[dict]
+
+
+@router.post("/{project_id}/intelligence-dismiss")
+def dismiss_intelligence(project_id: int, body: IntelligenceDismissRequest):
+    from carbongpt.repository.store import get_user_project, update_user_project
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    intake = dict(project.get("project_intake") or {})
+    dismissed = list(intake.get("_dismissed_suggestions", []))
+
+    dismissed_count = 0
+    for item in body.items:
+        cat = item.get("category", "")
+        fkey = item.get("field_key", "")
+        if not cat or not fkey:
+            continue
+        key = f"{cat}.{fkey}"
+        if key not in dismissed:
+            dismissed.append(key)
+            dismissed_count += 1
+
+    intake["_dismissed_suggestions"] = dismissed
+    update_user_project(project_id, project_intake=intake)
+    return {"message": f"{dismissed_count} suggestion(s) dismissed.", "dismissed": dismissed_count}
 
 
 @router.get("/{project_id}/sections")
