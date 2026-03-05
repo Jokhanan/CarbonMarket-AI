@@ -319,7 +319,7 @@ def _gather_ai_context(project_id, project, doc_type):
     for rd in ai_docs:
         if rd.get("doc_type") in ("reference", "research", "field_data", "other"):
             if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:2000])
+                ref_texts.append(rd["parsed_text"][:8000])
         elif rd.get("doc_type") == "pdd" and doc_type == "mr" and not pdd_text:
             pdd_text = rd.get("parsed_text", "")
 
@@ -327,7 +327,7 @@ def _gather_ai_context(project_id, project, doc_type):
         parent_ai_docs = get_project_documents_for_ai(project["parent_project_id"])
         for rd in parent_ai_docs:
             if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:2000])
+                ref_texts.append(rd["parsed_text"][:8000])
 
     reference_text = "\n---\n".join(ref_texts) if ref_texts else None
     return pdd_text, reference_text

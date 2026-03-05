@@ -3266,13 +3266,22 @@ def _render_document_card(project_id, doc):
     doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
     status_label = doc.get("status", "uploaded")
     use_ai = doc.get("use_as_ai_context", True)
-    has_parsed = bool(doc.get("parsed_text"))
+    parsed_text = doc.get("parsed_text") or ""
+    has_parsed = bool(parsed_text.strip())
 
     with st.container(border=True):
         dc1, dc2, dc3, dc4, dc5 = st.columns([3, 1.2, 0.8, 0.8, 0.5])
         with dc1:
             st.markdown(f"**{doc['file_name']}**")
-            st.caption(f"{doc_type_label}")
+            meta_parts = [doc_type_label]
+            if has_parsed:
+                char_count = len(parsed_text)
+                word_count = len(parsed_text.split())
+                if char_count > 1000:
+                    meta_parts.append(f"{word_count:,} words extracted")
+                else:
+                    meta_parts.append(f"{char_count} chars extracted")
+            st.caption(" | ".join(meta_parts))
         with dc2:
             status_display = {"parsed": "Parsed", "reviewed": "Reviewed", "uploaded": "Uploaded", "draft_generated": "Generated"}.get(status_label, status_label)
             st.caption(f"Status: {status_display}")
@@ -3304,6 +3313,13 @@ def _render_document_card(project_id, doc):
                 _fetch(f"/projects/{project_id}/documents/{doc['id']}", method="DELETE")
                 time.sleep(0.3)
                 st.rerun()
+
+        if has_parsed:
+            with st.expander("Preview extracted text", expanded=False):
+                preview = parsed_text[:3000]
+                if len(parsed_text) > 3000:
+                    preview += f"\n\n... ({len(parsed_text) - 3000:,} more characters)"
+                st.text(preview)
 
 
 def _render_document_prompts(project_type):
@@ -3569,6 +3585,17 @@ def _render_write_tab(project):
         placeholder="e.g., 'Focus on cookstove distribution in rural areas', 'Use conservative emission factors'...",
         height=60,
     )
+
+    project_docs = project.get("documents", [])
+    ai_context_docs = [d for d in project_docs if d.get("use_as_ai_context", True) and (d.get("parsed_text") or "").strip()]
+    if ai_context_docs:
+        doc_names = [f"**{d['file_name']}** ({len(d['parsed_text'].split()):,} words)" for d in ai_context_docs]
+        with st.expander(f"AI Context: {len(ai_context_docs)} document{'s' if len(ai_context_docs) != 1 else ''} will be used", expanded=False):
+            for dn in doc_names:
+                st.markdown(f"- {dn}")
+            st.caption("Toggle documents on/off in the Documents tab.")
+    elif project_docs:
+        st.caption("No documents are active as AI context. Toggle them on in the Documents tab.")
 
     gen_col1, gen_col2, gen_col3 = st.columns([1, 1, 1])
     with gen_col1:
