@@ -1,0 +1,67 @@
+You already produced a technical evaluation. Now I want you to IMPLEMENT the highest impact improvements, without breaking the current MVP.
+
+RULES:
+- Do not change product features or UI flows unless necessary.
+- Focus on architecture + AI quality + performance.
+- Work incrementally with small PR-style changes.
+- After each change, explain what you changed, where, and how to test it.
+
+GOAL:
+Make CarbonGPT more scalable, more reliable, and produce higher-quality outputs, especially for complex sections.
+
+PHASE 1 — Project-level RAG for uploaded documents (HIGH PRIORITY)
+1) Build a project document vector store:
+   - On document upload: chunk + embed + store chunks with metadata (project_id, doc_id, section headers, page numbers if possible).
+   - Use the same hybrid approach already used in knowledge_retrieval.py (vector + keyword), but for project docs.
+2) During section writing:
+   - Instead of concatenating all raw project documents, retrieve only the top N relevant chunks for that section (e.g., 6-10 chunks).
+   - Add section-aware retrieval queries: use section title + must_include items + key entities from project intake.
+3) Replace positional truncation with semantic retrieval:
+   - Keep strict token budgets per section, but fill them with relevant chunks only.
+
+Deliverables:
+- New module: project_doc_index.py (or similar)
+- Updated upload pipeline
+- Updated section generation pipeline to call project-doc retrieval
+- Tests: show retrieved chunks for a section in debug mode
+
+PHASE 2 — Cross-section consistency validator (LOW EFFORT / HIGH IMPACT)
+1) After generating a full document, run a validator pass that:
+   - Extracts key facts from all sections (crediting period, methodology, region, appliance type, EF values, etc.)
+   - Flags contradictions and missing required fields
+2) Output:
+   - A “Consistency Report” panel in UI with issues + suggested fixes.
+
+PHASE 3 — Adaptive model selection (QUALITY)
+Implement routing rules:
+- Use gpt-4o-mini for simple narrative sections.
+- Use gpt-4o for complex sections: additionality, baseline scenario, emission calculations, monitoring parameters.
+- Add “retry with escalation”: if mini output fails validation/self-score, auto-retry with gpt-4o.
+
+PHASE 4 — Project brief for coherence
+Before writing any sections:
+- Generate a 500-word “Project Brief” from intake + top doc chunks
+- Store it and include it in every section prompt.
+
+PHASE 5 — Refactor monolith (MAINTENANCE)
+1) Split the 5,800-line Streamlit file into:
+   - ui/pages/workspace.py
+   - ui/pages/project.py
+   - ui/pages/review.py
+   - ui/pages/write.py
+   - ui/components/sidebar.py
+2) Split API logic into services:
+   - services/ai_writer.py
+   - services/ai_reviewer.py
+   - services/ai_extractor.py
+   - services/retrieval_service.py
+3) Create an orchestration layer:
+   - orchestrator/section_pipeline.py (plans steps, calls retrieval, calls model, validates, stores output)
+
+OUTPUT FORMAT:
+For each phase:
+- files created/modified
+- exact functions added
+- how to test
+- risk/rollback plan
+Start with PHASE 1 only, implement it, then stop and ask me before moving to PHASE 2.
