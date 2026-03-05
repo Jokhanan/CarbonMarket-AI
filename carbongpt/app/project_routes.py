@@ -302,6 +302,12 @@ def upload_project_document(
         except Exception as e:
             logger.warning("Structured extraction failed for %s: %s", file.filename, e)
 
+        try:
+            from carbongpt.core.project_doc_index import index_project_document
+            index_project_document(project_id, doc_id, parsed_text, parsed_sections, file.filename)
+        except Exception as e:
+            logger.warning("Project doc indexing failed for %s: %s", file.filename, e)
+
     return {
         "id": doc_id,
         "file_name": file.filename,
@@ -322,6 +328,11 @@ def delete_document(project_id: int, doc_id: int):
     try:
         os.remove(doc["file_path"])
     except OSError:
+        pass
+    try:
+        from carbongpt.core.project_doc_index import delete_project_doc_chunks
+        delete_project_doc_chunks(doc_id)
+    except Exception:
         pass
     delete_project_document(doc_id)
     return {"message": "Document deleted."}
@@ -637,16 +648,70 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
+    intake = project.get("project_intake") or {}
+    if not intake.get("_project_brief"):
+        try:
+            from carbongpt.core.ai_writer import generate_project_brief as _gen_brief
+            from carbongpt.repository.store import update_user_project as _upd_proj
+            brief_info = {
+                "name": project["name"],
+                "standard": project.get("standard", ""),
+                "methodology": project.get("methodology"),
+                "country": project.get("country"),
+                "description": project.get("description"),
+                "project_intake": intake,
+            }
+            brief_chunks = None
+            try:
+                from carbongpt.core.project_doc_index import search_project_chunks as _sp, get_project_chunk_count as _gc
+                if _gc(project_id) > 0:
+                    brief_chunks = _sp(project_id, f"{project.get('name', '')} {project.get('methodology', '')} overview")
+            except Exception:
+                pass
+            brief = _gen_brief(brief_info, brief_chunks)
+            if brief:
+                intake["_project_brief"] = brief
+                _upd_proj(project_id, project_intake=intake)
+                logger.info("Auto-generated project brief for project %s", project_id)
+        except Exception as e:
+            logger.warning("Auto project brief generation failed: %s", e)
+
     project_info = {
         "name": project["name"],
         "methodology": project.get("methodology"),
         "country": project.get("country"),
         "description": project.get("description"),
-        "project_intake": project.get("project_intake") or {},
+        "project_intake": intake,
         "project_settings": project.get("project_settings") or {},
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
+
+    project_doc_context = None
+    try:
+        from carbongpt.core.project_doc_index import (
+            search_project_chunks, format_project_context_for_prompt,
+            build_section_search_query, get_project_chunk_count,
+        )
+        if get_project_chunk_count(project_id) > 0:
+            from carbongpt.core.ai_writer import get_sections_for_doc_type as _get_secs
+            all_secs = _get_secs(project["standard"], doc_type) or []
+            must_include_items = []
+            for s in all_secs:
+                if s["id"] == data.section_id:
+                    must_include_items = s.get("must_include", [])
+                    break
+            search_query = build_section_search_query(
+                section_title=next((s["title"] for s in all_secs if s["id"] == data.section_id), data.section_id),
+                must_include_items=must_include_items,
+                project_info=project_info,
+            )
+            chunks = search_project_chunks(project_id, search_query)
+            if chunks:
+                project_doc_context = format_project_context_for_prompt(chunks)
+                reference_text = None
+    except Exception as e:
+        logger.warning("Project doc RAG failed, falling back to concatenation: %s", e)
 
     try:
         generated = generate_section_draft(
@@ -655,7 +720,7 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
             section_id=data.section_id,
             project_info=project_info,
             existing_pdd_text=pdd_text,
-            reference_docs_text=reference_text,
+            reference_docs_text=reference_text or project_doc_context,
             user_instructions=data.user_instructions,
         )
     except ValueError as e:
@@ -680,11 +745,26 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
         generated_text=generated,
     )
 
+    validation = None
+    try:
+        from carbongpt.core.ai_writer import validate_section_output, get_sections_for_doc_type as _get_secs2
+        all_secs2 = _get_secs2(project["standard"], doc_type) or []
+        guide_section = None
+        for s in all_secs2:
+            if s["id"] == data.section_id:
+                guide_section = s
+                break
+        if guide_section:
+            validation = validate_section_output(generated, guide_section)
+    except Exception as e:
+        logger.warning("Output validation failed: %s", e)
+
     return {
         "session_id": session_id,
         "section_id": data.section_id,
         "section_title": section_title,
         "generated_text": generated,
+        "validation": validation,
     }
 
 
@@ -768,6 +848,85 @@ def update_section_text(project_id: int, data: UpdateSectionTextRequest):
     )
 
     return {"session_id": session_id, "section_id": data.section_id, "saved": True}
+
+
+@router.post("/{project_id}/generate-brief")
+def generate_brief_endpoint(project_id: int):
+    from carbongpt.repository.store import get_user_project, update_user_project
+    from carbongpt.core.ai_writer import generate_project_brief
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    project_info = {
+        "name": project["name"],
+        "standard": project.get("standard", ""),
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+        "description": project.get("description"),
+        "project_intake": project.get("project_intake") or {},
+    }
+
+    doc_chunks = None
+    try:
+        from carbongpt.core.project_doc_index import search_project_chunks, get_project_chunk_count
+        if get_project_chunk_count(project_id) > 0:
+            doc_chunks = search_project_chunks(
+                project_id,
+                f"{project.get('name', '')} {project.get('methodology', '')} project overview technology",
+            )
+    except Exception:
+        pass
+
+    try:
+        brief = generate_project_brief(project_info, doc_chunks)
+    except Exception as e:
+        logger.error("Project brief generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Brief generation failed: {e}")
+
+    intake = project.get("project_intake") or {}
+    intake["_project_brief"] = brief
+    update_user_project(project_id, project_intake=intake)
+
+    return {"brief": brief}
+
+
+@router.post("/{project_id}/validate-consistency")
+def validate_consistency_endpoint(project_id: int, doc_type: str = "pdd"):
+    from carbongpt.repository.store import get_user_project, get_write_sessions
+    from carbongpt.core.ai_writer import validate_document_consistency
+
+    project = get_user_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    sessions = get_write_sessions(project_id, doc_type)
+    if not sessions:
+        return {"error": "No drafted sections found. Write sections first."}
+
+    sections_dict = {}
+    for s in sessions:
+        sections_dict[s["section_id"]] = {
+            "section_title": s.get("section_title", s["section_id"]),
+            "generated_text": s.get("user_text") or s.get("generated_text", ""),
+        }
+
+    if len(sections_dict) < 2:
+        return {"error": "Need at least 2 sections for consistency check."}
+
+    project_info = {
+        "name": project["name"],
+        "methodology": project.get("methodology"),
+        "country": project.get("country"),
+    }
+
+    try:
+        result = validate_document_consistency(sections_dict, project_info)
+    except Exception as e:
+        logger.error("Consistency validation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Consistency validation failed: {e}")
+    return result
 
 
 @router.post("/{project_id}/explain")

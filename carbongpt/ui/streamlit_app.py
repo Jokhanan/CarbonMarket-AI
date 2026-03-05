@@ -4052,7 +4052,7 @@ def _render_review_tab(project):
 
     st.subheader("Review")
 
-    review_tabs = st.tabs(["Review Your Draft", "Review Uploaded Document"])
+    review_tabs = st.tabs(["Review Your Draft", "Review Uploaded Document", "Consistency Check"])
 
     with review_tabs[0]:
         st.markdown("#### Review Your Draft")
@@ -4143,6 +4143,79 @@ def _render_review_tab(project):
 
             if result:
                 _render_review_result(result)
+
+    with review_tabs[2]:
+        st.markdown("#### Cross-Section Consistency Check")
+        st.write("Analyze all drafted sections for internal contradictions, missing facts, and inconsistencies.")
+
+        available_doc_types_cc = DOC_TYPES_FOR_STANDARD.get(standard, {})
+        default_dt_cc = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
+        doc_type_keys_cc = list(available_doc_types_cc.keys())
+        default_idx_cc = doc_type_keys_cc.index(default_dt_cc) if default_dt_cc in doc_type_keys_cc else 0
+
+        cc_doc_type = st.selectbox(
+            "Document type to check",
+            doc_type_keys_cc,
+            index=default_idx_cc,
+            format_func=lambda x: available_doc_types_cc[x],
+            key=f"cc_doc_type_{project_id}",
+        )
+
+        if st.button("Run Consistency Check", key=f"cc_btn_{project_id}", type="primary"):
+            with st.spinner("Analyzing sections for consistency..."):
+                cc_result = _fetch(
+                    f"/projects/{project_id}/validate-consistency?doc_type={cc_doc_type}",
+                    method="POST",
+                )
+                if cc_result:
+                    st.session_state[f"cc_result_{project_id}_{cc_doc_type}"] = cc_result
+                    st.rerun()
+
+        cc_data = st.session_state.get(f"cc_result_{project_id}_{cc_doc_type}")
+        if cc_data:
+            if cc_data.get("error"):
+                st.warning(cc_data["error"])
+            else:
+                contradictions = cc_data.get("contradictions", [])
+                facts = cc_data.get("facts_extracted", [])
+                missing = cc_data.get("missing_required", [])
+                suggestions = cc_data.get("suggestions", [])
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.metric("Contradictions", len(contradictions))
+                with c2:
+                    st.metric("Key Facts Found", len(facts))
+                with c3:
+                    st.metric("Missing Fields", len(missing))
+
+                if contradictions:
+                    with st.expander(f"Contradictions ({len(contradictions)})", expanded=True):
+                        for cont in contradictions:
+                            severity = cont.get("severity", "medium")
+                            sev_color = {"high": "red", "medium": "orange", "low": "blue"}.get(severity, "gray")
+                            st.markdown(
+                                f'<span style="color:{sev_color};font-weight:600;">[{severity.upper()}]</span> '
+                                f'{cont.get("description", "")}',
+                                unsafe_allow_html=True,
+                            )
+                            if cont.get("section_a") and cont.get("section_b"):
+                                st.caption(f"Section {cont['section_a']}: {cont.get('value_a', '')} vs Section {cont['section_b']}: {cont.get('value_b', '')}")
+
+                if missing:
+                    with st.expander(f"Missing Required Fields ({len(missing)})"):
+                        for m in missing:
+                            st.write(f"- **{m.get('field', '')}**: {m.get('description', '')}")
+
+                if facts:
+                    with st.expander(f"Key Facts Extracted ({len(facts)})"):
+                        for f_item in facts:
+                            st.write(f"- **{f_item.get('fact', '')}**: {f_item.get('value', '')} (referenced in {f_item.get('sections_referenced', '')})")
+
+                if suggestions:
+                    with st.expander("Improvement Suggestions"):
+                        for sug in suggestions:
+                            st.write(f"- {sug}")
 
 
 def _render_review_result(result):
@@ -4262,6 +4335,24 @@ def _render_write_tab(project):
     elif project_docs:
         st.caption("No documents are active as AI context. Toggle them on in the Documents tab.")
 
+    project_brief = (project.get("project_intake") or {}).get("_project_brief")
+    if project_brief:
+        with st.expander("Project Brief (shared context for all sections)"):
+            st.markdown(project_brief)
+            if st.button("Regenerate Brief", key=f"regen_brief_{project_id}"):
+                with st.spinner("Regenerating project brief..."):
+                    brief_result = _fetch(f"/projects/{project_id}/generate-brief", method="POST")
+                    if brief_result:
+                        st.success("Project brief updated.")
+                        st.rerun()
+    else:
+        if st.button("Generate Project Brief", key=f"gen_brief_{project_id}", help="Creates a consistent summary shared across all sections"):
+            with st.spinner("Generating project brief..."):
+                brief_result = _fetch(f"/projects/{project_id}/generate-brief", method="POST")
+                if brief_result:
+                    st.success("Project brief generated. It will be included in all section prompts.")
+                    st.rerun()
+
     gen_col1, gen_col2, gen_col3 = st.columns([1, 1, 1])
     with gen_col1:
         generate_all = st.button(
@@ -4376,6 +4467,9 @@ def _render_write_tab(project):
                             },
                         )
                         if result:
+                            val = result.get("validation")
+                            if val:
+                                st.session_state[f"val_{project_id}_{selected_write_dt}_{sec_id}"] = val
                             st.rerun()
             with action_col2:
                 with st.popover("Info"):
@@ -4431,6 +4525,32 @@ def _render_write_tab(project):
                     if st.button("Edit", key=f"edit_btn_{project_id}_{selected_write_dt}_{sec_id}"):
                         st.session_state[edit_key] = True
                         st.rerun()
+
+                val_data = st.session_state.get(f"val_{project_id}_{selected_write_dt}_{sec_id}")
+                if val_data:
+                    q_score = val_data.get("quality_score", 0)
+                    covered = val_data.get("covered", [])
+                    missing_items = val_data.get("missing", [])
+                    has_ph = val_data.get("has_placeholders", False)
+                    wc_val = val_data.get("word_count", 0)
+
+                    score_color = "#22c55e" if q_score >= 0.7 else ("#f59e0b" if q_score >= 0.4 else "#ef4444")
+                    with st.expander(f"Quality: {q_score:.0%} | {len(covered)}/{len(covered)+len(missing_items)} requirements covered"):
+                        st.markdown(
+                            f"<span style='color:{score_color};font-weight:600;font-size:1.1em;'>"
+                            f"Quality Score: {q_score:.0%}</span> "
+                            f"| {wc_val} words"
+                            f"{' | Has placeholders' if has_ph else ''}",
+                            unsafe_allow_html=True,
+                        )
+                        if covered:
+                            st.markdown("**Covered requirements:**")
+                            for ci in covered:
+                                st.markdown(f"- {ci}")
+                        if missing_items:
+                            st.markdown("**Missing requirements:**")
+                            for mi in missing_items:
+                                st.warning(f"- {mi}")
             else:
                 st.markdown(
                     "<span style='color:#999; font-style:italic;'>"

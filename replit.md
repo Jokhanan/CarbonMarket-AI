@@ -23,7 +23,15 @@ The UI is a single Streamlit application (`streamlit_app.py`) communicating with
 The FastAPI application organizes routes into project-specific and admin modules. It handles project CRUD, document uploads, AI intelligence extraction, drafting, review, findings response generation, and document export. Long-running AI review tasks are managed by a separate asynchronous worker process. Database schema is ensured on startup, and methodologies are seeded.
 
 **AI & NLP:**
-The core AI components leverage OpenAI's GPT-4o-mini for language model inference and `text-embedding-3-small` for embeddings. AI functions include drafting document sections, generating full documents, providing section explanations, performing compliance audits, extracting narrative summaries, and structured data extraction. AI context assembly prioritizes compact summaries and uses a guide file system that defines document structures, formatting instructions, and template scaffolds for AI generation.
+The core AI components leverage OpenAI's GPT models for language model inference and `text-embedding-3-small` for embeddings. AI functions include drafting document sections, generating full documents, providing section explanations, performing compliance audits, extracting narrative summaries, and structured data extraction. AI context assembly prioritizes compact summaries and uses a guide file system that defines document structures, formatting instructions, and template scaffolds for AI generation.
+
+Key AI architecture features:
+- **Adaptive model selection**: Complex sections (equations, parameter blocks, additionality, baseline) use gpt-4o; simple narrative sections use gpt-4o-mini. Retry-with-escalation if mini output is too short.
+- **Project-level RAG**: Uploaded documents are chunked, embedded, and stored in `project_doc_chunks` table. Section writing uses semantic retrieval (hybrid vector+keyword search) instead of raw text concatenation.
+- **Project Brief**: A 500-word consistent summary is auto-generated from intake data + document chunks and included in every section prompt for cross-section coherence.
+- **Cross-section consistency validation**: After drafting, a validator analyzes all sections together to flag contradictions, missing fields, and inconsistencies.
+- **Output validation**: Each generated section is checked against the guide's `must_include` items, with coverage scores and missing requirement flags.
+- **Section complexity classification**: `COMPLEX_SECTION_IDS` and `COMPLEX_CONTENT_FORMATS` in `ai_writer.py` determine which model to use per section.
 
 **Document Processing:**
 PDFs are parsed with `pdfplumber`, Word documents with `python-docx`, and Excel exports with `openpyxl`. `rapidfuzz` is used for fuzzy matching. The system extracts text, detects sections, and applies AI for intelligence extraction which populates project intake forms. Document export involves filling official `.docx` templates with AI-generated content.

@@ -385,10 +385,42 @@ def _get_api_key():
     return api_key
 
 
-def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=4000):
+COMPLEX_CONTENT_FORMATS = {"equations_and_prose", "parameter_blocks"}
+
+COMPLEX_SECTION_PATTERNS = [
+    "additionality", "baseline", "emission", "quantification",
+    "calculation", "monitoring_plan", "leakage",
+]
+
+COMPLEX_SECTION_IDS = {
+    "B.3", "B.4", "B.5", "B.6", "B.6.1", "B.6.2", "B.7",
+    "2.3", "2.4", "2.5", "3.1", "3.2", "3.3", "3.4", "4.1", "4.2", "4.3", "4.4",
+}
+
+UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "gpt-4o")
+MIN_WORDS_FOR_ESCALATION = 200
+
+
+def _select_model_for_section(section_id, content_format="prose", section_title=""):
+    if content_format in COMPLEX_CONTENT_FORMATS:
+        return UPGRADE_MODEL
+
+    if section_id in COMPLEX_SECTION_IDS:
+        return UPGRADE_MODEL
+
+    title_lower = section_title.lower()
+    for pattern in COMPLEX_SECTION_PATTERNS:
+        if pattern in title_lower:
+            return UPGRADE_MODEL
+
+    return MODEL
+
+
+def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=4000, model_override=None):
     api_key = _get_api_key()
+    use_model = model_override or MODEL
     payload = {
-        "model": MODEL,
+        "model": use_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -494,7 +526,6 @@ def generate_section_draft(
                 section_title=subsection["title"],
                 section_text=search_query,
                 standard=standard,
-                max_results=5,
             )
             if chunks:
                 knowledge_context = format_context_for_prompt(chunks)
@@ -632,13 +663,29 @@ def generate_section_draft(
     if user_instructions:
         user_prompt += f"### Additional instructions from the user:\n{user_instructions}\n\n"
 
+    project_brief = (project_info.get("project_intake") or {}).get("_project_brief")
+    if project_brief:
+        user_prompt += (
+            "### Project Brief (consistent facts for all sections):\n"
+            f"{project_brief}\n\n"
+        )
+
     format_closing = _get_format_closing_instruction(content_format)
     user_prompt += (
         f"Write the complete content for section {section_id}: {subsection['title']}. "
         f"Make it ready for inclusion in the document. {format_closing}"
     )
 
-    result = _call_openai(system_prompt, user_prompt, max_tokens=4000)
+    selected_model = _select_model_for_section(section_id, content_format, subsection.get("title", ""))
+    logger.info("Section %s: using model %s (format=%s)", section_id, selected_model, content_format)
+
+    result = _call_openai(system_prompt, user_prompt, max_tokens=4000, model_override=selected_model)
+
+    word_count = len(result.split())
+    if selected_model == MODEL and word_count < MIN_WORDS_FOR_ESCALATION:
+        logger.info("Section %s output too short (%d words), escalating to %s", section_id, word_count, UPGRADE_MODEL)
+        result = _call_openai(system_prompt, user_prompt, max_tokens=4000, model_override=UPGRADE_MODEL)
+
     return result
 
 
@@ -1168,3 +1215,126 @@ def extract_structured_intelligence(parsed_text, file_name, doc_type):
                 continue
             logger.warning("Structured intelligence extraction failed for %s: %s", file_name, e)
             return None
+
+
+def generate_project_brief(project_info, doc_chunks=None):
+    intake = project_info.get("project_intake") or {}
+    intake_context = _format_project_context(project_info)
+
+    chunks_text = ""
+    if doc_chunks:
+        chunk_parts = []
+        for c in doc_chunks[:5]:
+            chunk_parts.append(c.get("content", ""))
+        chunks_text = "\n---\n".join(chunk_parts)
+
+    system_prompt = (
+        "You are an expert carbon project analyst. Generate a concise Project Brief (max 500 words) "
+        "that summarizes the key facts of this carbon project. This brief will be used as shared context "
+        "across all sections of the project document to ensure consistency.\n\n"
+        "RULES:\n"
+        "- Include ONLY facts that are stated in the provided data. Do NOT invent details.\n"
+        "- Cover: project name, developer, country/region, technology, methodology, baseline scenario, "
+        "scale, crediting period, estimated emission reductions, and key monitoring parameters.\n"
+        "- Use specific numbers, dates, and names — not generic descriptions.\n"
+        "- If a fact is not available, do not mention it.\n"
+        "- Write in third person, present tense, factual style."
+    )
+
+    user_prompt = "Generate the Project Brief from this data:\n\n"
+    user_prompt += f"Project: {project_info.get('name', 'Unknown')}\n"
+    user_prompt += f"Standard: {project_info.get('standard', 'Unknown')}\n"
+    user_prompt += f"Methodology: {project_info.get('methodology', 'Unknown')}\n"
+    user_prompt += f"Country: {project_info.get('country', 'Unknown')}\n\n"
+
+    if intake_context:
+        user_prompt += f"### Intake Data:\n{intake_context}\n\n"
+
+    if chunks_text:
+        user_prompt += f"### Key Document Extracts:\n{chunks_text[:8000]}\n\n"
+
+    user_prompt += "Write the Project Brief (max 500 words):"
+
+    return _call_openai(system_prompt, user_prompt, max_tokens=1500)
+
+
+def validate_document_consistency(sections_dict, project_info):
+    if not sections_dict or len(sections_dict) < 2:
+        return {"facts_extracted": [], "contradictions": [], "missing_required": [], "suggestions": []}
+
+    sections_text = ""
+    for sid, sdata in sections_dict.items():
+        title = sdata.get("section_title", sid)
+        text = sdata.get("generated_text", "") or sdata.get("user_text", "")
+        if text:
+            sections_text += f"\n## Section {sid}: {title}\n{text[:3000]}\n"
+
+    if not sections_text.strip():
+        return {"facts_extracted": [], "contradictions": [], "missing_required": [], "suggestions": []}
+
+    system_prompt = (
+        "You are a senior carbon project compliance auditor. Analyze all sections of this document "
+        "and check for internal consistency.\n\n"
+        "Extract key facts stated across sections and flag any contradictions.\n"
+        "Return a JSON object with these keys:\n"
+        "- facts_extracted: list of {fact, sections_referenced, value} for key facts\n"
+        "- contradictions: list of {description, section_a, section_b, value_a, value_b, severity} "
+        "where severity is 'high', 'medium', or 'low'\n"
+        "- missing_required: list of {field, description} for important fields that appear nowhere\n"
+        "- suggestions: list of strings with improvement recommendations\n\n"
+        "Key facts to check: crediting period dates/length, methodology name/version, "
+        "country/region, emission reduction estimates, baseline scenario description, "
+        "technology type, monitoring parameters, project scale, emission factors."
+    )
+
+    user_prompt = f"Project: {project_info.get('name', 'Unknown')}\n"
+    user_prompt += f"Methodology: {project_info.get('methodology', 'Unknown')}\n\n"
+    user_prompt += f"Document sections:\n{sections_text[:25000]}\n\n"
+    user_prompt += "Analyze for consistency and return JSON:"
+
+    result = _call_openai(
+        system_prompt, user_prompt,
+        response_format={"type": "json_object"},
+        max_tokens=4000,
+        model_override=UPGRADE_MODEL,
+    )
+
+    try:
+        return json.loads(result)
+    except json.JSONDecodeError:
+        logger.warning("Consistency validation returned non-JSON")
+        return {"facts_extracted": [], "contradictions": [], "missing_required": [], "suggestions": [result]}
+
+
+def validate_section_output(section_text, guide_section):
+    if not section_text or not guide_section:
+        return {"covered": [], "missing": [], "has_placeholders": False, "word_count": 0, "quality_score": 0.0}
+
+    must_include = guide_section.get("must_include", [])
+    word_count = len(section_text.split())
+    has_placeholders = "[INSERT" in section_text or "[PLACEHOLDER" in section_text or "[TBD" in section_text
+
+    text_lower = section_text.lower()
+    covered = []
+    missing = []
+    for item in must_include:
+        key_words = [w.lower() for w in item.split() if len(w) > 3][:5]
+        matches = sum(1 for w in key_words if w in text_lower)
+        if key_words and matches / len(key_words) >= 0.4:
+            covered.append(item)
+        else:
+            missing.append(item)
+
+    total = len(must_include) if must_include else 1
+    coverage_ratio = len(covered) / total
+    length_score = min(1.0, word_count / 300)
+    placeholder_penalty = 0.1 if has_placeholders else 0.0
+    quality_score = round((coverage_ratio * 0.7 + length_score * 0.3) - placeholder_penalty, 2)
+
+    return {
+        "covered": covered,
+        "missing": missing,
+        "has_placeholders": has_placeholders,
+        "word_count": word_count,
+        "quality_score": max(0.0, quality_score),
+    }

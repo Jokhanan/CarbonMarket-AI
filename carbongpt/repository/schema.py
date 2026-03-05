@@ -290,6 +290,24 @@ CREATE TABLE IF NOT EXISTS methodology_knowledge (
     UNIQUE(methodology_code, chunk_type, chunk_key)
 );
 
+CREATE TABLE IF NOT EXISTS project_doc_chunks (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    doc_id INTEGER NOT NULL REFERENCES project_documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    token_count INTEGER,
+    embedding vector(1536),
+    section_title VARCHAR(500),
+    metadata JSONB DEFAULT '{}',
+    search_vector tsvector,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pdc_project ON project_doc_chunks(project_id);
+CREATE INDEX IF NOT EXISTS idx_pdc_doc ON project_doc_chunks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_pdc_search_vector ON project_doc_chunks USING GIN(search_vector);
+
 CREATE INDEX IF NOT EXISTS idx_mk_methodology_code ON methodology_knowledge(methodology_code);
 CREATE INDEX IF NOT EXISTS idx_mk_chunk_type ON methodology_knowledge(chunk_type);
 CREATE INDEX IF NOT EXISTS idx_mk_document_id ON methodology_knowledge(document_id);
