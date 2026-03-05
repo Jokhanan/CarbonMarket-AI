@@ -241,6 +241,7 @@ ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS monitoring_period_start DATE;
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS monitoring_period_end DATE;
 
 ALTER TABLE project_documents ADD COLUMN IF NOT EXISTS use_as_ai_context BOOLEAN DEFAULT true;
+ALTER TABLE project_documents ADD COLUMN IF NOT EXISTS ai_extracted_summary TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_user_projects_parent ON user_projects(parent_project_id);
 CREATE INDEX IF NOT EXISTS idx_user_projects_project_type ON user_projects(project_type);

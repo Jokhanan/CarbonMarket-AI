@@ -3314,12 +3314,31 @@ def _render_document_card(project_id, doc):
                 time.sleep(0.3)
                 st.rerun()
 
-        if has_parsed:
-            with st.expander("Preview extracted text", expanded=False):
-                preview = parsed_text[:3000]
-                if len(parsed_text) > 3000:
-                    preview += f"\n\n... ({len(parsed_text) - 3000:,} more characters)"
-                st.text(preview)
+        ai_summary = doc.get("ai_extracted_summary") or ""
+        if ai_summary.strip():
+            with st.expander("Extracted intelligence", expanded=False):
+                st.markdown(ai_summary)
+        elif has_parsed:
+            ec1, ec2 = st.columns([4, 1])
+            with ec1:
+                with st.expander("Preview extracted text", expanded=False):
+                    preview = parsed_text[:3000]
+                    if len(parsed_text) > 3000:
+                        preview += f"\n\n... ({len(parsed_text) - 3000:,} more characters)"
+                    st.text(preview)
+            with ec2:
+                if st.button("Extract intelligence", key=f"extract_intel_{doc['id']}", help="Run AI to extract key data points from this document"):
+                    with st.spinner("Extracting intelligence..."):
+                        result = _fetch(
+                            f"/projects/{project_id}/documents/{doc['id']}/extract-intelligence",
+                            method="POST",
+                        )
+                        if result and result.get("summary"):
+                            st.success("Intelligence extracted.")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.warning("Extraction returned no results.")
 
 
 def _render_document_prompts(project_type):

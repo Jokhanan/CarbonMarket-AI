@@ -877,3 +877,70 @@ def review_with_context(
         return json.loads(result)
     except json.JSONDecodeError:
         return {"raw_review": result, "overall_risk": "UNKNOWN", "sections": [], "priority_actions": []}
+
+
+def extract_document_intelligence(parsed_text, file_name, doc_type):
+    if not parsed_text or not parsed_text.strip():
+        return None
+
+    DOC_TYPE_LABELS = {
+        "pdd": "Project Design Document (PDD)",
+        "mr": "Monitoring Report",
+        "poa_dd": "Programme of Activities Design Document",
+        "vpa_dd": "VPA Design Document",
+        "valver": "Validation/Verification Report",
+        "reference": "Reference Document",
+        "research": "Research Paper/Report",
+        "field_data": "Field Data / Survey / Test Report",
+        "other": "Supporting Document",
+    }
+    doc_label = DOC_TYPE_LABELS.get(doc_type, "Document")
+
+    system_prompt = (
+        "You are a carbon project intelligence analyst. Your job is to extract ALL useful "
+        "data, facts, and findings from project documents.\n\n"
+        "You must be thorough — extract every piece of information that could be useful for "
+        "writing carbon project documents (PDD, MR, PoA-DD, VPA-DD, or validation reports).\n\n"
+        "Return a structured summary organized into clear categories. Use bullet points. "
+        "Include specific numbers, measurements, percentages, dates, and names — not vague summaries.\n\n"
+        "If the document contains tables with data, extract the key values.\n"
+        "If the document contains test results, extract all results and parameters.\n"
+        "If the document contains survey data, extract sample sizes, key findings, and statistics."
+    )
+
+    chunk_size = 60000
+    text_to_process = parsed_text[:chunk_size]
+    truncated = len(parsed_text) > chunk_size
+
+    user_prompt = (
+        f"Extract all useful intelligence from this {doc_label}.\n"
+        f"File: {file_name}\n\n"
+        "Organize your extraction into these categories (skip any category that has no relevant data):\n\n"
+        "**Project Overview**: Project name, developer, location, country, start date, scale, sector\n"
+        "**Technology**: Device/system type, manufacturer, model, specifications, efficiency, fuel type\n"
+        "**Baseline Data**: Baseline practice, fuel consumption, energy sources, current situation\n"
+        "**Test Results & Measurements**: Kitchen performance test results, water boiling test results, "
+        "emission factors, thermal efficiency, specific fuel consumption, any measured values\n"
+        "**Survey Data**: Sample size, methodology, key findings, demographics, usage patterns\n"
+        "**Emission Factors & Parameters**: All emission factors, default values, conversion factors, "
+        "fraction of non-renewable biomass (fNRB), net calorific values, any quantitative parameters\n"
+        "**Emission Reductions**: Baseline emissions, project emissions, leakage, net ERs, calculation approach\n"
+        "**Monitoring Data**: Monitored parameters, values, data collection methods, sampling approach\n"
+        "**Stakeholder & Social**: Consultation outcomes, grievance mechanisms, gender considerations\n"
+        "**Regulatory & Compliance**: Legal approvals, permits, host country authorizations\n"
+        "**Key Dates**: Project start, crediting period, monitoring period, validation/verification dates\n"
+        "**Other Important Facts**: Anything else relevant for carbon project documentation\n\n"
+        "Be specific — extract actual values, not descriptions of what the document contains.\n"
+    )
+    if truncated:
+        user_prompt += f"Note: The document has been truncated ({len(parsed_text):,} total characters). Extract everything from what is provided.\n"
+    user_prompt += f'\n"""\n{text_to_process}\n"""'
+
+    try:
+        result = _call_openai(system_prompt, user_prompt, max_tokens=4000)
+        if result and len(result) > 8000:
+            result = result[:8000] + "\n\n[... summary trimmed to 8000 chars ...]"
+        return result
+    except Exception as e:
+        logger.warning("Document intelligence extraction failed for %s: %s", file_name, e)
+        return None

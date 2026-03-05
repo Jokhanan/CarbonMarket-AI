@@ -255,6 +255,7 @@ def upload_project_document(
     except Exception as e:
         logger.warning("Document parsing failed: %s", e)
 
+    ai_summary = None
     if parsed_text:
         import json
         update_project_document(
@@ -264,11 +265,20 @@ def upload_project_document(
             status="parsed",
         )
 
+        try:
+            from carbongpt.core.ai_writer import extract_document_intelligence
+            ai_summary = extract_document_intelligence(parsed_text, file.filename, doc_type)
+            if ai_summary:
+                update_project_document(doc_id, ai_extracted_summary=ai_summary)
+        except Exception as e:
+            logger.warning("AI extraction failed for %s: %s", file.filename, e)
+
     return {
         "id": doc_id,
         "file_name": file.filename,
         "doc_type": doc_type,
         "parsed": parsed_text is not None,
+        "ai_extracted": ai_summary is not None,
         "message": "Document uploaded successfully.",
     }
 
@@ -285,6 +295,26 @@ def delete_document(project_id: int, doc_id: int):
         pass
     delete_project_document(doc_id)
     return {"message": "Document deleted."}
+
+
+@router.post("/{project_id}/documents/{doc_id}/extract-intelligence")
+def extract_document_intel(project_id: int, doc_id: int):
+    from carbongpt.repository.store import get_project_document, update_project_document
+    doc = get_project_document(doc_id)
+    if not doc or doc["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if not doc.get("parsed_text"):
+        raise HTTPException(status_code=400, detail="Document has not been parsed yet.")
+    try:
+        from carbongpt.core.ai_writer import extract_document_intelligence
+        summary = extract_document_intelligence(doc["parsed_text"], doc["file_name"], doc["doc_type"])
+        if summary:
+            update_project_document(doc_id, ai_extracted_summary=summary)
+            return {"message": "Intelligence extracted.", "summary": summary}
+        return {"message": "Extraction returned no results."}
+    except Exception as e:
+        logger.error("Intelligence extraction failed for doc %s: %s", doc_id, e)
+        raise HTTPException(status_code=500, detail="Intelligence extraction failed. Please try again.")
 
 
 @router.get("/{project_id}/sections")
@@ -321,38 +351,46 @@ def _gather_ai_context(project_id, project, doc_type):
         "field_data": "Field Data / Survey", "other": "Supporting Document",
     }
 
-    MAX_PER_DOC = 15000
-    MAX_TOTAL_REF = 40000
+    MAX_RAW_FALLBACK = 12000
+    MAX_TOTAL_REF = 50000
+
+    MAX_SUMMARY = 8000
+
+    def _doc_text(rd, prefix="Document"):
+        label = DOC_TYPE_LABELS.get(rd.get("doc_type", "other"), rd.get("doc_type", "other"))
+        fname = rd.get("file_name", "")
+        header = f"[{prefix}: {fname} | Type: {label}]"
+        summary = (rd.get("ai_extracted_summary") or "").strip()
+        if summary:
+            text = summary[:MAX_SUMMARY]
+            return f"{header}\n{text}"
+        raw = rd.get("parsed_text", "")
+        if raw:
+            text = raw[:MAX_RAW_FALLBACK]
+            if len(raw) > MAX_RAW_FALLBACK:
+                text += "\n[... document truncated, AI extraction not yet run ...]"
+            return f"{header}\n{text}"
+        return None
 
     ai_docs = get_project_documents_for_ai(project_id)
     ref_parts = []
     for rd in ai_docs:
-        if not rd.get("parsed_text"):
+        if not rd.get("parsed_text") and not rd.get("ai_extracted_summary"):
             continue
         rd_type = rd.get("doc_type", "other")
         if rd_type == "pdd" and doc_type == "mr" and not pdd_text:
-            pdd_text = rd["parsed_text"]
+            pdd_text = rd.get("parsed_text", "")
             continue
-        label = DOC_TYPE_LABELS.get(rd_type, rd_type)
-        fname = rd.get("file_name", "")
-        header = f"[Document: {fname} | Type: {label}]"
-        text = rd["parsed_text"][:MAX_PER_DOC]
-        if len(rd["parsed_text"]) > MAX_PER_DOC:
-            text += "\n[... document truncated ...]"
-        ref_parts.append(f"{header}\n{text}")
+        part = _doc_text(rd)
+        if part:
+            ref_parts.append(part)
 
     if project.get("parent_project_id"):
         parent_ai_docs = get_project_documents_for_ai(project["parent_project_id"])
         for rd in parent_ai_docs:
-            if rd.get("parsed_text"):
-                rd_type = rd.get("doc_type", "other")
-                label = DOC_TYPE_LABELS.get(rd_type, rd_type)
-                fname = rd.get("file_name", "")
-                header = f"[Parent Project Document: {fname} | Type: {label}]"
-                text = rd["parsed_text"][:MAX_PER_DOC]
-                if len(rd["parsed_text"]) > MAX_PER_DOC:
-                    text += "\n[... document truncated ...]"
-                ref_parts.append(f"{header}\n{text}")
+            part = _doc_text(rd, prefix="Parent Project Document")
+            if part:
+                ref_parts.append(part)
 
     combined = "\n\n---\n\n".join(ref_parts) if ref_parts else None
     if combined and len(combined) > MAX_TOTAL_REF:

@@ -1075,7 +1075,7 @@ def get_project_document(doc_id):
 
 
 def update_project_document(doc_id, **kwargs):
-    allowed = {"parsed_text", "parsed_sections", "status", "review_result", "notes"}
+    allowed = {"parsed_text", "parsed_sections", "status", "review_result", "notes", "ai_extracted_summary"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return
@@ -1170,7 +1170,7 @@ def get_project_documents_for_ai(project_id):
     with get_cursor() as cur:
         cur.execute(
             "SELECT * FROM project_documents WHERE project_id = %s AND use_as_ai_context = true "
-            "AND parsed_text IS NOT NULL ORDER BY created_at DESC",
+            "AND (parsed_text IS NOT NULL OR ai_extracted_summary IS NOT NULL) ORDER BY created_at DESC",
             (project_id,)
         )
         return cur.fetchall()
