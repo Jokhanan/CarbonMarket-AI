@@ -314,22 +314,50 @@ def _gather_ai_context(project_id, project, doc_type):
             if parent_pdd_docs:
                 pdd_text = parent_pdd_docs[0].get("parsed_text", "")
 
+    DOC_TYPE_LABELS = {
+        "pdd": "PDD", "mr": "Monitoring Report", "poa_dd": "PoA-DD",
+        "vpa_dd": "VPA-DD", "valver": "Validation/Verification Report",
+        "reference": "Reference Document", "research": "Research",
+        "field_data": "Field Data / Survey", "other": "Supporting Document",
+    }
+
+    MAX_PER_DOC = 15000
+    MAX_TOTAL_REF = 40000
+
     ai_docs = get_project_documents_for_ai(project_id)
-    ref_texts = []
+    ref_parts = []
     for rd in ai_docs:
-        if rd.get("doc_type") in ("reference", "research", "field_data", "other"):
-            if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:8000])
-        elif rd.get("doc_type") == "pdd" and doc_type == "mr" and not pdd_text:
-            pdd_text = rd.get("parsed_text", "")
+        if not rd.get("parsed_text"):
+            continue
+        rd_type = rd.get("doc_type", "other")
+        if rd_type == "pdd" and doc_type == "mr" and not pdd_text:
+            pdd_text = rd["parsed_text"]
+            continue
+        label = DOC_TYPE_LABELS.get(rd_type, rd_type)
+        fname = rd.get("file_name", "")
+        header = f"[Document: {fname} | Type: {label}]"
+        text = rd["parsed_text"][:MAX_PER_DOC]
+        if len(rd["parsed_text"]) > MAX_PER_DOC:
+            text += "\n[... document truncated ...]"
+        ref_parts.append(f"{header}\n{text}")
 
     if project.get("parent_project_id"):
         parent_ai_docs = get_project_documents_for_ai(project["parent_project_id"])
         for rd in parent_ai_docs:
             if rd.get("parsed_text"):
-                ref_texts.append(rd["parsed_text"][:8000])
+                rd_type = rd.get("doc_type", "other")
+                label = DOC_TYPE_LABELS.get(rd_type, rd_type)
+                fname = rd.get("file_name", "")
+                header = f"[Parent Project Document: {fname} | Type: {label}]"
+                text = rd["parsed_text"][:MAX_PER_DOC]
+                if len(rd["parsed_text"]) > MAX_PER_DOC:
+                    text += "\n[... document truncated ...]"
+                ref_parts.append(f"{header}\n{text}")
 
-    reference_text = "\n---\n".join(ref_texts) if ref_texts else None
+    combined = "\n\n---\n\n".join(ref_parts) if ref_parts else None
+    if combined and len(combined) > MAX_TOTAL_REF:
+        combined = combined[:MAX_TOTAL_REF] + "\n[... remaining documents truncated ...]"
+    reference_text = combined
     return pdd_text, reference_text
 
 

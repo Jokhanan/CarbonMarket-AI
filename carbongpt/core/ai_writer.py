@@ -575,17 +575,29 @@ def generate_section_draft(
         user_prompt += meth_params_context + "\n"
 
     if existing_pdd_text:
-        pdd_excerpt = existing_pdd_text[:6000]
+        pdd_excerpt = existing_pdd_text[:25000]
+        if len(existing_pdd_text) > 25000:
+            pdd_excerpt += "\n[... PDD text truncated ...]"
         user_prompt += (
-            "### Existing Project Description (PDD) content for reference:\n"
-            "Use this to ensure consistency with the project design.\n"
+            "### Existing Project Description (PDD):\n"
+            "This is the registered PDD for this project. Extract and use specific data, parameters, "
+            "baseline descriptions, technology details, and monitoring plan from this document. "
+            "Ensure consistency with the project design.\n"
             f'"""\n{pdd_excerpt}\n"""\n\n'
         )
 
     if reference_docs_text:
-        ref_excerpt = reference_docs_text[:4000]
+        max_ref_chars = 30000
+        ref_excerpt = reference_docs_text[:max_ref_chars]
+        if len(reference_docs_text) > max_ref_chars:
+            ref_excerpt += "\n[... document text truncated ...]"
         user_prompt += (
-            "### Additional reference documents provided by the user:\n"
+            "### Project Documents (uploaded by the user):\n"
+            "IMPORTANT: These documents contain real project data, field measurements, survey results, "
+            "and technical details. Extract and USE specific data points, findings, values, and facts "
+            "from these documents when writing this section. Do NOT ignore this content — it is the "
+            "primary source of project-specific intelligence. Reference specific data, numbers, and "
+            "conclusions from these documents rather than writing generic text.\n\n"
             f'"""\n{ref_excerpt}\n"""\n\n'
         )
 
@@ -775,17 +787,25 @@ def review_with_context(
         )
 
     if pdd_text:
-        pdd_excerpt = pdd_text[:6000]
+        pdd_excerpt = pdd_text[:20000]
+        if len(pdd_text) > 20000:
+            pdd_excerpt += "\n[... PDD text truncated ...]"
         user_prompt += (
             "### Project Description (PDD) for cross-reference:\n"
-            "Check that the document being reviewed is consistent with this PDD.\n"
+            "Check that the document being reviewed is consistent with this PDD. "
+            "Use specific data, parameters, and claims from the PDD to verify the reviewed document.\n"
             f'"""\n{pdd_excerpt}\n"""\n\n'
         )
 
     if reference_texts:
-        ref_excerpt = reference_texts[:4000]
+        max_ref_chars = 20000
+        ref_excerpt = reference_texts[:max_ref_chars]
+        if len(reference_texts) > max_ref_chars:
+            ref_excerpt += "\n[... document text truncated ...]"
         user_prompt += (
-            "### Additional reference documents:\n"
+            "### Project Documents (uploaded by the user):\n"
+            "These contain real project data, field measurements, and technical details. "
+            "Use this data to verify claims and check consistency in the document being reviewed.\n\n"
             f'"""\n{ref_excerpt}\n"""\n\n'
         )
 
