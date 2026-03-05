@@ -313,7 +313,10 @@ def extract_document_intel(project_id: int, doc_id: int):
             return {"message": "Intelligence extracted.", "summary": summary}
         return {"message": "Extraction returned no results."}
     except Exception as e:
+        err_str = str(e)
         logger.error("Intelligence extraction failed for doc %s: %s", doc_id, e)
+        if "429" in err_str or "rate" in err_str.lower():
+            raise HTTPException(status_code=429, detail="OpenAI rate limit reached. Please wait a minute and try again.")
         raise HTTPException(status_code=500, detail="Intelligence extraction failed. Please try again.")
 
 

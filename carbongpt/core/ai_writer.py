@@ -936,11 +936,21 @@ def extract_document_intelligence(parsed_text, file_name, doc_type):
         user_prompt += f"Note: The document has been truncated ({len(parsed_text):,} total characters). Extract everything from what is provided.\n"
     user_prompt += f'\n"""\n{text_to_process}\n"""'
 
-    try:
-        result = _call_openai(system_prompt, user_prompt, max_tokens=4000)
-        if result and len(result) > 8000:
-            result = result[:8000] + "\n\n[... summary trimmed to 8000 chars ...]"
-        return result
-    except Exception as e:
-        logger.warning("Document intelligence extraction failed for %s: %s", file_name, e)
-        return None
+    import time as _time
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            result = _call_openai(system_prompt, user_prompt, max_tokens=4000)
+            if result and len(result) > 8000:
+                result = result[:8000] + "\n\n[... summary trimmed to 8000 chars ...]"
+            return result
+        except Exception as e:
+            err_str = str(e)
+            is_rate_limit = "429" in err_str or "rate" in err_str.lower()
+            if is_rate_limit and attempt < max_retries:
+                wait = (attempt + 1) * 5
+                logger.info("Rate limited on extraction for %s, retrying in %ds (attempt %d/%d)", file_name, wait, attempt + 1, max_retries)
+                _time.sleep(wait)
+                continue
+            logger.warning("Document intelligence extraction failed for %s: %s", file_name, e)
+            raise

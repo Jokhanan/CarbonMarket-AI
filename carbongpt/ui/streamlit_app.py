@@ -3328,17 +3328,18 @@ def _render_document_card(project_id, doc):
                     st.text(preview)
             with ec2:
                 if st.button("Extract intelligence", key=f"extract_intel_{doc['id']}", help="Run AI to extract key data points from this document"):
-                    with st.spinner("Extracting intelligence..."):
+                    with st.spinner("Extracting intelligence (this may take 15-30 seconds)..."):
                         result = _fetch(
                             f"/projects/{project_id}/documents/{doc['id']}/extract-intelligence",
                             method="POST",
+                            timeout=120,
                         )
                         if result and result.get("summary"):
                             st.success("Intelligence extracted.")
                             time.sleep(0.5)
                             st.rerun()
-                        else:
-                            st.warning("Extraction returned no results.")
+                        elif result:
+                            st.warning("Extraction completed but returned no data.")
 
 
 def _render_document_prompts(project_type):
