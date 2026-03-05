@@ -908,9 +908,15 @@ def extract_document_intelligence(parsed_text, file_name, doc_type):
         "If the document contains survey data, extract sample sizes, key findings, and statistics."
     )
 
-    chunk_size = 60000
-    text_to_process = parsed_text[:chunk_size]
-    truncated = len(parsed_text) > chunk_size
+    chunk_size = 30000
+    text = parsed_text.strip()
+    if len(text) > chunk_size:
+        half = chunk_size // 2
+        text_to_process = text[:half] + "\n\n[... middle section omitted ...]\n\n" + text[-half:]
+        truncated = True
+    else:
+        text_to_process = text
+        truncated = False
 
     user_prompt = (
         f"Extract all useful intelligence from this {doc_label}.\n"
