@@ -1,0 +1,80 @@
+id="91384"}
+I want you to perform a deep technical evaluation of the CarbonGPT system.
+
+You previously described the architecture and how the AI works. Now I want you to critically analyze the system and evaluate whether the current implementation is optimal.
+
+Your goal is to act like a senior AI architect reviewing the system.
+
+Please analyze the system and answer the following sections.
+
+1. OVERALL SYSTEM EVALUATION  
+Evaluate the overall architecture of CarbonGPT.  
+Is the current system design optimal for an AI-powered platform that will analyze and generate carbon project documents?
+
+2. AI ARCHITECTURE REVIEW  
+Analyze how the AI is currently implemented:
+- prompting system
+- context management
+- document processing
+- template filling
+- AI workflow
+
+Explain whether the current AI design is robust and scalable.
+
+3. RESPONSE QUALITY  
+Evaluate whether the current AI setup is likely to produce high-quality outputs for:
+- reviewing carbon documents
+- writing project documentation
+- structured template completion
+
+Explain possible weaknesses in response quality.
+
+4. CONTEXT MANAGEMENT  
+Analyze how the system handles context:
+- project information
+- methodology information
+- uploaded documents
+- user instructions
+
+Explain whether the context system is sufficient or if improvements are needed.
+
+5. PERFORMANCE AND EFFICIENCY  
+Evaluate:
+- speed
+- prompt complexity
+- token usage
+- scalability
+
+Explain what could be optimized.
+
+6. SYSTEM LIMITATIONS  
+Identify current limitations in:
+- architecture
+- AI usage
+- data structure
+- workflow design
+
+7. IMPROVEMENT OPPORTUNITIES  
+Suggest concrete improvements to make the system:
+- more reliable
+- more scalable
+- more intelligent
+- better for long carbon project documents
+
+8. AI SYSTEM IMPROVEMENTS  
+Suggest improvements such as:
+- better prompt architecture
+- RAG (retrieval augmented generation)
+- knowledge base for methodologies
+- structured outputs
+- document chunking
+- vector databases
+
+9. FUTURE AI ARCHITECTURE  
+Describe what the ideal AI architecture for CarbonGPT would look like if the goal is to build a professional AI system for carbon market experts.
+
+10. PRIORITY IMPROVEMENTS  
+List the TOP 10 most important improvements that should be implemented next.
+
+IMPORTANT:
+Be critical and honest. The goal is to improve the system as much
