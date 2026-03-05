@@ -135,6 +135,17 @@ def _get_template_font(doc):
     return None
 
 
+def _get_template_font_size(doc):
+    try:
+        normal_style = doc.styles["Normal"]
+        if normal_style.font.size:
+            size_half_pts = normal_style.font.size.pt * 2
+            return round(size_half_pts) / 2
+    except Exception:
+        pass
+    return None
+
+
 def _insert_content_into_doc(doc, insert_after_element, content_text, project_info=None, section_id=None):
     from docx.shared import Pt, RGBColor
     from docx.oxml.ns import qn
@@ -165,8 +176,9 @@ def _insert_content_into_doc(doc, insert_after_element, content_text, project_in
             color_el = doc.element.makeelement(qn("w:color"), {qn("w:val"): color})
             rpr.append(color_el)
         if font_size:
-            sz_el = doc.element.makeelement(qn("w:sz"), {qn("w:val"): str(font_size * 2)})
-            szcs_el = doc.element.makeelement(qn("w:szCs"), {qn("w:val"): str(font_size * 2)})
+            half_pts = str(int(round(font_size * 2)))
+            sz_el = doc.element.makeelement(qn("w:sz"), {qn("w:val"): half_pts})
+            szcs_el = doc.element.makeelement(qn("w:szCs"), {qn("w:val"): half_pts})
             rpr.append(sz_el)
             rpr.append(szcs_el)
         return rpr
@@ -237,27 +249,29 @@ def _insert_content_into_doc(doc, insert_after_element, content_text, project_in
         ref_element.addnext(tbl_el)
         ref_element = tbl_el
 
+    base_size = _get_template_font_size(doc)
+
     for block_type, block_data in blocks:
         if block_type == "table":
             rows = _parse_md_table(block_data)
             if rows:
                 _add_table_after(rows)
         elif block_type == "heading3":
-            _add_para_after(block_data, bold=True, font_size=13)
+            _add_para_after(block_data, bold=True, font_size=base_size + 2 if base_size else 13)
         elif block_type == "heading4":
-            _add_para_after(block_data, bold=True, font_size=11)
+            _add_para_after(block_data, bold=True, font_size=base_size or 11)
         elif block_type == "bullet":
-            _add_para_after(f"\u2022  {block_data}")
+            _add_para_after(f"\u2022  {block_data}", font_size=base_size)
         elif block_type == "numbered":
-            _add_para_after(block_data)
+            _add_para_after(block_data, font_size=base_size)
         elif block_type == "insert_placeholder":
-            _add_para_after(block_data, bold=True, color="CC0000")
+            _add_para_after(block_data, bold=True, color="CC0000", font_size=base_size)
         elif block_type == "bold_line":
-            _add_para_after(block_data, bold=True)
+            _add_para_after(block_data, bold=True, font_size=base_size)
         elif block_type == "empty":
             _add_para_after("")
         elif block_type == "paragraph":
-            _add_para_after(block_data)
+            _add_para_after(block_data, font_size=base_size)
 
 
 def _fill_gs_kpi_table(doc, project_info):
@@ -722,6 +736,66 @@ def _match_vcs_title_to_sid(text, title_map):
     return None
 
 
+def _remove_vcs_boilerplate(doc):
+    from docx.oxml.ns import qn as _qn
+    from docx.text.paragraph import Paragraph as _Para
+
+    body = doc.element.body
+    to_remove = []
+    for child in body:
+        if child.tag == _qn('w:p'):
+            para = _Para(child, doc)
+            style = para.style.name if para.style else ""
+            if style == "Heading 1":
+                break
+            if style in ("Normal", "Intra-section header", "List Paragraph", "Template Title"):
+                text = para.text.strip()
+                if any(kw in text.lower() for kw in [
+                    "this template is for", "instructions for completing",
+                    "file name:", "file type:", "title page formatting",
+                    "general formatting", "general instructions",
+                    "note: the instructions", "where a section is not applicable",
+                    "delete all instructions", "logo (optional)",
+                    "ddmmmyyyy", "'ddmmmyyyy",
+                ]):
+                    to_remove.append(child)
+                elif style == "List Paragraph" and ("vcs pd" in text.lower() or "ddmmmyyyy" in text.lower()):
+                    to_remove.append(child)
+            elif style == "TOC" or style.startswith("toc "):
+                pass
+        elif child.tag == _qn('w:sdt'):
+            pass
+
+    for el in to_remove:
+        body.remove(el)
+
+
+def _fill_vcs_kpi_table(doc, project_info):
+    if not doc.tables:
+        return
+    kpi_table = doc.tables[0]
+    intake = project_info.get("intake", {})
+    proponent = intake.get("proponent", {})
+
+    for row in kpi_table.rows:
+        label = row.cells[0].text.strip().lower()
+        cell = row.cells[1]
+
+        if "project title" in label:
+            cell.text = project_info.get("name", "")
+        elif "prepared by" in label:
+            dev = proponent.get("organization_name", "") or proponent.get("contact_person", "")
+            if dev:
+                cell.text = dev
+        elif "vcs standard version" in label:
+            cell.text = "4.4"
+
+        if cell.text and cell.paragraphs:
+            for run in cell.paragraphs[0].runs:
+                if run.font:
+                    run.font.size = None
+
+
 def _fill_vcs_template(doc, sections_map, project_info):
     from docx.shared import Pt
 
@@ -733,16 +807,17 @@ def _fill_vcs_template(doc, sections_map, project_info):
     else:
         title_map = VCS_PDD_TITLE_MAP
 
+    _remove_vcs_boilerplate(doc)
+    _fill_vcs_kpi_table(doc, project_info)
+
     paragraphs = list(doc.paragraphs)
 
-    title_para = None
     for para in paragraphs:
-        if para.style and para.style.name == "Template Title" and "Project" in para.text:
-            title_para = para
-            break
-    if title_para:
-        title_para.clear()
-        title_para.add_run(project_info.get("name", "Project Title"))
+        if para.style and para.style.name == "Template Title":
+            text = para.text.strip()
+            if "Project" in text or "TITLE" in text:
+                para.clear()
+                para.add_run(project_info.get("name", "Project Title"))
 
     filled_sids = set()
 
@@ -772,6 +847,15 @@ def _fill_vcs_template(doc, sections_map, project_info):
         while next_sibling is not None and instructions_removed < 30:
             from docx.oxml.ns import qn as _qn
             if next_sibling.tag != _qn('w:p'):
+                if next_sibling.tag == _qn('w:tbl'):
+                    from docx.oxml.ns import qn as _qn2
+                    next_next = next_sibling.getnext()
+                    if next_next is not None and next_next.tag == _qn2('w:p'):
+                        from docx.text.paragraph import Paragraph as _P2
+                        pp = _P2(next_next, doc)
+                        ps = pp.style.name if pp.style else ""
+                        if ps in ("Instruction", "Bullets"):
+                            pass
                 break
             from docx.text.paragraph import Paragraph as _Para
             next_para = _Para(next_sibling, doc)
