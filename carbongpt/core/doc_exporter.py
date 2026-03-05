@@ -630,8 +630,108 @@ def _fill_gs_titled_template(doc, sections_map, project_info, title_map):
     _remove_remaining_placeholders_gs(doc, sections_map)
 
 
+VCS_PDD_TITLE_MAP = {
+    "Summary Description of the Project": "1.1",
+    "Audit History": "1.2",
+    "Sectoral Scope and Project Type": "1.3",
+    "Project Eligibility": "1.4",
+    "Project Design": "1.5",
+    "Project Proponent": "1.6",
+    "Other Entities Involved in the Project": "1.7",
+    "Ownership": "1.8",
+    "Project Start Date": "1.9",
+    "Project Crediting Period": "1.10",
+    "Project Scale and Estimated GHG Emission Reductions or Removals": "1.11",
+    "Description of the Project Activity": "1.12",
+    "Project Location": "1.13",
+    "Conditions Prior to Project Initiation": "1.14",
+    "Compliance with Laws, Statutes and Other Regulatory Frameworks": "1.15",
+    "Double Counting and Participation under Other GHG Programs": "1.16",
+    "Double Claiming, Other Forms of Credit, and Scope 3 Emissions": "1.17",
+    "Sustainable Development Contributions": "1.18",
+    "Additional Information Relevant to the Project": "1.19",
+    "Stakeholder Engagement and Consultation": "2.1",
+    "Risks to Stakeholders and the Environment": "2.2",
+    "Respect for Human Rights and Equity": "2.3",
+    "Ecosystem Health": "2.4",
+    "Title and Reference of Methodology": "3.1",
+    "Applicability of Methodology": "3.2",
+    "Project Boundary": "3.3",
+    "Baseline Scenario": "3.4",
+    "Additionality": "3.5",
+    "Methodology Deviations": "3.6",
+    "Baseline Emissions": "4.1",
+    "Project Emissions": "4.2",
+    "Leakage Emissions": "4.3",
+    "Estimated GHG Emission Reductions and Carbon Dioxide Removals": "4.4",
+    "Data and Parameters Available at Validation": "5.1",
+    "Data and Parameters Monitored": "5.2",
+    "Monitoring Plan": "5.3",
+}
+
+VCS_MR_TITLE_MAP = {
+    "Summary Description of the Implementation Status of the Project": "1.1",
+    "Audit History": "1.2",
+    "Sectoral Scope and Project Type": "1.3",
+    "Project Proponent": "1.4",
+    "Other Entities Involved in the Project": "1.5",
+    "Project Start Date": "1.6",
+    "Project Crediting Period": "1.7",
+    "Project Location": "1.8",
+    "Title and Reference of Methodology": "1.9",
+    "Double Counting and Participation under Other GHG Programs": "1.10",
+    "Double Claiming, Other Forms of Credit, and Scope 3 Emissions": "1.11",
+    "Sustainable Development Contributions": "1.12",
+    "Commercially Sensitive Information": "1.13",
+    "Stakeholder Engagement and Consultation": "2.1",
+    "Risks to Stakeholders and the Environment": "2.2",
+    "Respect for Human Rights and Equity": "2.3",
+    "Ecosystem Health": "2.4",
+    "Implementation Status of the Project Activity": "3.1",
+    "Deviations": "3.2",
+    "Grouped Projects": "3.3",
+    "Baseline Reassessment": "3.4",
+    "Data and Parameters Available at Validation": "4.1",
+    "Data and Parameters Monitored": "4.2",
+    "Monitoring Plan": "4.3",
+    "Baseline Emissions": "5.1",
+    "Project Emissions": "5.2",
+    "Leakage Emissions": "5.3",
+    "GHG Emission Reductions and Carbon Dioxide Removals": "5.4",
+}
+
+VCS_VALVER_TITLE_MAP = {}
+
+
+def _match_vcs_title_to_sid(text, title_map):
+    normalized = text.strip()
+    m = VCS_SECTION_RE.match(normalized)
+    if m:
+        return m.group(1)
+    sid = title_map.get(normalized)
+    if sid:
+        return sid
+    text_lower = normalized.lower()
+    for title, map_sid in title_map.items():
+        if title.lower() == text_lower:
+            return map_sid
+    if len(text_lower) > 10:
+        for title, map_sid in title_map.items():
+            if title.lower() in text_lower or text_lower in title.lower():
+                return map_sid
+    return None
+
+
 def _fill_vcs_template(doc, sections_map, project_info):
     from docx.shared import Pt
+
+    doc_type = project_info.get("doc_type", "pdd")
+    if doc_type == "mr":
+        title_map = VCS_MR_TITLE_MAP
+    elif doc_type == "valver":
+        title_map = VCS_VALVER_TITLE_MAP
+    else:
+        title_map = VCS_PDD_TITLE_MAP
 
     paragraphs = list(doc.paragraphs)
 
@@ -652,11 +752,10 @@ def _fill_vcs_template(doc, sections_map, project_info):
             continue
 
         text = para.text.strip()
-        m = VCS_SECTION_RE.match(text)
-        if not m:
+        if not text:
             continue
-        sid = m.group(1)
 
+        sid = _match_vcs_title_to_sid(text, title_map)
         if not sid:
             continue
 
@@ -667,30 +766,34 @@ def _fill_vcs_template(doc, sections_map, project_info):
             continue
         filled_sids.add(sid)
 
-        j = i + 1
+        insert_after = para._element
+        next_sibling = insert_after.getnext()
         instructions_removed = 0
-        while j < len(paragraphs) and instructions_removed < 20:
-            next_style = paragraphs[j].style.name if paragraphs[j].style else ""
-            next_text = paragraphs[j].text.strip()
+        while next_sibling is not None and instructions_removed < 30:
+            from docx.oxml.ns import qn as _qn
+            if next_sibling.tag != _qn('w:p'):
+                break
+            from docx.text.paragraph import Paragraph as _Para
+            next_para = _Para(next_sibling, doc)
+            ns = next_para.style.name if next_para.style else ""
+            nt = next_para.text.strip()
 
-            if next_style in ("Instruction", "Bullets", "List Paragraph"):
-                para_el = paragraphs[j]._element
-                parent = para_el.getparent()
-                if parent is not None:
-                    parent.remove(para_el)
-                    instructions_removed += 1
-                    continue
-            elif next_text == "" and next_style == "Normal":
-                para_el = paragraphs[j]._element
-                parent = para_el.getparent()
-                if parent is not None:
-                    parent.remove(para_el)
-                    instructions_removed += 1
-                    continue
+            if ns in ("Instruction", "Bullets", "List Paragraph"):
+                to_remove = next_sibling
+                next_sibling = next_sibling.getnext()
+                to_remove.getparent().remove(to_remove)
+                instructions_removed += 1
+            elif nt == "" and ns in ("Normal", "Body Text"):
+                to_remove = next_sibling
+                next_sibling = next_sibling.getnext()
+                to_remove.getparent().remove(to_remove)
+                instructions_removed += 1
             else:
                 break
 
         _insert_content_into_doc(doc, para._element, content, project_info, section_id=sid)
+
+    logger.info("VCS template filled: %d sections matched out of %d available", len(filled_sids), len(sections_map))
 
 
 def export_template_word(sections_content, project_info, template_type="pdd"):
