@@ -291,7 +291,12 @@ def _fill_gs_kpi_table(doc, project_info):
         label = row.cells[0].text.strip().lower()
         cell = row.cells[1]
 
-        if "title" in label and "project" in label:
+        is_title_field = False
+        if "title" in label:
+            if any(w in label for w in ["of project", "of programme", "of vpa", "of cpa"]):
+                if "corresponding" not in label and "applicable" not in label and "gs id" not in label:
+                    is_title_field = True
+        if is_title_field:
             cell.text = project_info.get("name", "")
         elif "host country" in label:
             cell.text = project_info.get("country", "")
@@ -694,10 +699,19 @@ VCS_MR_TITLE_MAP = {
     "Project Location": "1.8",
     "Title and Reference of Methodology": "1.9",
     "Double Counting and Participation under Other GHG Programs": "1.10",
+    "No Double Issuance": "1.10.1",
+    "Registration in Other GHG Programs": "1.10.2",
     "Double Claiming, Other Forms of Credit, and Scope 3 Emissions": "1.11",
+    "No Double Claiming with Emissions Trading Programs or Binding Emission Limits": "1.11.1",
+    "No Double Claiming with Other Forms of Environmental Credit": "1.11.2",
+    "Supply Chain (Scope 3) Emissions": "1.11.3",
     "Sustainable Development Contributions": "1.12",
     "Commercially Sensitive Information": "1.13",
     "Stakeholder Engagement and Consultation": "2.1",
+    "Stakeholder Identification": "2.1.1",
+    "Stakeholder Consultation and Ongoing Communication": "2.1.2",
+    "Free, Prior, and Informed Consent": "2.1.3",
+    "Grievance Redress Procedure": "2.1.4",
     "Risks to Stakeholders and the Environment": "2.2",
     "Respect for Human Rights and Equity": "2.3",
     "Ecosystem Health": "2.4",
@@ -714,7 +728,42 @@ VCS_MR_TITLE_MAP = {
     "GHG Emission Reductions and Carbon Dioxide Removals": "5.4",
 }
 
-VCS_VALVER_TITLE_MAP = {}
+VCS_VALVER_TITLE_MAP = {
+    "Objective": "1.1",
+    "Scope and Criteria": "1.2",
+    "Reasonableness of Assumptions and Level of Assurance": "1.3",
+    "Summary Description of the Project": "1.4",
+    "Method and Criteria": "2.1",
+    "Document Review": "2.2",
+    "Interviews": "2.3",
+    "Site Visits": "2.4",
+    "Resolution of Findings": "2.5",
+    "Forward Action Requests": "2.5.1",
+    "Project Details": "3.1",
+    "Project Activity Instances in Grouped Projects": "3.2",
+    "Safeguards": "3.3",
+    "Stakeholder Engagement and Consultation": "3.3.1",
+    "Risks to Local Stakeholders and the Environment": "3.3.2",
+    "Respect for Human Rights and Equity": "3.3.3",
+    "Ecosystem Health": "3.3.4",
+    "Application of Methodology": "3.4",
+    "Title and Reference": "3.4.1",
+    "Applicability": "3.4.2",
+    "Project Boundary": "3.4.3",
+    "Baseline Scenario": "3.4.4",
+    "Additionality": "3.4.5",
+    "Quantification of GHG Emission Reductions and Carbon Dioxide Removals": "3.4.6",
+    "Methodology Deviations": "3.4.7",
+    "Monitoring Plan": "3.4.8",
+    "Non-Permanence Risk Analysis": "3.5",
+    "Project Implementation Status": "4.1",
+    "Accuracy of Reduction and Removal Calculations": "4.2",
+    "Quality of Evidence to Determine Reductions and Removals": "4.3",
+    "Validation and Verification Summary": "5.1",
+    "Validation Conclusion": "5.2",
+    "Verification conclusion": "5.3",
+    "Ex-ante vs Ex-post ERR Comparison": "5.4",
+}
 
 
 def _match_vcs_title_to_sid(text, title_map):
@@ -742,27 +791,28 @@ def _remove_vcs_boilerplate(doc):
 
     body = doc.element.body
     to_remove = []
+    instruction_kws = [
+        "this template is for", "instructions for completing",
+        "file name:", "file type:", "title page formatting",
+        "general formatting", "general instructions",
+        "note: the instructions", "where a section is not applicable",
+        "delete all instructions", "logo (optional)",
+        "ddmmmyyyy", "'ddmmmyyyy",
+    ]
+    passed_first_heading = False
     for child in body:
         if child.tag == _qn('w:p'):
             para = _Para(child, doc)
             style = para.style.name if para.style else ""
-            if style == "Heading 1":
-                break
-            if style in ("Normal", "Intra-section header", "List Paragraph", "Template Title"):
-                text = para.text.strip()
-                if any(kw in text.lower() for kw in [
-                    "this template is for", "instructions for completing",
-                    "file name:", "file type:", "title page formatting",
-                    "general formatting", "general instructions",
-                    "note: the instructions", "where a section is not applicable",
-                    "delete all instructions", "logo (optional)",
-                    "ddmmmyyyy", "'ddmmmyyyy",
-                ]):
+            text = para.text.strip()
+            text_lower = text.lower()
+            if style == "Heading 1" and "instruction" not in text_lower:
+                passed_first_heading = True
+            if not passed_first_heading:
+                if any(kw in text_lower for kw in instruction_kws):
                     to_remove.append(child)
-                elif style == "List Paragraph" and ("vcs pd" in text.lower() or "ddmmmyyyy" in text.lower()):
+                elif style == "List Paragraph" and ("vcs pd" in text_lower or "ddmmmyyyy" in text_lower):
                     to_remove.append(child)
-            elif style == "TOC" or style.startswith("toc "):
-                pass
         elif child.tag == _qn('w:sdt'):
             pass
 
@@ -895,19 +945,26 @@ def export_template_word(sections_content, project_info, template_type="pdd"):
         if content and content.strip():
             sections_map[sid] = content
 
-    if template_path and sections_map:
+    if template_path:
         try:
             doc = Document(template_path)
-            if standard == "GoldStandard" and template_type == "vpa_dd":
-                _fill_gs_titled_template(doc, sections_map, project_info, GS_VPA_DD_TITLE_MAP)
-            elif standard == "GoldStandard" and template_type == "poa_dd":
-                _fill_gs_titled_template(doc, sections_map, project_info, GS_POA_DD_TITLE_MAP)
-            elif standard == "GoldStandard":
-                _fill_gs_template(doc, sections_map, project_info, template_type=template_type)
-            elif standard == "Verra":
-                _fill_vcs_template(doc, sections_map, project_info)
+            if sections_map:
+                if standard == "GoldStandard" and template_type == "vpa_dd":
+                    _fill_gs_titled_template(doc, sections_map, project_info, GS_VPA_DD_TITLE_MAP)
+                elif standard == "GoldStandard" and template_type == "poa_dd":
+                    _fill_gs_titled_template(doc, sections_map, project_info, GS_POA_DD_TITLE_MAP)
+                elif standard == "GoldStandard":
+                    _fill_gs_template(doc, sections_map, project_info, template_type=template_type)
+                elif standard == "Verra":
+                    _fill_vcs_template(doc, sections_map, project_info)
+                else:
+                    _fill_gs_template(doc, sections_map, project_info)
             else:
-                _fill_gs_template(doc, sections_map, project_info)
+                if standard == "Verra":
+                    _fill_vcs_kpi_table(doc, project_info)
+                    _remove_vcs_boilerplate(doc)
+                elif standard == "GoldStandard":
+                    _fill_gs_kpi_table(doc, project_info)
 
             buf = io.BytesIO()
             doc.save(buf)
