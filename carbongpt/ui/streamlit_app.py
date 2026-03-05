@@ -3958,22 +3958,18 @@ def _render_proponent_card(project_id, intake, standard, prefix=""):
     with st.container(border=True):
         std_label = "Project Developer" if standard == "GoldStandard" else "Project Proponent"
         st.markdown(f"#### {std_label}")
-        st.caption("Contact details for the project developer / proponent. Required by both GS and Verra templates.")
         pc1, pc2 = st.columns(2)
         with pc1:
             prop_org = st.text_input("Organization name", value=prop.get("organization_name", ""),
                                       key=f"setup_prop_org{sfx}_{project_id}",
                                       placeholder="e.g., CleanCook Ltd.")
+            prop_email = st.text_input("Email", value=prop.get("email", ""),
+                                        key=f"setup_prop_email{sfx}_{project_id}",
+                                        placeholder="contact@example.com")
         with pc2:
             prop_contact = st.text_input("Contact person", value=prop.get("contact_person", ""),
                                           key=f"setup_prop_contact{sfx}_{project_id}",
                                           placeholder="Full name of primary contact")
-        pc3, pc4 = st.columns(2)
-        with pc3:
-            prop_email = st.text_input("Email", value=prop.get("email", ""),
-                                        key=f"setup_prop_email{sfx}_{project_id}",
-                                        placeholder="contact@example.com")
-        with pc4:
             prop_phone = st.text_input("Phone", value=prop.get("phone", ""),
                                         key=f"setup_prop_phone{sfx}_{project_id}",
                                         placeholder="+1 234 567 8900")
@@ -3984,8 +3980,8 @@ def _render_proponent_card(project_id, intake, standard, prefix=""):
         if standard == "Verra":
             prop_other = st.text_area("Other entities involved", value=prop.get("other_entities", ""),
                                        key=f"setup_prop_other{sfx}_{project_id}",
-                                       placeholder="List any other organizations involved in the project, their roles, and contact details (VCS-PD Section 1.7)...",
-                                       height=80)
+                                       placeholder="Other organizations involved, their roles, and contact details...",
+                                       height=68)
 
     return {
         "organization_name": prop_org,
@@ -4013,20 +4009,12 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
     safeg = intake.get("safeguards", {})
     prior = intake.get("prior_consideration", {})
     legal = intake.get("legal_compliance", {})
-    dates = intake.get("crediting_dates", {})
 
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="pdd")
 
     with st.container(border=True):
-        st.markdown("#### Project Overview")
-        po_objective = st.text_area("Detailed objective", value=po.get("objective", ""),
-                                     key=f"setup_po_objective_{project_id}",
-                                     placeholder="What is the primary goal of this project?",
-                                     height=80)
-        po_summary = st.text_area("Project summary", value=po.get("summary", ""),
-                                   key=f"setup_po_summary_{project_id}",
-                                   placeholder="Provide a short summary suitable for a PDD introduction...",
-                                   height=80)
+        st.markdown("#### Project Facts")
+        st.caption("Only provide facts unique to your project. The AI will draft everything else from your methodology and uploaded documents.")
         pc1, pc2, pc3 = st.columns(3)
         with pc1:
             po_start_date = st.text_input("Project start date", value=po.get("start_date", ""),
@@ -4058,170 +4046,46 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
 
     with st.container(border=True):
         st.markdown("#### Technology & Approach")
-        tech_desc = st.text_area("Technology / intervention description", value=tech.get("description", ""),
+        tech_desc = st.text_area("What is the project technology or intervention?", value=tech.get("description", ""),
                                   key=f"setup_tech_desc_{project_id}",
-                                  placeholder="Describe the technology, intervention, or approach used (e.g., improved cookstoves, solar panels, EV fleet, grid connection, afforestation)...",
+                                  placeholder="e.g., Distribution of improved biomass cookstoves to replace traditional three-stone fires...",
                                   height=80)
         tc1, tc2 = st.columns(2)
         with tc1:
-            tech_manufacturer = st.text_input("Equipment manufacturer / supplier (if applicable)", value=tech.get("manufacturer", ""),
+            tech_manufacturer = st.text_input("Manufacturer / supplier", value=tech.get("manufacturer", ""),
                                                key=f"setup_tech_mfr_{project_id}",
                                                placeholder="e.g., BioLite, Tesla, Vestas")
-            tech_baseline_scenario = st.text_input("Baseline energy source / practice", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
+            tech_baseline_scenario = st.text_input("Baseline practice / fuel", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
                                                 key=f"setup_tech_fuel_bl_{project_id}",
-                                                placeholder="e.g., Wood, Diesel generators, Grid electricity, Open burning")
+                                                placeholder="e.g., Wood, Diesel, Grid electricity")
         with tc2:
             tech_model = st.text_input("Model / specification", value=tech.get("model", ""),
                                         key=f"setup_tech_model_{project_id}",
-                                        placeholder="e.g., HomeStove 2, Model 3, V150-4.2MW")
-            tech_project_scenario = st.text_input("Project energy source / practice", value=tech.get("fuel_project", tech.get("project_scenario", "")),
+                                        placeholder="e.g., HomeStove 2, V150-4.2MW")
+            tech_project_scenario = st.text_input("Project practice / fuel", value=tech.get("fuel_project", tech.get("project_scenario", "")),
                                                key=f"setup_tech_fuel_pj_{project_id}",
-                                               placeholder="e.g., LPG, Solar PV, Grid-connected wind, Improved cookstove")
+                                               placeholder="e.g., LPG, Solar PV, Improved cookstove")
         tech_distribution = st.text_input("Distribution / implementation method", value=tech.get("distribution_method", ""),
                                            key=f"setup_tech_dist_{project_id}",
-                                           placeholder="e.g., Direct sales, Lease model, Government programme, Grid connection")
+                                           placeholder="e.g., Direct sales, Lease model, Government programme")
 
     with st.container(border=True):
         st.markdown("#### Location & Beneficiaries")
-        loc_regions = st.text_input("Regions / provinces", value=loc.get("regions", ""),
-                                     key=f"setup_loc_regions_{project_id}",
-                                     placeholder="e.g., Northern Region, Ashanti Region")
-        loc_coords = st.text_input("Coordinates (lat, lon)", value=loc.get("coordinates", ""),
-                                    key=f"setup_loc_coords_{project_id}",
-                                    placeholder="e.g., 7.9465, -1.0232")
         lc1, lc2 = st.columns(2)
         with lc1:
+            loc_regions = st.text_input("Regions / provinces", value=loc.get("regions", ""),
+                                         key=f"setup_loc_regions_{project_id}",
+                                         placeholder="e.g., Northern Region, Ashanti Region")
             loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
                                         key=f"setup_loc_target_{project_id}",
                                         placeholder="e.g., Rural households")
         with lc2:
+            loc_coords = st.text_input("Coordinates (lat, lon)", value=loc.get("coordinates", ""),
+                                        key=f"setup_loc_coords_{project_id}",
+                                        placeholder="e.g., 7.9465, -1.0232")
             loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
                                                key=f"setup_loc_bene_{project_id}",
                                                placeholder="e.g., 250,000 people")
-
-    with st.container(border=True):
-        st.markdown("#### Baseline & Additionality")
-        ba_baseline = st.text_area("Baseline scenario", value=ba.get("baseline_scenario", ""),
-                                    key=f"setup_ba_baseline_{project_id}",
-                                    placeholder="Describe what would happen without the project...",
-                                    height=80)
-        ba_additionality = st.text_area("Additionality justification", value=ba.get("additionality_justification", ""),
-                                         key=f"setup_ba_add_{project_id}",
-                                         placeholder="Why would this project not happen without carbon finance?",
-                                         height=80)
-        ba_barriers = st.text_area("Barriers", value=ba.get("barriers", ""),
-                                    key=f"setup_ba_barriers_{project_id}",
-                                    placeholder="Investment barriers, technological barriers, institutional barriers...",
-                                    height=80)
-        ba_common = st.text_area("Common practice analysis", value=ba.get("common_practice", ""),
-                                  key=f"setup_ba_common_{project_id}",
-                                  placeholder="Is this technology/practice common in the region?",
-                                  height=80)
-
-    prior_data = {}
-    if standard == "GoldStandard":
-        with st.container(border=True):
-            st.markdown("#### Prior Consideration & Financial Need")
-            st.caption("Required by Gold Standard for additionality demonstration (Sections B.5.1, B.5.2, A.5).")
-            prior_awareness = st.text_input("Date of awareness of GS carbon finance",
-                                             value=prior.get("awareness_date", ""),
-                                             key=f"setup_prior_aware_{project_id}",
-                                             placeholder="YYYY-MM-DD - When was the decision to use carbon finance first documented?")
-            prior_evidence = st.text_area("Prior consideration evidence",
-                                           value=prior.get("evidence", ""),
-                                           key=f"setup_prior_evidence_{project_id}",
-                                           placeholder="Describe the evidence that the project was designed with the intent to seek carbon finance (board minutes, emails, feasibility studies)...",
-                                           height=80)
-            prior_financial = st.text_area("Financial need / investment barrier details",
-                                            value=prior.get("financial_need", ""),
-                                            key=f"setup_prior_financial_{project_id}",
-                                            placeholder="Describe why the project requires carbon finance to be viable (IRR analysis, funding gap, etc.)...",
-                                            height=80)
-            prior_funding = st.text_area("Funding sources",
-                                          value=prior.get("funding_sources", ""),
-                                          key=f"setup_prior_funding_{project_id}",
-                                          placeholder="List all funding sources: ODA, carbon finance, grants, equity, debt, subsidies...",
-                                          height=80)
-            prior_data = {
-                "awareness_date": prior_awareness,
-                "evidence": prior_evidence,
-                "financial_need": prior_financial,
-                "funding_sources": prior_funding,
-            }
-
-    legal_data = {}
-    if standard == "Verra":
-        with st.container(border=True):
-            st.markdown("#### Legal & Compliance")
-            st.caption("Required by Verra VCS-PD (Sections 1.8, 1.15, 1.16, 1.17).")
-            legal_ownership = st.text_area("GHG emission reduction ownership",
-                                            value=legal.get("ownership", ""),
-                                            key=f"setup_legal_own_{project_id}",
-                                            placeholder="Describe proof of right and legal ownership of the GHG emission reductions...",
-                                            height=80)
-            legal_compliance = st.text_area("Regulatory compliance",
-                                             value=legal.get("regulatory_compliance", ""),
-                                             key=f"setup_legal_reg_{project_id}",
-                                             placeholder="Describe compliance with applicable laws and regulations...",
-                                             height=80)
-            legal_double_count = st.text_area("Double counting declaration",
-                                               value=legal.get("double_counting", ""),
-                                               key=f"setup_legal_dc_{project_id}",
-                                               placeholder="Declare that emission reductions are not claimed under any other GHG program...",
-                                               height=80)
-            legal_audit_history = st.text_area("Audit history",
-                                                value=legal.get("audit_history", ""),
-                                                key=f"setup_legal_audit_{project_id}",
-                                                placeholder="List prior validation/verification dates, VVB names, and outcomes...",
-                                                height=80)
-            legal_data = {
-                "ownership": legal_ownership,
-                "regulatory_compliance": legal_compliance,
-                "double_counting": legal_double_count,
-                "audit_history": legal_audit_history,
-            }
-
-    with st.container(border=True):
-        st.markdown("#### Crediting Period & Project Dates")
-        st.caption("Key dates for your project. These feed GS Sections C.1/C.2 and Verra Section 1.9.")
-        dc1, dc2 = st.columns(2)
-        with dc1:
-            dates_cp_start = st.text_input("Crediting period start date",
-                                            value=dates.get("crediting_start", ""),
-                                            key=f"setup_dates_cp_start_{project_id}",
-                                            placeholder="YYYY-MM-DD")
-        with dc2:
-            cp_length_options = ["", "5", "7", "10", "14", "21", "28"]
-            current_cp_length = str(dates.get("crediting_length_years", ""))
-            cp_idx = cp_length_options.index(current_cp_length) if current_cp_length in cp_length_options else 0
-            dates_cp_length = st.selectbox("Crediting period length (years)",
-                                            cp_length_options,
-                                            index=cp_idx,
-                                            key=f"setup_dates_cp_length_{project_id}",
-                                            format_func=lambda x: f"{x} years" if x else "Select...")
-        dates_operational = st.text_input("Expected operational lifetime (years)",
-                                           value=dates.get("operational_lifetime", ""),
-                                           key=f"setup_dates_oplife_{project_id}",
-                                           placeholder="e.g., 15, 20, 30")
-
-    with st.container(border=True):
-        st.markdown("#### Monitoring Plan")
-        mon_approach = st.text_area("Monitoring approach", value=mon.get("monitoring_approach", ""),
-                                     key=f"setup_mon_approach_{project_id}",
-                                     placeholder="Describe how the project will be monitored...",
-                                     height=80)
-        mon_params = st.text_area("Key parameters to monitor", value=mon.get("key_parameters", ""),
-                                   key=f"setup_mon_params_{project_id}",
-                                   placeholder="List the key monitoring parameters...",
-                                   height=80)
-        mon_sampling = st.text_area("Sampling approach", value=mon.get("sampling_approach", ""),
-                                     key=f"setup_mon_sampling_{project_id}",
-                                     placeholder="Describe the sampling methodology if applicable...",
-                                     height=80)
-        mon_qaqc = st.text_area("QA/QC procedures", value=mon.get("qa_qc", ""),
-                                  key=f"setup_mon_qaqc_{project_id}",
-                                  placeholder="Describe quality assurance / quality control procedures...",
-                                  height=80)
 
     with st.container(border=True):
         st.markdown("#### Emission Reductions")
@@ -4234,58 +4098,51 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
             er_total = st.text_input("Total ER estimate (tCO2e)", value=er.get("total_er_estimate", ""),
                                       key=f"setup_er_total_{project_id}",
                                       placeholder="e.g., 1,050,000")
-        er_calc_approach = st.text_area("Calculation approach", value=er.get("calculation_approach", ""),
-                                         key=f"setup_er_calc_{project_id}",
-                                         placeholder="Describe how emission reductions are calculated...",
-                                         height=80)
-        er_summary = st.text_area("ER summary", value=er.get("er_summary", ""),
-                                   key=f"setup_er_summary_{project_id}",
-                                   placeholder="Brief summary of the emission reduction claim...",
-                                   height=80)
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 
-    with st.container(border=True):
-        st.markdown("#### Stakeholder Engagement")
-        stk_consultation = st.text_area("Consultation summary", value=stk.get("consultation_summary", ""),
-                                         key=f"setup_stk_consult_{project_id}",
-                                         placeholder="Describe the stakeholder consultation process and outcomes...",
-                                         height=80)
-        stk_grievance = st.text_area("Grievance mechanism", value=stk.get("grievance_mechanism", ""),
-                                      key=f"setup_stk_grievance_{project_id}",
-                                      placeholder="Describe the grievance redress mechanism...",
-                                      height=80)
-        stk_gender = st.text_area("Gender assessment", value=stk.get("gender_assessment", ""),
-                                   key=f"setup_stk_gender_{project_id}",
-                                   placeholder="Describe gender considerations and impact...",
-                                   height=80)
+    with st.expander("Additional details (optional)", expanded=False):
+        st.caption("The AI will draft these sections automatically. Only fill in if you have specific information the AI should use instead of generating.")
 
-    with st.container(border=True):
-        st.markdown("#### Safeguards")
-        safeg_env = st.text_area("Environmental safeguards", value=safeg.get("environmental_safeguards", ""),
-                                  key=f"setup_safeg_env_{project_id}",
-                                  placeholder="Describe environmental safeguards and mitigation measures...",
-                                  height=80)
-        safeg_social = st.text_area("Social safeguards", value=safeg.get("social_safeguards", ""),
-                                     key=f"setup_safeg_social_{project_id}",
-                                     placeholder="Describe social safeguards...",
-                                     height=80)
-        safeg_dnh = st.text_area("Do no harm assessment", value=safeg.get("do_no_harm", ""),
-                                  key=f"setup_safeg_dnh_{project_id}",
-                                  placeholder="Describe the do-no-harm assessment...",
-                                  height=80)
+        st.markdown("**Baseline & Additionality**")
+        ba_baseline = st.text_area("Baseline scenario", value=ba.get("baseline_scenario", ""),
+                                    key=f"setup_ba_baseline_{project_id}",
+                                    placeholder="Leave blank and the AI will describe the baseline from your methodology and project context...",
+                                    height=68)
+        ba_additionality = st.text_area("Additionality justification", value=ba.get("additionality_justification", ""),
+                                         key=f"setup_ba_add_{project_id}",
+                                         placeholder="Leave blank and the AI will draft the additionality argument...",
+                                         height=68)
+
+        if standard == "GoldStandard":
+            st.markdown("**Prior Consideration (GS)**")
+            prior_awareness = st.text_input("Date of awareness of carbon finance",
+                                             value=prior.get("awareness_date", ""),
+                                             key=f"setup_prior_aware_{project_id}",
+                                             placeholder="YYYY-MM-DD")
+            prior_funding = st.text_area("Funding sources",
+                                          value=prior.get("funding_sources", ""),
+                                          key=f"setup_prior_funding_{project_id}",
+                                          placeholder="e.g., ODA 30%, carbon finance 40%, equity 30%...",
+                                          height=68)
+
+        st.markdown("**Monitoring**")
+        mon_approach = st.text_area("Monitoring notes", value=mon.get("monitoring_approach", ""),
+                                     key=f"setup_mon_approach_{project_id}",
+                                     placeholder="Any project-specific monitoring details. The AI will use the methodology's monitoring requirements automatically...",
+                                     height=68)
+
+        st.markdown("**Stakeholder & Safeguards**")
+        stk_consultation = st.text_area("Stakeholder consultation summary", value=stk.get("consultation_summary", ""),
+                                         key=f"setup_stk_consult_{project_id}",
+                                         placeholder="Brief summary of consultations held, if any...",
+                                         height=68)
 
     result = {
         "proponent": proponent_data,
         "project_overview": {
-            "objective": po_objective, "summary": po_summary,
             "start_date": po_start_date, "scale": po_scale, "num_units": po_num_units,
             "activity_type": po_activity_type, "sectoral_scope": po_sector,
-        },
-        "crediting_dates": {
-            "crediting_start": dates_cp_start,
-            "crediting_length_years": dates_cp_length,
-            "operational_lifetime": dates_operational,
         },
         "technology": {
             "description": tech_desc, "manufacturer": tech_manufacturer, "model": tech_model,
@@ -4299,30 +4156,45 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
         },
         "baseline_additionality": {
             "baseline_scenario": ba_baseline, "additionality_justification": ba_additionality,
-            "barriers": ba_barriers, "common_practice": ba_common,
+            "barriers": ba.get("barriers", ""), "common_practice": ba.get("common_practice", ""),
         },
         "monitoring": {
-            "monitoring_approach": mon_approach, "key_parameters": mon_params,
-            "sampling_approach": mon_sampling, "qa_qc": mon_qaqc,
+            "monitoring_approach": mon_approach,
+            "key_parameters": mon.get("key_parameters", ""),
+            "sampling_approach": mon.get("sampling_approach", ""),
+            "qa_qc": mon.get("qa_qc", ""),
         },
         "emission_reductions": {
             "annual_er_estimate": er_annual, "total_er_estimate": er_total,
-            "calculation_approach": er_calc_approach, "er_summary": er_summary,
+            "calculation_approach": er.get("calculation_approach", ""),
+            "er_summary": er.get("er_summary", ""),
         },
         "sdgs": {"selected_sdgs": sdg_list},
         "stakeholders": {
-            "consultation_summary": stk_consultation, "grievance_mechanism": stk_grievance,
-            "gender_assessment": stk_gender,
+            "consultation_summary": stk_consultation,
+            "grievance_mechanism": stk.get("grievance_mechanism", ""),
+            "gender_assessment": stk.get("gender_assessment", ""),
         },
         "safeguards": {
-            "environmental_safeguards": safeg_env, "social_safeguards": safeg_social,
-            "do_no_harm": safeg_dnh,
+            "environmental_safeguards": safeg.get("environmental_safeguards", ""),
+            "social_safeguards": safeg.get("social_safeguards", ""),
+            "do_no_harm": safeg.get("do_no_harm", ""),
         },
     }
-    if prior_data:
-        result["prior_consideration"] = prior_data
-    if legal_data:
-        result["legal_compliance"] = legal_data
+    if standard == "GoldStandard":
+        result["prior_consideration"] = {
+            "awareness_date": prior_awareness if standard == "GoldStandard" else "",
+            "evidence": prior.get("evidence", ""),
+            "financial_need": prior.get("financial_need", ""),
+            "funding_sources": prior_funding if standard == "GoldStandard" else "",
+        }
+    if standard == "Verra":
+        result["legal_compliance"] = {
+            "ownership": legal.get("ownership", ""),
+            "regulatory_compliance": legal.get("regulatory_compliance", ""),
+            "double_counting": legal.get("double_counting", ""),
+            "audit_history": legal.get("audit_history", ""),
+        }
     return result
 
 
@@ -4339,78 +4211,38 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="poa")
 
     with st.container(border=True):
-        st.markdown("#### Programme Description")
+        st.markdown("#### Programme Facts")
+        st.caption("Provide the key facts about your programme. The AI will draft detailed sections from this and your methodology.")
         prog_objective = st.text_area("Programme objective", value=prog.get("objective", ""),
                                        key=f"setup_poa_objective_{project_id}",
                                        placeholder="What is the overall objective of this Programme of Activities?",
-                                       height=80)
-        prog_scope = st.text_area("Geographic scope", value=prog.get("geographic_scope", ""),
+                                       height=68)
+        prog_scope = st.text_input("Geographic scope", value=prog.get("geographic_scope", ""),
                                    key=f"setup_poa_scope_{project_id}",
-                                   placeholder="Countries/regions covered by the programme...",
-                                   height=80)
-        pc1, pc2 = st.columns(2)
+                                   placeholder="Countries/regions covered by the programme")
+        pc1, pc2, pc3 = st.columns(3)
         with pc1:
-            prog_cme = st.text_input("Coordinating/Managing Entity (CME)", value=prog.get("cme_name", ""),
+            prog_cme = st.text_input("CME name", value=prog.get("cme_name", ""),
                                       key=f"setup_poa_cme_{project_id}",
-                                      placeholder="Name of the CME organization")
+                                      placeholder="Coordinating/Managing Entity")
         with pc2:
-            prog_target_vpas = st.text_input("Target number of VPAs", value=prog.get("target_vpas", ""),
+            prog_target_vpas = st.text_input("Target VPAs", value=prog.get("target_vpas", ""),
                                               key=f"setup_poa_target_vpas_{project_id}",
                                               placeholder="e.g., 15")
-        prog_cme_details = st.text_area("CME organizational details", value=prog.get("cme_details", ""),
-                                         key=f"setup_poa_cme_details_{project_id}",
-                                         placeholder="Describe the CME's role, experience, and organizational structure...",
-                                         height=80)
-        pc3, pc4 = st.columns(2)
         with pc3:
-            prog_duration = st.text_input("Programme duration (years)", value=prog.get("duration", ""),
+            prog_duration = st.text_input("Duration (years)", value=prog.get("duration", ""),
                                            key=f"setup_poa_duration_{project_id}",
                                            placeholder="e.g., 28")
-        with pc4:
-            prog_first_submission = st.text_input("Date of first submission", value=prog.get("first_submission_date", ""),
-                                                    key=f"setup_poa_first_sub_{project_id}",
-                                                    placeholder="YYYY-MM-DD")
 
     with st.container(border=True):
-        st.markdown("#### Management System")
-        st.caption("Describe how the CME manages the programme (GS Section B.1).")
-        mgmt_description = st.text_area("Management system description",
-                                          value=mgmt.get("description", ""),
-                                          key=f"setup_poa_mgmt_desc_{project_id}",
-                                          placeholder="Describe the CME's management system: organizational structure, roles and responsibilities, record-keeping, internal audits, training...",
-                                          height=100)
-        mgmt_multi_tech = st.text_area("Multiple technologies / measures",
-                                        value=mgmt.get("multiple_technologies", ""),
-                                        key=f"setup_poa_mgmt_tech_{project_id}",
-                                        placeholder="If the PoA uses multiple technologies, methodologies, or measures, describe them here...",
-                                        height=80)
-        mgmt_qaqc = st.text_area("Programme-level QA/QC",
-                                   value=mgmt.get("qa_qc", ""),
-                                   key=f"setup_poa_mgmt_qaqc_{project_id}",
-                                   placeholder="Describe the programme-level quality assurance / quality control procedures...",
-                                   height=80)
-
-    with st.container(border=True):
-        st.markdown("#### Eligibility & Inclusion")
-        elig_criteria = st.text_area("VPA eligibility criteria", value=elig.get("criteria", ""),
+        st.markdown("#### VPA Eligibility Criteria")
+        elig_criteria = st.text_area("What criteria must a VPA meet to be included?", value=elig.get("criteria", ""),
                                       key=f"setup_poa_elig_{project_id}",
-                                      placeholder="What criteria must a VPA meet to be included in this programme?",
-                                      height=100)
-        elig_process = st.text_area("VPA inclusion process", value=elig.get("inclusion_process", ""),
-                                     key=f"setup_poa_inclusion_{project_id}",
-                                     placeholder="Describe the process for adding new VPAs to the programme...",
-                                     height=80)
-        elig_approval = st.text_area("VPA approval mechanism", value=elig.get("approval_mechanism", ""),
-                                      key=f"setup_poa_approval_{project_id}",
-                                      placeholder="How are VPAs approved and validated?",
+                                      placeholder="Define the eligibility criteria for VPA inclusion in this programme...",
                                       height=80)
 
     with st.container(border=True):
-        st.markdown("#### Monitoring & Emission Reductions")
-        mon_approach = st.text_area("Programme-level monitoring approach", value=mon.get("monitoring_approach", ""),
-                                     key=f"setup_poa_mon_{project_id}",
-                                     placeholder="Describe the overall monitoring framework for the programme...",
-                                     height=80)
+        st.markdown("#### Emission Reductions")
         ec1, ec2 = st.columns(2)
         with ec1:
             er_annual = st.text_input("Estimated annual ERs (tCO2e)", value=er.get("annual_er_estimate", ""),
@@ -4421,46 +4253,45 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 
-    with st.container(border=True):
-        st.markdown("#### Stakeholder Engagement")
-        stk_consultation = st.text_area("Consultation summary", value=stk.get("consultation_summary", ""),
-                                         key=f"setup_poa_stk_{project_id}",
-                                         placeholder="Describe the stakeholder consultation process...",
-                                         height=80)
-        stk_grievance = st.text_area("Grievance mechanism", value=stk.get("grievance_mechanism", ""),
-                                      key=f"setup_poa_grievance_{project_id}",
-                                      placeholder="Describe the grievance redress mechanism...",
-                                      height=80)
+    with st.expander("Additional details (optional)", expanded=False):
+        st.caption("The AI will draft these sections automatically. Only fill in if you have specific information.")
 
-    with st.container(border=True):
-        st.markdown("#### Safeguards")
-        safeg_env = st.text_area("Environmental safeguards", value=safeg.get("environmental_safeguards", ""),
-                                  key=f"setup_poa_safeg_env_{project_id}", height=80)
-        safeg_social = st.text_area("Social safeguards", value=safeg.get("social_safeguards", ""),
-                                     key=f"setup_poa_safeg_social_{project_id}", height=80)
+        st.markdown("**Management System**")
+        mgmt_description = st.text_area("Management system description",
+                                          value=mgmt.get("description", ""),
+                                          key=f"setup_poa_mgmt_desc_{project_id}",
+                                          placeholder="Leave blank and the AI will draft from programme context...",
+                                          height=68)
+
+        st.markdown("**Stakeholder & Safeguards**")
+        stk_consultation = st.text_area("Stakeholder consultation summary", value=stk.get("consultation_summary", ""),
+                                         key=f"setup_poa_stk_{project_id}",
+                                         placeholder="Brief summary of consultations held...",
+                                         height=68)
 
     return {
         "proponent": proponent_data,
         "programme": {
             "objective": prog_objective, "geographic_scope": prog_scope,
-            "cme_name": prog_cme, "cme_details": prog_cme_details,
+            "cme_name": prog_cme, "cme_details": prog.get("cme_details", ""),
             "target_vpas": prog_target_vpas,
-            "duration": prog_duration, "first_submission_date": prog_first_submission,
+            "duration": prog_duration, "first_submission_date": prog.get("first_submission_date", ""),
         },
         "management_system": {
             "description": mgmt_description,
-            "multiple_technologies": mgmt_multi_tech,
-            "qa_qc": mgmt_qaqc,
+            "multiple_technologies": mgmt.get("multiple_technologies", ""),
+            "qa_qc": mgmt.get("qa_qc", ""),
         },
         "eligibility": {
-            "criteria": elig_criteria, "inclusion_process": elig_process,
-            "approval_mechanism": elig_approval,
+            "criteria": elig_criteria,
+            "inclusion_process": elig.get("inclusion_process", ""),
+            "approval_mechanism": elig.get("approval_mechanism", ""),
         },
-        "monitoring": {"monitoring_approach": mon_approach},
+        "monitoring": {"monitoring_approach": mon.get("monitoring_approach", "")},
         "emission_reductions": {"annual_er_estimate": er_annual, "total_er_estimate": er_total},
         "sdgs": {"selected_sdgs": sdg_list},
-        "stakeholders": {"consultation_summary": stk_consultation, "grievance_mechanism": stk_grievance},
-        "safeguards": {"environmental_safeguards": safeg_env, "social_safeguards": safeg_social},
+        "stakeholders": {"consultation_summary": stk_consultation, "grievance_mechanism": stk.get("grievance_mechanism", "")},
+        "safeguards": {"environmental_safeguards": safeg.get("environmental_safeguards", ""), "social_safeguards": safeg.get("social_safeguards", "")},
     }
 
 
@@ -4470,85 +4301,48 @@ def _render_intake_vpa(project_id, intake, standard="GoldStandard"):
     loc = intake.get("location", {})
     mon = intake.get("monitoring", {})
     er = intake.get("emission_reductions", {})
-    dates = intake.get("crediting_dates", {})
 
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="vpa")
 
     with st.container(border=True):
-        st.markdown("#### VPA Details")
+        st.markdown("#### VPA Facts")
+        st.caption("Key facts about this VPA component. The AI will draft detailed sections from this and the parent PoA-DD.")
         vpa_elig = st.text_area("How this VPA meets PoA eligibility criteria", value=vpa.get("eligibility_justification", ""),
                                  key=f"setup_vpa_elig_{project_id}",
                                  placeholder="Explain how this VPA satisfies the eligibility criteria defined in the parent PoA-DD...",
-                                 height=100)
+                                 height=80)
         vc1, vc2 = st.columns(2)
         with vc1:
             vpa_start = st.text_input("VPA start date", value=vpa.get("start_date", ""),
                                        key=f"setup_vpa_start_{project_id}",
                                        placeholder="YYYY-MM-DD")
         with vc2:
-            vpa_baseline = st.text_input("VPA-specific baseline scenario", value=vpa.get("baseline_scenario", ""),
+            vpa_baseline = st.text_input("Baseline practice", value=vpa.get("baseline_scenario", ""),
                                           key=f"setup_vpa_baseline_{project_id}",
-                                          placeholder="e.g., Uncontrolled three-stone fire")
+                                          placeholder="e.g., Three-stone fire, Diesel generator")
 
     with st.container(border=True):
-        st.markdown("#### Crediting Period & Lifetime")
-        st.caption("VPA-specific crediting period and operational lifetime.")
-        dc1, dc2, dc3 = st.columns(3)
-        with dc1:
-            dates_cp_start = st.text_input("Crediting period start",
-                                            value=dates.get("crediting_start", ""),
-                                            key=f"setup_vpa_cp_start_{project_id}",
-                                            placeholder="YYYY-MM-DD")
-        with dc2:
-            dates_cp_end = st.text_input("Crediting period end",
-                                          value=dates.get("crediting_end", ""),
-                                          key=f"setup_vpa_cp_end_{project_id}",
-                                          placeholder="YYYY-MM-DD")
-        with dc3:
-            dates_oplife = st.text_input("Operational lifetime (years)",
-                                          value=dates.get("operational_lifetime", ""),
-                                          key=f"setup_vpa_oplife_{project_id}",
-                                          placeholder="e.g., 10")
-
-    with st.container(border=True):
-        st.markdown("#### Technology & Approach")
-        tech_desc = st.text_area("VPA-specific technology/approach", value=tech.get("description", ""),
+        st.markdown("#### Technology & Location")
+        tech_desc = st.text_area("Technology / approach", value=tech.get("description", ""),
                                   key=f"setup_vpa_tech_{project_id}",
-                                  placeholder="Describe the technology or approach specific to this VPA...",
-                                  height=80)
+                                  placeholder="What technology or intervention is used in this VPA?",
+                                  height=68)
         tc1, tc2 = st.columns(2)
         with tc1:
             tech_manufacturer = st.text_input("Manufacturer", value=tech.get("manufacturer", ""),
                                                key=f"setup_vpa_mfr_{project_id}")
+            loc_regions = st.text_input("Location / regions", value=loc.get("regions", ""),
+                                         key=f"setup_vpa_regions_{project_id}",
+                                         placeholder="Regions or districts for this VPA")
         with tc2:
             tech_model = st.text_input("Model", value=tech.get("model", ""),
                                         key=f"setup_vpa_model_{project_id}")
-        tech_distribution = st.text_input("Distribution / deployment method", value=tech.get("distribution_method", ""),
-                                           key=f"setup_vpa_dist_{project_id}",
-                                           placeholder="e.g., Direct sales, Lease model, NGO distribution")
-
-    with st.container(border=True):
-        st.markdown("#### Location & Geography")
-        loc_regions = st.text_input("VPA location / regions", value=loc.get("regions", ""),
-                                     key=f"setup_vpa_regions_{project_id}",
-                                     placeholder="Specific regions or districts for this VPA")
-        loc_coords = st.text_input("Coordinates", value=loc.get("coordinates", ""),
-                                    key=f"setup_vpa_coords_{project_id}",
-                                    placeholder="e.g., 7.9465, -1.0232")
-        lc1, lc2 = st.columns(2)
-        with lc1:
-            loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
-                                        key=f"setup_vpa_target_{project_id}")
-        with lc2:
             loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
-                                               key=f"setup_vpa_bene_{project_id}")
+                                               key=f"setup_vpa_bene_{project_id}",
+                                               placeholder="e.g., 50,000 people")
 
     with st.container(border=True):
-        st.markdown("#### Monitoring & Emission Reductions")
-        mon_approach = st.text_area("VPA-specific monitoring arrangements", value=mon.get("monitoring_approach", ""),
-                                     key=f"setup_vpa_mon_{project_id}",
-                                     placeholder="Any VPA-specific monitoring requirements beyond the PoA-level plan...",
-                                     height=80)
+        st.markdown("#### Emission Reductions")
         ec1, ec2 = st.columns(2)
         with ec1:
             er_annual = st.text_input("Expected annual ERs (tCO2e)", value=er.get("annual_er_estimate", ""),
@@ -4563,20 +4357,15 @@ def _render_intake_vpa(project_id, intake, standard="GoldStandard"):
             "eligibility_justification": vpa_elig, "start_date": vpa_start,
             "baseline_scenario": vpa_baseline,
         },
-        "crediting_dates": {
-            "crediting_start": dates_cp_start,
-            "crediting_end": dates_cp_end,
-            "operational_lifetime": dates_oplife,
-        },
         "technology": {
             "description": tech_desc, "manufacturer": tech_manufacturer, "model": tech_model,
-            "distribution_method": tech_distribution,
+            "distribution_method": tech.get("distribution_method", ""),
         },
         "location": {
-            "regions": loc_regions, "coordinates": loc_coords,
-            "target_population": loc_target, "beneficiaries": loc_beneficiaries,
+            "regions": loc_regions, "coordinates": loc.get("coordinates", ""),
+            "target_population": loc.get("target_population", ""), "beneficiaries": loc_beneficiaries,
         },
-        "monitoring": {"monitoring_approach": mon_approach},
+        "monitoring": {"monitoring_approach": mon.get("monitoring_approach", "")},
         "emission_reductions": {"annual_er_estimate": er_annual, "total_er_estimate": er_total},
     }
 
@@ -4592,29 +4381,27 @@ def _render_intake_mr(project_id, intake, standard="GoldStandard"):
 
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="mr")
 
+    st.info("Upload your PDD in the Documents tab so the AI can extract baseline, methodology, and monitoring details automatically.")
+
     with st.container(border=True):
         st.markdown("#### Monitoring Period")
-        mp1, mp2 = st.columns(2)
+        st.caption("The essential facts for this monitoring report. The AI will draft all sections from this, your PDD, and the methodology.")
+        mp1, mp2, mp3 = st.columns(3)
         with mp1:
-            period_start = st.text_input("Monitoring period start", value=period.get("start_date", ""),
+            period_start = st.text_input("Period start", value=period.get("start_date", ""),
                                           key=f"setup_mr_period_start_{project_id}",
                                           placeholder="YYYY-MM-DD")
         with mp2:
-            period_end = st.text_input("Monitoring period end", value=period.get("end_date", ""),
+            period_end = st.text_input("Period end", value=period.get("end_date", ""),
                                         key=f"setup_mr_period_end_{project_id}",
                                         placeholder="YYYY-MM-DD")
-        period_number = st.text_input("Monitoring period number", value=period.get("period_number", ""),
-                                       key=f"setup_mr_period_num_{project_id}",
-                                       placeholder="e.g., 1, 2, 3...")
+        with mp3:
+            period_number = st.text_input("Period number", value=period.get("period_number", ""),
+                                           key=f"setup_mr_period_num_{project_id}",
+                                           placeholder="e.g., 1, 2, 3")
 
     with st.container(border=True):
         st.markdown("#### Implementation Status")
-        st.caption("Describe the current status of project implementation during this monitoring period.")
-        impl_status = st.text_area("Implementation status description",
-                                    value=impl.get("status_description", ""),
-                                    key=f"setup_mr_impl_status_{project_id}",
-                                    placeholder="Describe current status: devices operational, decommissioned, replaced, new installations...",
-                                    height=80)
         ic1, ic2 = st.columns(2)
         with ic1:
             impl_units_active = st.text_input("Active units / devices",
@@ -4626,65 +4413,10 @@ def _render_intake_mr(project_id, intake, standard="GoldStandard"):
                                                        value=impl.get("units_decommissioned", ""),
                                                        key=f"setup_mr_impl_decom_{project_id}",
                                                        placeholder="e.g., 2,500")
-        impl_training = st.text_area("Training / capacity building activities",
-                                      value=impl.get("training_activities", ""),
-                                      key=f"setup_mr_impl_training_{project_id}",
-                                      placeholder="Describe any training, capacity building, or awareness activities conducted during this period...",
-                                      height=80)
-
-    with st.container(border=True):
-        st.markdown("#### Forward Action Requests (FARs)")
-        st.caption("Address any FARs or CARs from the previous verification/validation.")
-        fars_previous = st.text_area("FARs from previous verification",
-                                      value=fars.get("previous_fars", ""),
-                                      key=f"setup_mr_fars_prev_{project_id}",
-                                      placeholder="List any Forward Action Requests raised during the last verification...",
-                                      height=80)
-        fars_response = st.text_area("Response to FARs",
-                                      value=fars.get("response", ""),
-                                      key=f"setup_mr_fars_resp_{project_id}",
-                                      placeholder="Describe the actions taken to address each FAR...",
-                                      height=80)
-
-    with st.container(border=True):
-        st.markdown("#### Data Collection")
-        data_units = st.text_input("Number of devices/installations in this period",
+        data_units = st.text_input("New installations this period",
                                     value=data.get("num_units", ""),
                                     key=f"setup_mr_units_{project_id}",
-                                    placeholder="e.g., 25,000 stoves distributed")
-        data_summary = st.text_area("Data collection summary", value=data.get("collection_summary", ""),
-                                     key=f"setup_mr_data_summary_{project_id}",
-                                     placeholder="Summarize the monitoring data collected during this period...",
-                                     height=100)
-        data_highlights = st.text_area("Key monitoring data highlights", value=data.get("data_highlights", ""),
-                                        key=f"setup_mr_highlights_{project_id}",
-                                        placeholder="Notable findings, trends, or data points...",
-                                        height=80)
-
-    with st.container(border=True):
-        st.markdown("#### Calibration & Data Quality")
-        st.caption("Quality assurance information for monitoring data and instruments.")
-        cal_records = st.text_area("Calibration records summary",
-                                    value=calibration.get("calibration_records", ""),
-                                    key=f"setup_mr_cal_records_{project_id}",
-                                    placeholder="Describe calibration records for monitoring equipment (meters, scales, sensors)...",
-                                    height=80)
-        cal_data_sources = st.text_area("Data sources and references",
-                                         value=calibration.get("data_sources", ""),
-                                         key=f"setup_mr_cal_sources_{project_id}",
-                                         placeholder="List all data sources used: field surveys, utility records, government statistics, satellite data...",
-                                         height=80)
-
-    with st.container(border=True):
-        st.markdown("#### Deviations & Changes")
-        dev_methodology = st.text_area("Deviations from PDD methodology", value=deviations.get("methodology_deviations", ""),
-                                        key=f"setup_mr_dev_meth_{project_id}",
-                                        placeholder="Describe any deviations from the applied methodology...",
-                                        height=80)
-        dev_changes = st.text_area("Changes since last monitoring period", value=deviations.get("period_changes", ""),
-                                    key=f"setup_mr_dev_changes_{project_id}",
-                                    placeholder="Describe any changes compared to the previous monitoring period...",
-                                    height=80)
+                                    placeholder="e.g., 10,000 stoves distributed")
 
     with st.container(border=True):
         st.markdown("#### Emission Reduction Results")
@@ -4700,8 +4432,30 @@ def _render_intake_mr(project_id, intake, standard="GoldStandard"):
             res_leakage = st.text_input("Leakage (tCO2e)", value=results.get("leakage", ""),
                                          key=f"setup_mr_res_leak_{project_id}")
         with rc4:
-            res_net = st.text_input("Net emission reductions (tCO2e)", value=results.get("net_er", ""),
+            res_net = st.text_input("Net ERs (tCO2e)", value=results.get("net_er", ""),
                                      key=f"setup_mr_res_net_{project_id}")
+
+    with st.expander("Additional details (optional)", expanded=False):
+        st.caption("The AI will draft these sections from your PDD and methodology. Only fill in if you have specific information.")
+
+        st.markdown("**Forward Action Requests**")
+        fars_previous = st.text_area("FARs from previous verification",
+                                      value=fars.get("previous_fars", ""),
+                                      key=f"setup_mr_fars_prev_{project_id}",
+                                      placeholder="List any FARs that need to be addressed in this MR...",
+                                      height=68)
+
+        st.markdown("**Deviations**")
+        dev_methodology = st.text_area("Deviations from PDD methodology", value=deviations.get("methodology_deviations", ""),
+                                        key=f"setup_mr_dev_meth_{project_id}",
+                                        placeholder="Only if there are deviations from the registered methodology...",
+                                        height=68)
+
+        st.markdown("**Data Collection Notes**")
+        data_summary = st.text_area("Additional monitoring data notes", value=data.get("collection_summary", ""),
+                                     key=f"setup_mr_data_summary_{project_id}",
+                                     placeholder="Any notable findings, issues, or context about the monitoring data...",
+                                     height=68)
 
     return {
         "proponent": proponent_data,
@@ -4710,25 +4464,25 @@ def _render_intake_mr(project_id, intake, standard="GoldStandard"):
             "period_number": period_number,
         },
         "implementation_status": {
-            "status_description": impl_status,
+            "status_description": impl.get("status_description", ""),
             "units_active": impl_units_active,
             "units_decommissioned": impl_units_decommissioned,
-            "training_activities": impl_training,
+            "training_activities": impl.get("training_activities", ""),
         },
         "forward_action_requests": {
             "previous_fars": fars_previous,
-            "response": fars_response,
+            "response": fars.get("response", ""),
         },
         "data_collection": {
             "num_units": data_units, "collection_summary": data_summary,
-            "data_highlights": data_highlights,
+            "data_highlights": data.get("data_highlights", ""),
         },
         "calibration_data_quality": {
-            "calibration_records": cal_records,
-            "data_sources": cal_data_sources,
+            "calibration_records": calibration.get("calibration_records", ""),
+            "data_sources": calibration.get("data_sources", ""),
         },
         "deviations": {
-            "methodology_deviations": dev_methodology, "period_changes": dev_changes,
+            "methodology_deviations": dev_methodology, "period_changes": deviations.get("period_changes", ""),
         },
         "results": {
             "baseline_emissions": res_baseline, "project_emissions": res_project,
