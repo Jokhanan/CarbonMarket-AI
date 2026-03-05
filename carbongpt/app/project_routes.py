@@ -235,11 +235,31 @@ def upload_project_document(
         if file_type == "docx":
             from carbongpt.tools.parse_docx import parse_docx
             result = parse_docx(str(file_path))
-            parsed_text = result.get("full_text", "")
-            parsed_sections = [
-                {"heading": s.get("heading", ""), "text": s.get("text", "")[:500]}
-                for s in result.get("sections", [])
-            ]
+            sections_dict = result.get("sections", {})
+            if sections_dict:
+                parsed_text = "\n\n".join(
+                    f"{heading}\n{text}" if heading != "PREAMBLE" else text
+                    for heading, text in sections_dict.items()
+                    if text.strip()
+                )
+                parsed_sections = [
+                    {"heading": heading, "text": text[:500]}
+                    for heading, text in sections_dict.items()
+                    if text.strip()
+                ]
+            if not parsed_text:
+                from docx import Document as DocxDoc
+                doc_obj = DocxDoc(str(file_path))
+                all_text = []
+                for para in doc_obj.paragraphs:
+                    if para.text.strip():
+                        all_text.append(para.text.strip())
+                for table in doc_obj.tables:
+                    for row in table.rows:
+                        row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                        if row_text:
+                            all_text.append(" | ".join(row_text))
+                parsed_text = "\n".join(all_text)
         elif file_type == "pdf":
             try:
                 import pdfplumber

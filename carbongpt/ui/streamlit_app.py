@@ -642,7 +642,7 @@ st.markdown("""
         line-height: 1.2;
     }
     .workspace-header-meta {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: 8px;
         flex-wrap: wrap;
@@ -2596,29 +2596,28 @@ def _render_project_workspace(project_id):
         if parent:
             parent_type_info = PROJECT_TYPE_INFO.get(parent.get("project_type", ""), {})
             parent_short = parent_type_info.get("short", "Project")
-            parent_html = f'<div style="margin-top:8px;"><span class="stat-pill">Linked to {parent_short}: {parent["name"]}</span></div>'
+            parent_html = f'<span style="display:block;margin-top:8px;"><span class="stat-pill">Linked to {parent_short}: {parent["name"]}</span></span>'
 
     desc_html = ""
     if project.get("description"):
-        desc_html = f'<div style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary);">{project["description"]}</div>'
+        desc_html = f'<span style="display:block;margin-top:8px;font-size:0.85rem;color:var(--text-secondary);">{project["description"]}</span>'
 
-    st.markdown(f"""
-    <div class="workspace-header">
-        <div class="workspace-header-top">
-            <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span class="project-type-badge {badge_class}">{type_info['short']}</span>
-                    <span class="workspace-header-badge {std_badge_class}">{std_display}</span>
-                    <span class="status-badge {status_class}">{status_label}</span>
-                </div>
-                <h1>{project['name']}</h1>
-                <div class="workspace-header-meta">{meta_html}</div>
-                {parent_html}
-                {desc_html}
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(
+            f'<span class="project-type-badge {badge_class}">{type_info["short"]}</span> '
+            f'<span class="workspace-header-badge {std_badge_class}">{std_display}</span> '
+            f'<span class="status-badge {status_class}">{status_label}</span>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(f"### {project['name']}")
+        st.markdown(
+            f'<span class="workspace-header-meta">{meta_html}</span>',
+            unsafe_allow_html=True,
+        )
+        if parent_html:
+            st.markdown(parent_html, unsafe_allow_html=True)
+        if desc_html:
+            st.markdown(desc_html, unsafe_allow_html=True)
 
     if project_type == "poa_programme":
         children = _fetch(f"/projects/{project_id}/children") or []
