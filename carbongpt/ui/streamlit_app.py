@@ -731,6 +731,73 @@ st.markdown("""
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-full); }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+    /* ── Chat Widget ── */
+    .chat-container {
+        border: 1px solid var(--border-default, #e5e7eb);
+        border-radius: var(--radius-lg, 12px);
+        background: var(--surface-primary, #ffffff);
+        box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.08));
+        overflow: hidden;
+    }
+    .chat-header {
+        background: linear-gradient(135deg, #0d9488, #0f766e);
+        color: #ffffff;
+        padding: 12px 16px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .chat-header-icon {
+        width: 24px; height: 24px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.75rem;
+    }
+    .chat-messages {
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .chat-msg {
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        max-width: 85%;
+        word-wrap: break-word;
+    }
+    .chat-msg-user {
+        background: linear-gradient(135deg, #0d9488, #0f766e);
+        color: #ffffff;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+    }
+    .chat-msg-assistant {
+        background: var(--surface-secondary, #f8fafc);
+        color: var(--text-primary, #1a1a2e);
+        border: 1px solid var(--border-default, #e5e7eb);
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+    }
+    .chat-msg-assistant p { margin: 0 0 6px 0; }
+    .chat-msg-assistant p:last-child { margin-bottom: 0; }
+    .chat-context-badge {
+        display: inline-block;
+        background: rgba(13,148,136,0.1);
+        color: #0d9488;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -5585,6 +5652,187 @@ def _render_project_settings_legacy(project):
                 st.rerun()
 
 
+def _render_chat_widget():
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
+
+    project_id = st.session_state.get("selected_project_id")
+    project_name = ""
+    if project_id:
+        proj = _fetch(f"/projects/{project_id}")
+        if proj:
+            project_name = proj.get("name", "")
+
+    col_spacer, col_chat_toggle = st.columns([5, 1])
+    with col_chat_toggle:
+        toggle_label = "Close Assistant" if st.session_state.chat_open else "AI Assistant"
+        if st.button(toggle_label, key="chat_toggle_btn", type="primary" if not st.session_state.chat_open else "secondary", use_container_width=True):
+            st.session_state.chat_open = not st.session_state.chat_open
+            st.rerun()
+
+    if not st.session_state.chat_open:
+        return
+
+    context_badge = ""
+    if project_name:
+        context_badge = f'<span class="chat-context-badge">Project: {project_name}</span>'
+
+    st.markdown("---")
+
+    st.markdown(f"""
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="chat-header-icon">AI</div>
+            CarbonGPT Assistant{context_badge}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    chat_container = st.container(height=400)
+    with chat_container:
+        if not st.session_state.chat_history:
+            greeting = "Hello! I'm your CarbonGPT Assistant. I can help with:"
+            if project_name:
+                greeting += f"\n- Questions about **{project_name}**"
+            greeting += (
+                "\n- Carbon market concepts and terminology"
+                "\n- Methodology guidance (Gold Standard, Verra VCS, CDM)"
+                "\n- PDD/MR writing best practices"
+                "\n- Emission reduction calculations"
+                "\n- Validation and verification processes"
+                "\n\nHow can I help you?"
+            )
+            st.markdown(f"""<div style="padding:8px 0;">
+                <div class="chat-msg chat-msg-assistant">{greeting.replace(chr(10), '<br>')}</div>
+            </div>""", unsafe_allow_html=True)
+
+        for msg in st.session_state.chat_history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            css_class = "chat-msg-user" if role == "user" else "chat-msg-assistant"
+            if role == "assistant":
+                import re
+                formatted = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
+                formatted = formatted.replace("\n", "<br>")
+            else:
+                formatted = content.replace("\n", "<br>")
+            st.markdown(f"""<div style="padding:2px 0;display:flex;{'justify-content:flex-end' if role == 'user' else 'justify-content:flex-start'};">
+                <div class="chat-msg {css_class}">{formatted}</div>
+            </div>""", unsafe_allow_html=True)
+
+    ic1, ic2, ic3 = st.columns([5, 0.7, 0.7])
+    with ic1:
+        user_input = st.text_input(
+            "Message",
+            key="chat_input",
+            placeholder="Ask about carbon markets, your project, methodologies...",
+            label_visibility="collapsed",
+        )
+    with ic2:
+        send_clicked = st.button("Send", key="chat_send_btn", type="primary", use_container_width=True)
+    with ic3:
+        clear_clicked = st.button("Clear", key="chat_clear_btn", use_container_width=True)
+
+    import streamlit.components.v1 as components
+    components.html("""
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;">
+        <button id="voiceBtn" onclick="startVoice()" style="
+            background:linear-gradient(135deg,#0d9488,#0f766e);color:#fff;border:none;
+            border-radius:8px;padding:6px 14px;cursor:pointer;font-size:0.8rem;font-weight:500;
+            display:flex;align-items:center;gap:6px;transition:all 0.2s;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>
+            </svg>
+            Voice Input
+        </button>
+        <span id="voiceStatus" style="font-size:0.75rem;color:#6b7280;"></span>
+    </div>
+    <script>
+    function startVoice() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            document.getElementById('voiceStatus').textContent = 'Speech recognition not supported in this browser';
+            return;
+        }
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        const btn = document.getElementById('voiceBtn');
+        const status = document.getElementById('voiceStatus');
+        btn.style.background = '#dc2626';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></svg> Listening...';
+        status.textContent = 'Speak now...';
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            status.textContent = 'Heard: ' + transcript;
+            btn.style.background = 'linear-gradient(135deg,#0d9488,#0f766e)';
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg> Voice Input';
+
+            // Find Streamlit's input element and set the value
+            const inputs = window.parent.document.querySelectorAll('input[aria-label="Message"]');
+            if (inputs.length > 0) {
+                const input = inputs[inputs.length - 1];
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, 'value').set;
+                nativeInputValueSetter.call(input, transcript);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // Focus and trigger Streamlit update
+                input.focus();
+                setTimeout(() => {
+                    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+                }, 200);
+            }
+        };
+
+        recognition.onerror = function(event) {
+            status.textContent = 'Error: ' + event.error;
+            btn.style.background = 'linear-gradient(135deg,#0d9488,#0f766e)';
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg> Voice Input';
+        };
+
+        recognition.onend = function() {
+            btn.style.background = 'linear-gradient(135deg,#0d9488,#0f766e)';
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg> Voice Input';
+        };
+
+        recognition.start();
+    }
+    </script>
+    """, height=50)
+
+    if clear_clicked:
+        st.session_state.chat_history = []
+        st.rerun()
+
+    if send_clicked and user_input and user_input.strip():
+        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
+
+        with st.spinner("Thinking..."):
+            response = _fetch(
+                "/projects/chat",
+                method="POST",
+                json={
+                    "message": user_input.strip(),
+                    "project_id": project_id,
+                    "history": st.session_state.chat_history[-10:],
+                },
+                timeout=60,
+            )
+
+        if response and response.get("reply"):
+            st.session_state.chat_history.append({"role": "assistant", "content": response["reply"]})
+        elif response:
+            st.session_state.chat_history.append({"role": "assistant", "content": "I'm sorry, I couldn't generate a response. Please try again."})
+
+        st.rerun()
+
+
 if page == "Workspace":
     if "selected_project_id" not in st.session_state:
         st.session_state.selected_project_id = None
@@ -5595,3 +5843,5 @@ if page == "Workspace":
         _render_home()
 elif page == "Admin":
     render_repository()
+
+_render_chat_widget()

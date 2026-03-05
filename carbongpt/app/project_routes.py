@@ -1499,3 +1499,119 @@ def generate_template_endpoint(project_id: int, data: GenerateTemplateRequest):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+class ChatMessage(BaseModel):
+    message: str
+    project_id: int | None = None
+    history: list[dict] = []
+
+
+@router.post("/chat")
+def chat_with_ai(body: ChatMessage):
+    from carbongpt.core.ai_writer import _call_openai
+
+    project_context = ""
+    if body.project_id:
+        from carbongpt.repository.store import get_user_project, get_project_documents_for_ai
+        project = get_user_project(body.project_id)
+        if project:
+            intake = project.get("project_intake") or {}
+            context_parts = [
+                f"Project: {project['name']}",
+                f"Standard: {project.get('standard', '')}",
+                f"Type: {project.get('project_type', '')}",
+                f"Methodology: {project.get('methodology', '')}",
+                f"Country: {project.get('country', '')}",
+                f"Status: {project.get('status', '')}",
+            ]
+
+            if intake:
+                filtered = {k: v for k, v in intake.items() if not k.startswith("_") and v}
+                if filtered:
+                    import json
+                    context_parts.append(f"Project Setup Data: {json.dumps(filtered, default=str)[:3000]}")
+
+            docs = get_project_documents_for_ai(body.project_id)
+            if docs:
+                doc_summaries = []
+                for doc in docs[:5]:
+                    summary = doc.get("ai_extracted_summary", "")
+                    if summary:
+                        doc_summaries.append(f"[{doc['file_name']}]: {summary[:800]}")
+                if doc_summaries:
+                    context_parts.append("Document Intelligence:\n" + "\n".join(doc_summaries))
+
+            from carbongpt.repository.store import get_write_sessions
+            sessions = get_write_sessions(body.project_id)
+            if sessions:
+                drafted = [s for s in sessions if s.get("generated_text") or s.get("user_text")]
+                if drafted:
+                    draft_info = [f"Section {s['section_id']} ({s.get('section_title', '')}): {(s.get('user_text') or s.get('generated_text', ''))[:200]}..." for s in drafted[:10]]
+                    context_parts.append("Drafted Sections:\n" + "\n".join(draft_info))
+
+            project_context = "\n".join(context_parts)
+
+    system_prompt = (
+        "You are CarbonGPT Assistant, an expert AI assistant specializing in carbon markets, "
+        "climate finance, and carbon project development.\n\n"
+        "Your expertise covers:\n"
+        "- Carbon credit standards: Gold Standard (GS4GG), Verra VCS, CDM\n"
+        "- Project Design Documents (PDDs), Monitoring Reports (MRs), PoA-DDs, VPA-DDs\n"
+        "- Validation and Verification processes and reports (ValVer)\n"
+        "- Methodologies for emission reduction calculations\n"
+        "- Baseline and additionality assessments\n"
+        "- Monitoring parameters and data collection\n"
+        "- Stakeholder consultation and safeguards\n"
+        "- Sustainable Development Goals (SDGs) in carbon projects\n"
+        "- Emission factors, fNRB, net calorific values, and technical parameters\n\n"
+        "Guidelines:\n"
+        "- Be concise and practical in your answers\n"
+        "- When answering about a specific project, use the project context provided\n"
+        "- If asked to modify project data, explain what should be changed and how\n"
+        "- Use specific numbers, references, and examples when possible\n"
+        "- If you don't know something, say so rather than guessing\n"
+    )
+
+    if project_context:
+        system_prompt += f"\n\nCURRENT PROJECT CONTEXT:\n{project_context}"
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in body.history[-10:]:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": body.message})
+
+    try:
+        import os
+        import requests as http_client
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OpenAI API key not configured.")
+
+        payload = {
+            "model": os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini"),
+            "messages": messages,
+            "max_tokens": 2000,
+            "temperature": 0.5,
+        }
+        resp = http_client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        reply = data["choices"][0]["message"]["content"]
+        return {"reply": reply}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Chat error: %s", e)
+        err_str = str(e)
+        if "429" in err_str or "rate" in err_str.lower():
+            raise HTTPException(status_code=429, detail="Rate limit reached. Please wait and try again.")
+        raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
