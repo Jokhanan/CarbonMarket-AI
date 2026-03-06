@@ -1,12 +1,12 @@
 """
 Structured default values from CDM TOOL33 and methodology-specific references.
 
-These are official values from CDM Tool 33 "Default values of fraction of
-non-renewable biomass (fNRB)" and associated parameters used by cookstove
-and renewable energy methodologies.
+fNRB values are from the MoFuSS model (June 2024) as adopted by CDM TOOL33 v03.1.
+National-level mean fNRB and standard deviations for the 2020-2030 decade.
+Source: Ghilardi & Bailis, "Updated fNRB Values for Woodfuel Interventions",
+Revised version June 20, 2024. Global default = 0.30.
 
-Sources:
-- CDM TOOL33 v05.0 (Default values for common parameters)
+Other sources:
 - IPCC 2006 Guidelines for National GHG Inventories, Volume 2 (Energy)
 - VM0050 v1.0 (Energy Efficiency and Fuel-Switch Measures in Cookstoves)
 - GS TPDDTEC v4.0 (Technologies to Displace Decentralized Thermal Energy)
@@ -15,33 +15,80 @@ Sources:
 """
 
 TOOL33_FNRB_BY_COUNTRY = {
-    "Afghanistan": 0.96, "Angola": 0.73, "Bangladesh": 0.88,
-    "Benin": 0.89, "Burkina Faso": 0.84, "Burundi": 0.97,
-    "Cambodia": 0.65, "Cameroon": 0.82, "Central African Republic": 0.72,
-    "Chad": 0.90, "Colombia": 0.40, "Comoros": 0.97,
-    "Congo": 0.75, "Congo DR": 0.88, "Cote d'Ivoire": 0.72,
-    "Djibouti": 0.98, "Ecuador": 0.25, "Egypt": 0.98,
-    "El Salvador": 0.90, "Eritrea": 0.95, "Ethiopia": 0.88,
-    "Gabon": 0.30, "Gambia": 0.81, "Ghana": 0.72,
-    "Guatemala": 0.72, "Guinea": 0.74, "Guinea-Bissau": 0.71,
-    "Haiti": 0.89, "Honduras": 0.71, "India": 0.74,
-    "Indonesia": 0.42, "Kenya": 0.82, "Lao PDR": 0.39,
-    "Lesotho": 0.86, "Liberia": 0.59, "Madagascar": 0.77,
-    "Malawi": 0.90, "Mali": 0.77, "Mauritania": 0.97,
-    "Mexico": 0.53, "Mozambique": 0.80, "Myanmar": 0.59,
-    "Namibia": 0.56, "Nepal": 0.76, "Nicaragua": 0.72,
-    "Niger": 0.97, "Nigeria": 0.74, "Pakistan": 0.83,
-    "Papua New Guinea": 0.14, "Paraguay": 0.18, "Peru": 0.32,
-    "Philippines": 0.54, "Rwanda": 0.96, "Senegal": 0.82,
-    "Sierra Leone": 0.74, "Somalia": 0.98, "South Africa": 0.66,
-    "South Sudan": 0.78, "Sri Lanka": 0.56, "Sudan": 0.87,
-    "Swaziland": 0.83, "Tanzania": 0.85, "Thailand": 0.39,
-    "Togo": 0.71, "Uganda": 0.85, "Vietnam": 0.37,
-    "Zambia": 0.66, "Zimbabwe": 0.77,
+    "Bangladesh": {"mean": 0.34, "sd": 0.18},
+    "Bhutan": {"mean": 0.29, "sd": 0.17},
+    "Cambodia": {"mean": 0.45, "sd": 0.10},
+    "China": {"mean": 0.20, "sd": 0.25},
+    "India": {"mean": 0.34, "sd": 0.19},
+    "Indonesia": {"mean": 0.08, "sd": 0.30},
+    "Lao PDR": {"mean": 0.20, "sd": 0.15},
+    "Myanmar": {"mean": 0.36, "sd": 0.19},
+    "Nepal": {"mean": 0.39, "sd": 0.16},
+    "Pakistan": {"mean": 0.35, "sd": 0.22},
+    "Philippines": {"mean": 0.42, "sd": 0.22},
+    "Sri Lanka": {"mean": 0.42, "sd": 0.19},
+    "Thailand": {"mean": 0.18, "sd": 0.43},
+    "Timor-Leste": {"mean": 0.40, "sd": 0.23},
+    "Vietnam": {"mean": 0.34, "sd": 0.13},
+    "Bolivia": {"mean": 0.12, "sd": 0.43},
+    "Brazil": {"mean": 0.13, "sd": 0.28},
+    "Colombia": {"mean": 0.07, "sd": 0.64},
+    "Costa Rica": {"mean": 0.11, "sd": 0.56},
+    "Dominican Republic": {"mean": 0.62, "sd": 0.07},
+    "Ecuador": {"mean": 0.26, "sd": 0.19},
+    "Guatemala": {"mean": 0.42, "sd": 0.09},
+    "Guyana": {"mean": 0.00, "sd": 1.00},
+    "Haiti": {"mean": 0.70, "sd": 0.07},
+    "Honduras": {"mean": 0.32, "sd": 0.13},
+    "Jamaica": {"mean": 0.36, "sd": 0.16},
+    "Mexico": {"mean": 0.28, "sd": 0.09},
+    "Nicaragua": {"mean": 0.25, "sd": 0.16},
+    "Panama": {"mean": 0.21, "sd": 0.22},
+    "Benin": {"mean": 0.33, "sd": 0.16},
+    "Botswana": {"mean": 0.33, "sd": 0.30},
+    "Burkina Faso": {"mean": 0.37, "sd": 0.31},
+    "Burundi": {"mean": 0.31, "sd": 0.25},
+    "Cameroon": {"mean": 0.39, "sd": 0.22},
+    "Central African Republic": {"mean": 0.40, "sd": 0.14},
+    "Chad": {"mean": 0.36, "sd": 0.15},
+    "Congo": {"mean": 0.18, "sd": 0.54},
+    "Cote d'Ivoire": {"mean": 0.15, "sd": 0.50},
+    "Djibouti": {"mean": 0.01, "sd": 0.22},
+    "Equatorial Guinea": {"mean": 0.35, "sd": 0.44},
+    "Eritrea": {"mean": 0.28, "sd": 0.26},
+    "Ethiopia": {"mean": 0.32, "sd": 0.18},
+    "Gabon": {"mean": 0.22, "sd": 0.74},
+    "Gambia": {"mean": 0.57, "sd": 0.15},
+    "Ghana": {"mean": 0.33, "sd": 0.19},
+    "Guinea": {"mean": 0.36, "sd": 0.19},
+    "Guinea-Bissau": {"mean": 0.32, "sd": 0.23},
+    "Kenya": {"mean": 0.30, "sd": 0.19},
+    "Liberia": {"mean": 0.38, "sd": 0.32},
+    "Madagascar": {"mean": 0.34, "sd": 0.17},
+    "Malawi": {"mean": 0.49, "sd": 0.06},
+    "Mali": {"mean": 0.43, "sd": 0.23},
+    "Mauritania": {"mean": 0.63, "sd": 0.22},
+    "Mozambique": {"mean": 0.38, "sd": 0.11},
+    "Namibia": {"mean": 0.25, "sd": 0.23},
+    "Niger": {"mean": 0.60, "sd": 0.03},
+    "Nigeria": {"mean": 0.39, "sd": 0.12},
+    "Rwanda": {"mean": 0.29, "sd": 0.26},
+    "Senegal": {"mean": 0.63, "sd": 0.11},
+    "Sierra Leone": {"mean": 0.40, "sd": 0.15},
+    "Somalia": {"mean": 0.60, "sd": 0.15},
+    "South Africa": {"mean": 0.15, "sd": 0.35},
+    "South Sudan": {"mean": 0.33, "sd": 0.18},
+    "Sudan": {"mean": 0.49, "sd": 0.19},
+    "Swaziland": {"mean": 0.14, "sd": 0.42},
+    "Tanzania": {"mean": 0.51, "sd": 0.07},
+    "Togo": {"mean": 0.47, "sd": 0.17},
+    "Uganda": {"mean": 0.35, "sd": 0.19},
+    "Zambia": {"mean": 0.38, "sd": 0.12},
+    "Zimbabwe": {"mean": 0.19, "sd": 0.44},
 }
 
-FNRB_DEFAULT_WITH_DISCOUNT = 0.44
-FNRB_UNCERTAINTY_DISCOUNT = 0.26
+FNRB_GLOBAL_DEFAULT = 0.30
+FNRB_SSA_AVERAGE = 0.39
 
 FUEL_NCV = {
     "wood": {"value": 15.6, "unit": "TJ/Gg", "source": "IPCC 2006 default for air-dried wood", "note": "Equivalent to 15.6 GJ/tonne"},
@@ -461,33 +508,30 @@ VCS_TOOLS_REFERENCED = {
 def get_fnrb_for_country(country):
     if not country:
         return None
+
+    def _build_result(country_name, data):
+        mean = data["mean"]
+        sd = data["sd"]
+        return {
+            "value": mean,
+            "sd": sd,
+            "unit": "fraction",
+            "source": f"CDM TOOL33 v03.1 (MoFuSS 2024) national default for {country_name}",
+            "note": f"fNRB mean = {int(mean*100)}% +/- {int(sd*100)}% (2020-2030 decade). Source: MoFuSS model, TOOL33 v03.1.",
+        }
+
     direct = TOOL33_FNRB_BY_COUNTRY.get(country)
     if direct is not None:
-        return {
-            "value": direct,
-            "value_with_discount": round(direct * (1 - FNRB_UNCERTAINTY_DISCOUNT), 4),
-            "uncertainty_discount": FNRB_UNCERTAINTY_DISCOUNT,
-            "unit": "fraction",
-            "source": f"CDM TOOL33 country-specific default for {country}",
-            "note": f"Raw fNRB = {direct}. With 26% uncertainty discount = {round(direct * (1 - FNRB_UNCERTAINTY_DISCOUNT), 4)}",
-        }
+        return _build_result(country, direct)
     for k, v in TOOL33_FNRB_BY_COUNTRY.items():
         if k.lower() == country.lower():
-            return {
-                "value": v,
-                "value_with_discount": round(v * (1 - FNRB_UNCERTAINTY_DISCOUNT), 4),
-                "uncertainty_discount": FNRB_UNCERTAINTY_DISCOUNT,
-                "unit": "fraction",
-                "source": f"CDM TOOL33 country-specific default for {k}",
-                "note": f"Raw fNRB = {v}. With 26% uncertainty discount = {round(v * (1 - FNRB_UNCERTAINTY_DISCOUNT), 4)}",
-            }
+            return _build_result(k, v)
     return {
-        "value": FNRB_DEFAULT_WITH_DISCOUNT,
-        "value_with_discount": FNRB_DEFAULT_WITH_DISCOUNT,
-        "uncertainty_discount": FNRB_UNCERTAINTY_DISCOUNT,
+        "value": FNRB_GLOBAL_DEFAULT,
+        "sd": 0.18,
         "unit": "fraction",
-        "source": "CDM TOOL33 generic default (fNRB=0.44 with 26% uncertainty discount)",
-        "note": "No country-specific value found. Using conservative default.",
+        "source": "CDM TOOL33 global default (0.30)",
+        "note": f"No country-specific value found for '{country}'. Using TOOL33 global default of 30%.",
     }
 
 

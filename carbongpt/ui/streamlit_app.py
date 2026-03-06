@@ -4826,7 +4826,9 @@ def _render_tool33_defaults(project_id, meth_parsed, settings, meth_inputs, coun
             fnrb_data = get_fnrb_for_country(country)
             if fnrb_data:
                 current_fnrb = meth_inputs.get("tool33_fNRB", "")
-                default_label = f"fNRB = {fnrb_data['value']} (with discount: {fnrb_data['value_with_discount']})"
+                mean_pct = int(fnrb_data['value'] * 100)
+                sd_pct = int(fnrb_data.get('sd', 0) * 100)
+                default_label = f"fNRB = {fnrb_data['value']} ({mean_pct}% +/- {sd_pct}%)"
                 val = st.text_input(
                     f"fNRB - Fraction of non-renewable biomass [{fnrb_data['unit']}]",
                     value=current_fnrb,
