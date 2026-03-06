@@ -594,9 +594,11 @@ def get_fuel_defaults(fuel_type, include_production_emissions=False):
     fuel_key = fuel_type.lower().replace(" ", "_").replace("-", "_")
     aliases = {
         "woody_biomass": "wood", "firewood": "wood", "fuelwood": "wood",
+        "wood_(firewood)": "wood",
         "non_renewable_biomass": "wood", "renewable_biomass": "wood",
         "lpg": "LPG", "liquefied_petroleum_gas": "LPG",
         "green_charcoal": "charcoal", "biomass_briquette": "biomass_briquettes",
+        "biomass_briquettes": "biomass_briquettes",
     }
     fuel_key = aliases.get(fuel_key, fuel_key)
 
