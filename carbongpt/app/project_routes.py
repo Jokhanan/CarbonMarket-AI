@@ -1496,6 +1496,12 @@ def get_methodology_data_endpoint(project_id: int):
         if isinstance(data, str):
             import json as _json
             data = _json.loads(data)
+        try:
+            from carbongpt.core.tool_defaults import enrich_methodology_parameters
+            country = project.get("country", "")
+            data = enrich_methodology_parameters(data, methodology, country=country)
+        except Exception as e:
+            logger.warning("TOOL33 parameter enrichment failed: %s", e)
         return {"status": "ready", "parsed": data, "parsed_at": str(cached.get("parsed_at", ""))}
 
     return {"status": "not_parsed", "parsed": None}

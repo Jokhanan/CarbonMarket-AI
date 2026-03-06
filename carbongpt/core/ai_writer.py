@@ -285,6 +285,63 @@ def _format_methodology_parameters_context(project_info):
     return "### Methodology-Specific Data (from methodology setup):\n" + "\n\n".join(parts) + "\n"
 
 
+def _format_tool33_defaults_context(project_info):
+    methodology = project_info.get("methodology", "")
+    if not methodology:
+        return ""
+    try:
+        from carbongpt.core.tool_defaults import get_defaults_for_methodology
+        country = project_info.get("country", "")
+        settings = project_info.get("project_settings") or {}
+        defaults = get_defaults_for_methodology(
+            methodology,
+            country=country,
+            baseline_fuel=settings.get("baseline_fuel"),
+            project_fuel=settings.get("project_fuel"),
+        )
+        parts = []
+        params = defaults.get("parameters", {})
+        if params:
+            param_lines = []
+            for pkey, pval in params.items():
+                if not isinstance(pval, dict):
+                    continue
+                if "value" not in pval and "unit" not in pval:
+                    sub_items = []
+                    for sk, sv in pval.items():
+                        if isinstance(sv, dict) and "value" in sv:
+                            sub_items.append(f"{sk}={sv['value']}")
+                    if sub_items:
+                        param_lines.append(f"  - {pkey}: {', '.join(sub_items)}")
+                    continue
+                val = pval.get("value", "")
+                unit = pval.get("unit", "")
+                src = pval.get("source", "")
+                param_lines.append(f"  - {pkey}: {val} {unit} (Source: {src})")
+            if param_lines:
+                parts.append("**Reference Default Values (CDM TOOL33 / IPCC):**\n" + "\n".join(param_lines))
+
+        equations = defaults.get("equations", [])
+        if equations:
+            eq_lines = []
+            for eq in equations:
+                eq_lines.append(f"  - {eq.get('name', '')}: {eq.get('formula', '')} -- {eq.get('description', '')}")
+            if eq_lines:
+                parts.append("**Key Methodology Equations:**\n" + "\n".join(eq_lines))
+
+        if not parts:
+            return ""
+        return (
+            "### Official Default Values and Equations (from CDM TOOL33, IPCC, methodology documents):\n"
+            "USE these real values in your writing instead of placeholders where applicable. "
+            "These are official defaults from the methodology and IPCC guidelines.\n\n"
+            + "\n\n".join(parts) + "\n"
+        )
+    except Exception as e:
+        logger.warning("TOOL33 context formatting failed: %s", e)
+        return ""
+
+
 def _get_relevant_intake_cards(section_id):
     for prefix in sorted(SECTION_INTAKE_MAP.keys(), key=len, reverse=True):
         if section_id == prefix or section_id.startswith(prefix + "."):
@@ -604,6 +661,10 @@ def generate_section_draft(
     meth_params_context = _format_methodology_parameters_context(project_info)
     if meth_params_context:
         user_prompt += meth_params_context + "\n"
+
+    tool33_context = _format_tool33_defaults_context(project_info)
+    if tool33_context:
+        user_prompt += tool33_context + "\n"
 
     if existing_pdd_text:
         pdd_excerpt = existing_pdd_text[:25000]

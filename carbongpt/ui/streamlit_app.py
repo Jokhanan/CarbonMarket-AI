@@ -4741,7 +4741,89 @@ def _render_write_tab(project):
                 )
 
 
-def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake):
+def _render_tool33_defaults(project_id, meth_parsed, settings, meth_inputs, country=""):
+    meth_code = meth_parsed.get("methodology_code", "")
+    if not meth_code:
+        return
+    code_upper = meth_code.upper().replace("GS-", "")
+    if code_upper not in ("VM0050", "TPDDTEC"):
+        return
+
+    try:
+        from carbongpt.core.tool_defaults import get_fnrb_for_country, get_fuel_defaults, WOOD_TO_CHARCOAL_CF, LEAKAGE_DEFAULTS
+    except ImportError:
+        return
+    baseline_fuel = settings.get("baseline_fuel", "")
+    project_fuel = settings.get("project_fuel", "")
+
+    with st.container(border=True):
+        st.markdown("#### Reference Default Values (CDM TOOL33 / IPCC)")
+        st.caption("Official default values for your methodology. These are auto-populated from CDM TOOL33 and IPCC guidelines.")
+
+        if country:
+            fnrb_data = get_fnrb_for_country(country)
+            if fnrb_data:
+                current_fnrb = meth_inputs.get("tool33_fNRB", "")
+                default_label = f"fNRB = {fnrb_data['value']} (with discount: {fnrb_data['value_with_discount']})"
+                val = st.text_input(
+                    f"fNRB - Fraction of non-renewable biomass [{fnrb_data['unit']}]",
+                    value=current_fnrb,
+                    key=f"tool33_fnrb_{project_id}",
+                    placeholder=default_label,
+                )
+                meth_inputs["tool33_fNRB"] = val
+                st.caption(f"Source: {fnrb_data['source']}. {fnrb_data.get('note', '')}")
+        else:
+            st.caption("Set the project country in Project Setup to see country-specific fNRB values.")
+
+        if baseline_fuel:
+            bf_defaults = get_fuel_defaults(baseline_fuel)
+            if bf_defaults:
+                for param_key, param_data in bf_defaults.items():
+                    safe_key = f"bl_{param_key}".replace(" ", "_")[:30]
+                    current_val = meth_inputs.get(f"tool33_{safe_key}", "")
+                    label = f"Baseline {param_key} ({baseline_fuel}) [{param_data['unit']}]"
+                    val = st.text_input(
+                        label,
+                        value=current_val,
+                        key=f"tool33_bl_{param_key}_{project_id}",
+                        placeholder=f"Default: {param_data['value']} ({param_data['source']})",
+                    )
+                    meth_inputs[f"tool33_{safe_key}"] = val
+
+        if project_fuel and project_fuel != baseline_fuel:
+            pf_defaults = get_fuel_defaults(project_fuel)
+            if pf_defaults:
+                for param_key, param_data in pf_defaults.items():
+                    safe_key = f"pj_{param_key}".replace(" ", "_")[:30]
+                    current_val = meth_inputs.get(f"tool33_{safe_key}", "")
+                    label = f"Project {param_key} ({project_fuel}) [{param_data['unit']}]"
+                    val = st.text_input(
+                        label,
+                        value=current_val,
+                        key=f"tool33_pj_{param_key}_{project_id}",
+                        placeholder=f"Default: {param_data['value']} ({param_data['source']})",
+                    )
+                    meth_inputs[f"tool33_{safe_key}"] = val
+
+        if code_upper == "VM0050":
+            cf_data = WOOD_TO_CHARCOAL_CF["default"]
+            current_cf = meth_inputs.get("tool33_CF", "")
+            val = st.text_input(
+                f"CF - Wood-to-charcoal conversion factor [{cf_data['unit']}]",
+                value=current_cf,
+                key=f"tool33_cf_{project_id}",
+                placeholder=f"Default: {cf_data['value']} ({cf_data['source']})",
+            )
+            meth_inputs["tool33_CF"] = val
+
+        leak_key = "cookstove_renewable_biomass"
+        leak_data = LEAKAGE_DEFAULTS.get(leak_key, {})
+        if leak_data:
+            st.caption(f"Leakage: {leak_data['value']} discount factor ({leak_data['source']})")
+
+
+def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake, country=""):
     meth_inputs = intake.get("methodology_parameters", {})
     new_settings = dict(existing_settings)
 
@@ -4881,6 +4963,9 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                     placeholder=f"Monitoring source: {p_source[:80]}" if p_source else "Describe your monitoring approach or enter initial/estimated value",
                 )
                 meth_inputs[f"mon_{safe_key}"] = val
+
+    _render_tool33_defaults(project_id, meth_parsed, new_settings, meth_inputs,
+                            country=country)
 
     if default_params:
         with st.container(border=True):
@@ -5730,7 +5815,8 @@ def _render_project_settings(project):
             st.subheader("Methodology-Specific Setup")
             st.caption("These fields are derived from the selected methodology's requirements. They feed directly into the AI writer for accurate, methodology-compliant content.")
             new_settings, meth_layer_inputs = _render_methodology_layer(
-                project_id, meth_parsed, existing_settings, intake
+                project_id, meth_parsed, existing_settings, intake,
+                country=project.get("country", "")
             )
     elif methodology:
         st.divider()

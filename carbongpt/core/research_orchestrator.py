@@ -471,6 +471,31 @@ def _research_technical_parameter(project_id, param_name, methodology_code, proj
         sources.extend(doc_result.get("sources", []))
         options.append({"value": doc_result["value"], "source": "Project measurement/document", "rank": 1})
 
+    try:
+        from carbongpt.core.tool_defaults import get_defaults_for_methodology
+        country = project_info.get("country", "")
+        settings = project_info.get("project_settings") or {}
+        tool33_result = get_defaults_for_methodology(
+            methodology_code or "",
+            country=country,
+            baseline_fuel=settings.get("baseline_fuel"),
+            project_fuel=settings.get("project_fuel"),
+        )
+        tool33_params = tool33_result.get("parameters", {})
+        param_lower = param_name.lower().replace("_", "").replace(" ", "")
+        for pkey, pval in tool33_params.items():
+            if not isinstance(pval, dict):
+                continue
+            pkey_norm = pkey.lower().replace("_", "").replace(" ", "")
+            if pkey_norm == param_lower or param_lower in pkey_norm or pkey_norm in param_lower:
+                val_str = str(pval.get("value", ""))
+                src = pval.get("source", "CDM TOOL33 / IPCC")
+                context_parts.append(f"From CDM TOOL33/IPCC defaults (high priority): {pkey} = {val_str} {pval.get('unit', '')} ({src})")
+                sources.append({"type": "tool33_default", "reference": src})
+                options.append({"value": val_str, "source": f"CDM TOOL33/IPCC default ({src})", "rank": 2})
+    except Exception as e:
+        logger.warning("TOOL33 lookup in research orchestrator failed: %s", e)
+
     if kb_chunks:
         for chunk in kb_chunks[:4]:
             content = chunk.get("content", "")[:600]
