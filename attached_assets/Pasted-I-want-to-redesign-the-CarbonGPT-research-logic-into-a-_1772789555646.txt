@@ -1,0 +1,73 @@
+I want to redesign the CarbonGPT research logic into a multi-layer research system.
+
+The AI should not treat all missing information the same way. Different types of missing information require different research strategies, sources, and safety rules.
+
+Please design a "Research Orchestrator" architecture for CarbonGPT.
+
+The system should distinguish at least the following research layers:
+
+1. General context research
+Examples:
+- country, region, district, GPS coordinates, geography, climate, administrative context
+
+2. Methodology rule research
+Examples:
+- what the selected methodology allows
+- which tools are explicitly referenced by the methodology
+- what options are permitted for a given parameter
+- what data sources are acceptable according to the methodology
+
+3. Technical parameter research
+Examples:
+- fNRB
+- NCV
+- emission factors
+- baseline efficiency
+- monitoring parameters
+The system must not invent values. It must identify allowed options and sources.
+
+4. Project document research
+Search within uploaded project files to find evidence, technical details, parameter values, or previously documented assumptions.
+
+5. Knowledge base research
+Search the internal CarbonGPT knowledge base:
+- methodologies
+- tools
+- guidelines
+- parameter definitions
+- compliance logic
+
+6. Regulatory / web research
+Use external web search only when necessary, mainly for official updates, public reports, or current regulatory information.
+
+7. Dependency research
+The AI should identify which missing inputs depend on which tools, equations, or methodology clauses.
+
+8. Compliance research
+The AI should assess whether a found source or value is admissible under the selected methodology.
+
+Please produce:
+
+A. A full architecture for this multi-layer research system  
+B. A decision engine showing how the AI decides which research path to use  
+C. Source priority rules for each type of research  
+D. Safety rules for high-risk parameters  
+E. UI recommendations for showing research suggestions and options to the user  
+F. A structured database / schema proposal for:
+- methodologies
+- tools
+- parameters
+- source hierarchy
+- research results
+
+Important:
+We are intentionally focusing on 4 methodologies first:
+- Verra VM0050
+- Gold Standard TPDDTEC
+- ACM0002
+- AMS-I.D
+
+The system should deeply analyze these methodologies and also extract all tools, references, and external calculation options explicitly mentioned inside them, so these can be added to the knowledge base.
+
+The goal is not just “search”.
+The goal is to build a methodology-aware research assistant for carbon project development.
