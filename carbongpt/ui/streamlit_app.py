@@ -4840,45 +4840,116 @@ def _render_tool33_defaults(project_id, meth_parsed, settings, meth_inputs, coun
             st.caption("Set the project country in Project Setup to see country-specific fNRB values.")
 
         if baseline_fuel:
-            bf_defaults = get_fuel_defaults(baseline_fuel)
-            if bf_defaults:
-                for param_key, param_data in bf_defaults.items():
-                    safe_key = f"bl_{param_key}".replace(" ", "_")[:30]
-                    current_val = meth_inputs.get(f"tool33_{safe_key}", "")
-                    label = f"Baseline {param_key} ({baseline_fuel}) [{param_data['unit']}]"
-                    val = st.text_input(
-                        label,
-                        value=current_val,
-                        key=f"tool33_bl_{param_key}_{project_id}",
-                        placeholder=f"Default: {param_data['value']} ({param_data['source']})",
-                    )
-                    meth_inputs[f"tool33_{safe_key}"] = val
+            bl_fuel_lower = baseline_fuel.lower().replace(" ", "_").replace("-", "_")
+            bl_is_charcoal = bl_fuel_lower in ("charcoal", "green_charcoal")
+
+            if bl_is_charcoal:
+                from carbongpt.core.tool_defaults import CHARCOAL_DEFAULTS_SUMMARY
+                st.markdown(f"**Baseline fuel: {baseline_fuel}**")
+                charcoal_scenarios = {
+                    "With production emissions (methodology default)": "with_production",
+                    "With production emissions (methodology cap)": "with_production_cap",
+                    "Combustion only (no production emissions)": "combustion_only",
+                    "Custom values": "custom",
+                }
+                current_scenario = meth_inputs.get("tool33_charcoal_scenario", "With production emissions (methodology default)")
+                scenario_labels = list(charcoal_scenarios.keys())
+                scenario_idx = 0
+                if current_scenario in scenario_labels:
+                    scenario_idx = scenario_labels.index(current_scenario)
+                selected_scenario = st.selectbox(
+                    "Charcoal emission factor scenario",
+                    scenario_labels,
+                    index=scenario_idx,
+                    key=f"tool33_charcoal_scenario_{project_id}",
+                    help="Select how charcoal emissions are calculated. 'With production' includes emissions from charcoal production (wood pyrolysis). The 'cap' is the maximum permitted value.",
+                )
+                meth_inputs["tool33_charcoal_scenario"] = selected_scenario
+                scenario_key = charcoal_scenarios[selected_scenario]
+
+                if scenario_key == "custom":
+                    for param_name, unit, default_val in [
+                        ("NCV", "TJ/Gg", 29.5),
+                        ("EF_CO2", "tCO2/TJ", 165.22),
+                        ("EF_nonCO2", "tCO2e/TJ", 44.83),
+                    ]:
+                        sk = f"bl_{param_name}"
+                        current_val = meth_inputs.get(f"tool33_{sk}", "")
+                        val = st.text_input(
+                            f"Baseline {param_name} ({baseline_fuel}) [{unit}]",
+                            value=current_val,
+                            key=f"tool33_bl_{param_name}_{project_id}",
+                            placeholder=f"Enter value (default reference: {default_val})",
+                        )
+                        meth_inputs[f"tool33_{sk}"] = val
+                else:
+                    scenario_data = CHARCOAL_DEFAULTS_SUMMARY[scenario_key]
+                    ef_co2 = scenario_data["EF_CO2"]
+                    ef_nonco2 = scenario_data["EF_nonCO2_AR5"]
+                    ncv = CHARCOAL_DEFAULTS_SUMMARY["NCV"]
+
+                    for param_name, value, unit in [
+                        ("NCV", ncv, "TJ/Gg"),
+                        ("EF_CO2", ef_co2, "tCO2/TJ"),
+                        ("EF_nonCO2", ef_nonco2, "tCO2e/TJ"),
+                    ]:
+                        sk = f"bl_{param_name}"
+                        current_val = meth_inputs.get(f"tool33_{sk}", "")
+                        val = st.text_input(
+                            f"Baseline {param_name} ({baseline_fuel}) [{unit}]",
+                            value=current_val,
+                            key=f"tool33_bl_{param_name}_{project_id}",
+                            placeholder=f"Default: {value} ({selected_scenario})",
+                        )
+                        meth_inputs[f"tool33_{sk}"] = val
+
+                    st.caption(f"{scenario_data.get('note', '')} Source: {CHARCOAL_DEFAULTS_SUMMARY['source']}")
+
+                cf_data = WOOD_TO_CHARCOAL_CF["default"]
+                current_cf = meth_inputs.get("tool33_CF", "")
+                val = st.text_input(
+                    f"CF - Wood-to-charcoal conversion factor [{cf_data['unit']}]",
+                    value=current_cf,
+                    key=f"tool33_cf_{project_id}",
+                    placeholder=f"Default: {cf_data['value']} ({cf_data['source']})",
+                )
+                meth_inputs["tool33_CF"] = val
+
+            else:
+                bf_defaults = get_fuel_defaults(baseline_fuel)
+                if bf_defaults:
+                    st.markdown(f"**Baseline fuel: {baseline_fuel}**")
+                    for param_key in ["NCV", "EF_CO2", "EF_nonCO2"]:
+                        param_data = bf_defaults.get(param_key)
+                        if not param_data or not isinstance(param_data, dict) or "value" not in param_data:
+                            continue
+                        sk = f"bl_{param_key}"
+                        current_val = meth_inputs.get(f"tool33_{sk}", "")
+                        val = st.text_input(
+                            f"Baseline {param_key} ({baseline_fuel}) [{param_data['unit']}]",
+                            value=current_val,
+                            key=f"tool33_bl_{param_key}_{project_id}",
+                            placeholder=f"Default: {param_data['value']} ({param_data['source']})",
+                        )
+                        meth_inputs[f"tool33_{sk}"] = val
 
         if project_fuel and project_fuel != baseline_fuel:
             pf_defaults = get_fuel_defaults(project_fuel)
             if pf_defaults:
-                for param_key, param_data in pf_defaults.items():
-                    safe_key = f"pj_{param_key}".replace(" ", "_")[:30]
-                    current_val = meth_inputs.get(f"tool33_{safe_key}", "")
-                    label = f"Project {param_key} ({project_fuel}) [{param_data['unit']}]"
+                st.markdown(f"**Project fuel: {project_fuel}**")
+                for param_key in ["NCV", "EF_CO2", "EF_nonCO2"]:
+                    param_data = pf_defaults.get(param_key)
+                    if not param_data or not isinstance(param_data, dict) or "value" not in param_data:
+                        continue
+                    sk = f"pj_{param_key}"
+                    current_val = meth_inputs.get(f"tool33_{sk}", "")
                     val = st.text_input(
-                        label,
+                        f"Project {param_key} ({project_fuel}) [{param_data['unit']}]",
                         value=current_val,
                         key=f"tool33_pj_{param_key}_{project_id}",
                         placeholder=f"Default: {param_data['value']} ({param_data['source']})",
                     )
-                    meth_inputs[f"tool33_{safe_key}"] = val
-
-        if code_upper == "VM0050":
-            cf_data = WOOD_TO_CHARCOAL_CF["default"]
-            current_cf = meth_inputs.get("tool33_CF", "")
-            val = st.text_input(
-                f"CF - Wood-to-charcoal conversion factor [{cf_data['unit']}]",
-                value=current_cf,
-                key=f"tool33_cf_{project_id}",
-                placeholder=f"Default: {cf_data['value']} ({cf_data['source']})",
-            )
-            meth_inputs["tool33_CF"] = val
+                    meth_inputs[f"tool33_{sk}"] = val
 
         leak_key = "cookstove_renewable_biomass"
         leak_data = LEAKAGE_DEFAULTS.get(leak_key, {})
