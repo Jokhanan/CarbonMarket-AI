@@ -1794,3 +1794,67 @@ def chat_with_ai(body: ChatMessage):
         if "429" in err_str or "rate" in err_str.lower():
             raise HTTPException(status_code=429, detail="Rate limit reached. Please wait and try again.")
         raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
+
+
+class ResearchRunRequest(BaseModel):
+    doc_type: str = "pdd"
+    max_gaps: int = Field(default=20, le=50)
+
+
+class ResearchConfirmRequest(BaseModel):
+    result_id: int
+
+
+@router.post("/{project_id}/research/analyze-gaps")
+def analyze_gaps_endpoint(project_id: int, doc_type: str = "pdd"):
+    from carbongpt.core.research_orchestrator import analyze_gaps
+    try:
+        result = analyze_gaps(project_id, doc_type)
+    except Exception as e:
+        logger.error("Gap analysis failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {e}")
+    return result
+
+
+@router.post("/{project_id}/research/run")
+def run_research_endpoint(project_id: int, data: ResearchRunRequest):
+    from carbongpt.core.research_orchestrator import run_research_session
+    try:
+        result = run_research_session(project_id, data.doc_type, data.max_gaps)
+    except Exception as e:
+        logger.error("Research session failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Research session failed: {e}")
+    return result
+
+
+@router.post("/{project_id}/research/confirm")
+def confirm_research_endpoint(project_id: int, data: ResearchConfirmRequest):
+    from carbongpt.core.research_orchestrator import confirm_research_result
+    try:
+        result = confirm_research_result(data.result_id, project_id)
+    except Exception as e:
+        logger.error("Research confirm failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Confirm failed: {e}")
+    return result
+
+
+@router.post("/{project_id}/research/reject")
+def reject_research_endpoint(project_id: int, data: ResearchConfirmRequest):
+    from carbongpt.core.research_orchestrator import reject_research_result
+    try:
+        result = reject_research_result(data.result_id, project_id)
+    except Exception as e:
+        logger.error("Research reject failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Reject failed: {e}")
+    return result
+
+
+@router.get("/{project_id}/research/results")
+def get_research_results_endpoint(project_id: int, status: str = None):
+    from carbongpt.core.research_orchestrator import get_research_results
+    try:
+        results = get_research_results(project_id, status)
+    except Exception as e:
+        logger.error("Get research results failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get results: {e}")
+    return {"results": results}

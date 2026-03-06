@@ -351,6 +351,41 @@ CREATE INDEX IF NOT EXISTS idx_fk_pdd_section ON findings_knowledge(pdd_section)
 CREATE INDEX IF NOT EXISTS idx_fk_source_doc ON findings_knowledge(source_document_id);
 CREATE INDEX IF NOT EXISTS idx_fk_topic ON findings_knowledge(topic);
 
+CREATE TABLE IF NOT EXISTS research_results (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    research_layer VARCHAR(50) NOT NULL CHECK (research_layer IN (
+        'general_context', 'methodology_rules', 'technical_parameters',
+        'project_documents', 'knowledge_base', 'regulatory_web',
+        'dependencies', 'compliance'
+    )),
+    field_path VARCHAR(200),
+    query TEXT NOT NULL,
+    result_data JSONB DEFAULT '{}',
+    sources JSONB DEFAULT '[]',
+    confidence REAL DEFAULT 0.5,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected')),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rr_project ON research_results(project_id);
+CREATE INDEX IF NOT EXISTS idx_rr_status ON research_results(status);
+CREATE INDEX IF NOT EXISTS idx_rr_layer ON research_results(research_layer);
+
+CREATE TABLE IF NOT EXISTS research_source_priority (
+    id SERIAL PRIMARY KEY,
+    methodology_code VARCHAR(100),
+    parameter_name VARCHAR(200),
+    source_rank INTEGER NOT NULL DEFAULT 1,
+    source_type VARCHAR(100) NOT NULL,
+    source_description TEXT,
+    is_admissible BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rsp_meth ON research_source_priority(methodology_code);
+CREATE INDEX IF NOT EXISTS idx_rsp_param ON research_source_priority(parameter_name);
+
 INSERT INTO standards (name, slug, description) VALUES
     ('Gold Standard', 'goldstandard', 'Gold Standard for the Global Goals - carbon credit certification'),
     ('Verra VCS', 'verra', 'Verified Carbon Standard by Verra - voluntary carbon market')

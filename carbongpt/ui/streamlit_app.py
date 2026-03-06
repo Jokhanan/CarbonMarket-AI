@@ -4271,6 +4271,186 @@ def _render_review_result(result):
             st.write(raw)
 
 
+LAYER_LABELS = {
+    "general_context": "General Context",
+    "methodology_rules": "Methodology Rules",
+    "technical_parameters": "Technical Parameters",
+    "project_documents": "Project Documents",
+    "knowledge_base": "Knowledge Base",
+    "regulatory_web": "Regulatory / Web",
+    "dependencies": "Dependencies",
+    "compliance": "Compliance",
+}
+
+LAYER_COLORS = {
+    "general_context": "#2563eb",
+    "methodology_rules": "#7c3aed",
+    "technical_parameters": "#dc2626",
+    "project_documents": "#0d9488",
+    "knowledge_base": "#ca8a04",
+    "regulatory_web": "#ea580c",
+    "dependencies": "#6366f1",
+    "compliance": "#059669",
+}
+
+
+def _render_research_assistant(project_id, doc_type):
+    with st.expander("AI Research Assistant — Fill missing project data", expanded=False):
+        st.caption("The AI can analyze your project for missing information and research answers from multiple sources: uploaded documents, methodology rules, web search, and knowledge base.")
+
+        ra_col1, ra_col2 = st.columns(2)
+        with ra_col1:
+            analyze_btn = st.button("Analyze Gaps", key=f"research_analyze_{project_id}")
+        with ra_col2:
+            run_btn = st.button("Research All Gaps", key=f"research_run_{project_id}", type="primary")
+
+        if analyze_btn:
+            with st.spinner("Analyzing project for missing information..."):
+                gap_result = _fetch(f"/projects/{project_id}/research/analyze-gaps?doc_type={doc_type}", method="POST")
+            if gap_result and gap_result.get("gaps"):
+                gaps = gap_result["gaps"]
+                st.info(gap_result.get("summary", f"Found {len(gaps)} gaps"))
+                layer_groups = {}
+                for g in gaps:
+                    layer = g.get("layer", "general_context")
+                    if layer not in layer_groups:
+                        layer_groups[layer] = []
+                    layer_groups[layer].append(g)
+                for layer, layer_gaps in layer_groups.items():
+                    label = LAYER_LABELS.get(layer, layer)
+                    color = LAYER_COLORS.get(layer, "#666")
+                    st.markdown(f'<span style="color:{color};font-weight:600">{label}</span> — {len(layer_gaps)} gap(s)', unsafe_allow_html=True)
+                    for g in layer_gaps[:10]:
+                        st.caption(f"  - {g.get('description', g.get('field', ''))}")
+            elif gap_result:
+                st.success("No gaps found — all project fields are populated.")
+            else:
+                st.error("Failed to analyze gaps.")
+
+        if run_btn:
+            with st.spinner("Researching missing information across all layers... This may take a minute."):
+                research_result = _fetch(
+                    f"/projects/{project_id}/research/run",
+                    method="POST",
+                    json={"doc_type": doc_type, "max_gaps": 20},
+                )
+            if research_result and research_result.get("results"):
+                results = research_result["results"]
+                st.info(research_result.get("summary", f"Found {len(results)} suggestions"))
+                st.session_state[f"research_results_{project_id}"] = results
+            elif research_result:
+                st.warning(research_result.get("summary", "No suggestions found."))
+            else:
+                st.error("Research session failed.")
+
+        stored_results = st.session_state.get(f"research_results_{project_id}")
+        if not stored_results:
+            existing = _fetch(f"/projects/{project_id}/research/results?status=pending")
+            if existing and existing.get("results"):
+                stored_results = existing["results"]
+
+        if stored_results:
+            st.markdown("---")
+            st.markdown("**Research Suggestions**")
+            for idx, res in enumerate(stored_results):
+                _render_research_result_card(project_id, res, idx)
+
+
+def _render_research_result_card(project_id, result, idx):
+    result_data = result.get("result_data", result)
+    if isinstance(result_data, str):
+        try:
+            import json as _json
+            result_data = _json.loads(result_data)
+        except Exception:
+            result_data = {}
+
+    field = result.get("field") or result_data.get("field", "Unknown field")
+    value = result_data.get("value", "")
+    confidence = result.get("confidence") or result_data.get("confidence", 0)
+    layer = result.get("layer") or result_data.get("layer", "")
+    sources = result.get("sources") or result_data.get("sources", [])
+    result_id = result.get("id")
+    status = result.get("status", "pending")
+
+    if not value or status != "pending":
+        return
+
+    layer_label = LAYER_LABELS.get(layer, layer)
+    layer_color = LAYER_COLORS.get(layer, "#666")
+
+    if confidence >= 0.7:
+        conf_label = "High"
+        conf_color = "#059669"
+    elif confidence >= 0.4:
+        conf_label = "Medium"
+        conf_color = "#ca8a04"
+    else:
+        conf_label = "Low"
+        conf_color = "#dc2626"
+
+    with st.container(border=True):
+        field_display = field.split(".")[-1].replace("_", " ").title()
+        st.markdown(
+            f'<span style="font-weight:600">{field_display}</span> '
+            f'<span style="color:{layer_color};font-size:0.85em">({layer_label})</span> '
+            f'<span style="color:{conf_color};font-size:0.85em">Confidence: {conf_label} ({confidence:.0%})</span>',
+            unsafe_allow_html=True,
+        )
+
+        if isinstance(value, str) and len(value) > 200:
+            st.text_area("Suggested value", value=value, height=80, disabled=True, key=f"rv_{project_id}_{idx}", label_visibility="collapsed")
+        else:
+            st.markdown(f"**Suggested value:** {value}")
+
+        options = result_data.get("options")
+        if options and isinstance(options, list) and len(options) > 1:
+            with st.expander("Alternative options"):
+                for opt in options:
+                    if isinstance(opt, dict):
+                        st.caption(f"- {opt.get('value', opt)} (Source: {opt.get('source', 'N/A')}, Rank: {opt.get('rank', '?')})")
+                    else:
+                        st.caption(f"- {opt}")
+
+        if sources and isinstance(sources, list):
+            src_parts = []
+            for s in sources[:4]:
+                if isinstance(s, dict):
+                    ref = s.get("reference", s.get("type", ""))
+                    url = s.get("url")
+                    if url:
+                        src_parts.append(f'<span style="font-size:0.8em">[{ref}]({url})</span>')
+                    else:
+                        src_parts.append(f'<span style="font-size:0.8em">{ref}</span>')
+            if src_parts:
+                st.caption("Sources: " + " | ".join(src_parts))
+
+        if result_id:
+            c1, c2, c3 = st.columns([1, 1, 3])
+            with c1:
+                if st.button("Confirm", key=f"confirm_{project_id}_{result_id}_{idx}"):
+                    confirm_resp = _fetch(
+                        f"/projects/{project_id}/research/confirm",
+                        method="POST",
+                        json={"result_id": result_id},
+                    )
+                    if confirm_resp and confirm_resp.get("confirmed"):
+                        st.success(f"Confirmed and saved: {field_display}")
+                        if f"research_results_{project_id}" in st.session_state:
+                            del st.session_state[f"research_results_{project_id}"]
+                        st.rerun()
+            with c2:
+                if st.button("Reject", key=f"reject_{project_id}_{result_id}_{idx}"):
+                    _fetch(
+                        f"/projects/{project_id}/research/reject",
+                        method="POST",
+                        json={"result_id": result_id},
+                    )
+                    if f"research_results_{project_id}" in st.session_state:
+                        del st.session_state[f"research_results_{project_id}"]
+                    st.rerun()
+
+
 def _render_write_tab(project):
     project_id = project["id"]
     standard = project.get("standard", "GoldStandard")
@@ -4352,6 +4532,8 @@ def _render_write_tab(project):
                 if brief_result:
                     st.success("Project brief generated. It will be included in all section prompts.")
                     st.rerun()
+
+    _render_research_assistant(project_id, selected_write_dt)
 
     gen_col1, gen_col2, gen_col3 = st.columns([1, 1, 1])
     with gen_col1:

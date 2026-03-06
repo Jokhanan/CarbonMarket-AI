@@ -32,6 +32,7 @@ Key AI architecture features:
 - **Cross-section consistency validation**: After drafting, a validator analyzes all sections together to flag contradictions, missing fields, and inconsistencies.
 - **Output validation**: Each generated section is checked against the guide's `must_include` items, with coverage scores and missing requirement flags.
 - **Section complexity classification**: `COMPLEX_SECTION_IDS` and `COMPLEX_CONTENT_FORMATS` in `ai_writer.py` determine which model to use per section.
+- **Multi-layer Research Orchestrator**: `research_orchestrator.py` provides intelligent gap-filling across 8 research layers: general_context, methodology_rules, technical_parameters, project_documents, knowledge_base, regulatory_web, dependencies, compliance. Each layer has its own research strategy, source priorities, and safety rules. Results are stored in `research_results` table with confirm/reject workflow. UI in Write tab expander.
 
 **Document Processing:**
 PDFs are parsed with `pdfplumber`, Word documents with `python-docx`, and Excel exports with `openpyxl`. `rapidfuzz` is used for fuzzy matching. The system extracts text, detects sections, and applies AI for intelligence extraction which populates project intake forms. Document export involves filling official `.docx` templates with AI-generated content.
