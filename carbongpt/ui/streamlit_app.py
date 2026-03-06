@@ -4746,14 +4746,25 @@ def _build_tool33_lookup(meth_parsed, settings, country):
     if not meth_code:
         return {}
     try:
-        from carbongpt.core.tool_defaults import get_defaults_for_methodology
+        from carbongpt.core.tool_defaults import get_defaults_for_methodology, FUEL_NCV, FUEL_EF_CO2, FUEL_EF_NONCO2
+        baseline_fuel = settings.get("baseline_fuel", "")
+        project_fuel = settings.get("project_fuel", "")
         defaults = get_defaults_for_methodology(
             meth_code,
             country=country,
-            baseline_fuel=settings.get("baseline_fuel", ""),
-            project_fuel=settings.get("project_fuel", ""),
+            baseline_fuel=baseline_fuel,
+            project_fuel=project_fuel,
         )
-        return defaults.get("parameters", {})
+        params = defaults.get("parameters", {})
+        if not baseline_fuel:
+            params.setdefault("baseline_NCV", {"value": "15.6 (wood)", "unit": "TJ/Gg", "source": "IPCC 2006 default for wood (select baseline fuel for specific value)"})
+            params.setdefault("baseline_EF_CO2", {"value": "112.0 (wood)", "unit": "tCO2/TJ", "source": "IPCC 2006 default for wood (select baseline fuel for specific value)"})
+            params.setdefault("baseline_EF_nonCO2", {"value": "4.03 (wood)", "unit": "tCO2e/TJ", "source": "TPDDTEC default for wood (select baseline fuel for specific value)"})
+        if not project_fuel:
+            params.setdefault("project_NCV", {"value": "select project fuel for value", "unit": "TJ/Gg", "source": "IPCC 2006 (select project fuel in Methodology Choices)"})
+            params.setdefault("project_EF_CO2", {"value": "select project fuel for value", "unit": "tCO2/TJ", "source": "IPCC 2006 (select project fuel in Methodology Choices)"})
+            params.setdefault("project_EF_nonCO2", {"value": "select project fuel for value", "unit": "tCO2e/TJ", "source": "IPCC 2006 (select project fuel in Methodology Choices)"})
+        return params
     except Exception:
         return {}
 
@@ -4761,7 +4772,8 @@ def _build_tool33_lookup(meth_parsed, settings, country):
 def _match_tool33_param(symbol, tool33_params):
     if not symbol or not tool33_params:
         return None
-    sym_clean = symbol.lower().replace(" ", "").replace(",", "").replace("_", "")
+    import unicodedata
+    sym_clean = unicodedata.normalize("NFKD", symbol).lower().replace(" ", "").replace(",", "").replace("_", "")
     SYMBOL_MAP = {
         "efbfco2": ["baseline_EF_CO2"],
         "efbfnonco2": ["baseline_EF_nonCO2"],
@@ -5882,7 +5894,7 @@ def _render_project_settings(project):
             st.caption("These fields are derived from the selected methodology's requirements. They feed directly into the AI writer for accurate, methodology-compliant content.")
             new_settings, meth_layer_inputs = _render_methodology_layer(
                 project_id, meth_parsed, existing_settings, intake,
-                country=project.get("country", "")
+                country=new_country or project.get("country", "")
             )
     elif methodology:
         st.divider()
