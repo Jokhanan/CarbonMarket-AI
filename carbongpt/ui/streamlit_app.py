@@ -4741,6 +4741,56 @@ def _render_write_tab(project):
                 )
 
 
+def _build_tool33_lookup(meth_parsed, settings, country):
+    meth_code = meth_parsed.get("methodology_code", "")
+    if not meth_code:
+        return {}
+    try:
+        from carbongpt.core.tool_defaults import get_defaults_for_methodology
+        defaults = get_defaults_for_methodology(
+            meth_code,
+            country=country,
+            baseline_fuel=settings.get("baseline_fuel", ""),
+            project_fuel=settings.get("project_fuel", ""),
+        )
+        return defaults.get("parameters", {})
+    except Exception:
+        return {}
+
+
+def _match_tool33_param(symbol, tool33_params):
+    if not symbol or not tool33_params:
+        return None
+    sym_clean = symbol.lower().replace(" ", "").replace(",", "").replace("_", "")
+    SYMBOL_MAP = {
+        "efbfco2": ["baseline_EF_CO2"],
+        "efbfnonco2": ["baseline_EF_nonCO2"],
+        "efpfco2": ["project_EF_CO2"],
+        "efpfnonco2": ["project_EF_nonCO2"],
+        "ncvbfuel": ["baseline_NCV"],
+        "ncvpfuel": ["project_NCV"],
+        "ncvb": ["baseline_NCV"],
+        "ncvp": ["project_NCV"],
+        "fnrbiy": ["fNRB"],
+        "fnrb": ["fNRB"],
+        "cf": ["CF"],
+        "efco2": ["baseline_EF_CO2"],
+        "efnonco2": ["baseline_EF_nonCO2"],
+    }
+    for pattern, keys in SYMBOL_MAP.items():
+        if pattern in sym_clean or sym_clean in pattern:
+            for k in keys:
+                if k in tool33_params:
+                    return tool33_params[k]
+    for pkey, pval in tool33_params.items():
+        if not isinstance(pval, dict):
+            continue
+        pkey_clean = pkey.lower().replace("_", "").replace(" ", "")
+        if sym_clean in pkey_clean or pkey_clean in sym_clean:
+            return pval
+    return None
+
+
 def _render_tool33_defaults(project_id, meth_parsed, settings, meth_inputs, country=""):
     meth_code = meth_parsed.get("methodology_code", "")
     if not meth_code:
@@ -4967,6 +5017,8 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
     _render_tool33_defaults(project_id, meth_parsed, new_settings, meth_inputs,
                             country=country)
 
+    tool33_lookup = _build_tool33_lookup(meth_parsed, new_settings, country)
+
     if default_params:
         with st.container(border=True):
             st.markdown("#### Methodology Default Values")
@@ -4996,6 +5048,15 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                                 resolved_default = str(values_map[ctx_val])
                                 break
 
+                tool33_val = ""
+                tool33_src = ""
+                if not resolved_default and tool33_lookup:
+                    t33 = _match_tool33_param(p_symbol or p_name, tool33_lookup)
+                    if t33:
+                        tool33_val = str(t33.get("value", ""))
+                        tool33_src = t33.get("source", "CDM TOOL33 / IPCC")
+                        resolved_default = tool33_val
+
                 label = p_name
                 if p_unit:
                     label += f" [{p_unit}]"
@@ -5003,7 +5064,12 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                     label = f"{p_symbol} - {label}"
 
                 current_override = meth_inputs.get(f"def_{safe_key}", "")
-                placeholder = f"Default: {resolved_default[:100]}" if resolved_default else "No default specified"
+                if resolved_default:
+                    placeholder = f"Default: {resolved_default[:100]}"
+                    if tool33_src:
+                        placeholder += f" ({tool33_src})"
+                else:
+                    placeholder = "No default specified"
                 val = st.text_input(
                     label,
                     value=current_override,
