@@ -114,26 +114,34 @@ FNRB_REGIONAL_DEFAULTS = {
 
 TOOL33_OTHER_DEFAULTS = {
     "wood_to_charcoal_conversion": {"value": 4.0, "unit": "kg fuelwood (wet) / kg charcoal (dry)", "source": "TOOL33 v03.0 para 14"},
-    "annual_wood_consumption": {"value": 0.4, "unit": "tonnes/person/year (wet basis)", "source": "TOOL33 v03.0 para 15", "note": "Fuelwood (not charcoal). For charcoal users, divide by CF: 0.4 / 4.0 = 0.1 t charcoal/person/year"},
+    "annual_wood_consumption": {"value": 0.4, "unit": "tonnes/person/year (wet basis)", "source": "TOOL33 v03.0 para 15", "note": "Fuelwood (not charcoal). TPDDTEC Method 2 uses 0.5 t/capita/year. For charcoal users, divide by CF: 0.4/4.0 = 0.1 t charcoal/person/year"},
     "annual_charcoal_consumption": {"value": 0.1, "unit": "tonnes/person/year (dry basis)", "source": "Derived from TOOL33 v03.0 para 15 divided by CF (para 14)", "note": "0.4 t wood / 4.0 CF = 0.1 t charcoal/person/year"},
     "efficiency_three_stone_fire": {"value": 0.15, "unit": "fraction", "source": "TOOL33 v03.0 para 19(a)", "note": "Three-stone fire using firewood (not charcoal), or cookstove with no improved combustion air supply or flue gas ventilation (no grate or chimney)"},
     "efficiency_other_cookstove": {"value": 0.25, "unit": "fraction", "source": "TOOL33 v03.0 para 19(b)", "note": "For other type of devices not meeting para 19(a) description"},
 }
 
-CHARCOAL_PRODUCTION_DEFAULTS = {
-    "with_production_emissions": {
-        "charcoal_NCV": {"value": 29.5, "unit": "TJ/Gg", "source": "IPCC 2006 default for charcoal", "note": "Informational only. For emission calculations, use wood_equivalent_NCV after CF conversion."},
-        "charcoal_EF_CO2": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 default (solid biofuels)", "note": "Informational only. For emission calculations, use wood_equivalent_EF_CO2 after CF conversion."},
-        "charcoal_EF_nonCO2": {"value": 1.59, "unit": "tCO2e/TJ", "source": "TPDDTEC methodology default", "note": "Informational only. For emission calculations, use wood_equivalent_EF_nonCO2 after CF conversion."},
-        "CF": {"value": 4.0, "unit": "kg fuelwood (wet) / kg charcoal (dry)", "source": "TOOL33 v03.0 para 14"},
-        "calculation_note": "When charcoal is baseline fuel, total baseline emissions must include production emissions. The methodology converts charcoal consumption back to wood equivalent using CF, then applies wood_equivalent NCV and EFs. Total BE = BC_charcoal x CF x NCV_wood x (EF_CO2_wood + EF_nonCO2_wood) x fNRB. Use the wood_equivalent_* parameters for actual calculations.",
+CHARCOAL_DEFAULTS_SUMMARY = {
+    "combustion_only": {
+        "EF_CO2": 112.0,
+        "EF_nonCO2_AR5": 5.865,
+        "EF_nonCO2_AR4": 5.298,
+        "note": "Combustion-only. Does NOT include charcoal production emissions.",
     },
-    "without_production_emissions": {
-        "NCV": {"value": 29.5, "unit": "TJ/Gg", "source": "IPCC 2006 default for charcoal"},
-        "EF_CO2": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 default (solid biofuels)"},
-        "EF_nonCO2": {"value": 1.59, "unit": "tCO2e/TJ", "source": "TPDDTEC methodology default"},
-        "note": "Combustion-only emissions. Does NOT account for wood consumed during charcoal production. Use when project fuel is charcoal (not baseline).",
+    "with_production": {
+        "EF_CO2": 165.22,
+        "EF_nonCO2_AR5": 44.83,
+        "EF_nonCO2_AR4": 40.26,
+        "note": "Includes charcoal production emissions. Methodology default for charcoal baseline.",
     },
+    "with_production_cap": {
+        "EF_CO2": 197.15,
+        "EF_nonCO2_AR5": 92.29,
+        "EF_nonCO2_AR4": 82.90,
+        "note": "Methodology cap. EFs higher than these values are not permitted.",
+    },
+    "CF": 4.0,
+    "NCV": 29.5,
+    "source": "VM0050 v1.0 / TPDDTEC v4.0 (ICS 8, ICS 9). All units: EF_CO2 in tCO2/TJ, EF_nonCO2 in tCO2e/TJ, NCV in TJ/Gg.",
 }
 
 FUEL_NCV = {
@@ -151,8 +159,10 @@ FUEL_NCV = {
 }
 
 FUEL_EF_CO2 = {
-    "wood": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 Table 2.2 (solid biofuels)", "note": "Combustion EF only. Applied to non-renewable fraction (multiplied by fNRB)."},
-    "charcoal": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 Table 2.2 (solid biofuels)", "note": "Combustion EF only (same IPCC category as wood). When charcoal is baseline fuel, must also account for production emissions via CF conversion."},
+    "wood": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 / VM0050 / TPDDTEC", "note": "Combustion EF only. Applied to non-renewable fraction (multiplied by fNRB)."},
+    "charcoal_combustion": {"value": 112.0, "unit": "tCO2/TJ", "source": "IPCC 2006 / TPDDTEC (combustion only)", "note": "Combustion only — does NOT include charcoal production emissions."},
+    "charcoal_with_production": {"value": 165.22, "unit": "tCO2/TJ", "source": "TPDDTEC v4.0 ICS 8 (methodology default)", "note": "Includes charcoal production emissions. Use when charcoal is baseline fuel."},
+    "charcoal_with_production_cap": {"value": 197.15, "unit": "tCO2/TJ", "source": "TPDDTEC v4.0 ICS 8 (methodology cap)", "note": "Maximum permitted EF_CO2 for charcoal including production emissions. EFs higher than this cap are not permitted."},
     "LPG": {"value": 63.1, "unit": "tCO2/TJ", "source": "IPCC 2006 default"},
     "kerosene": {"value": 71.9, "unit": "tCO2/TJ", "source": "IPCC 2006 default"},
     "bioethanol": {"value": 0.0, "unit": "tCO2/TJ", "source": "IPCC 2006 (biogenic, zero net CO2)", "note": "Biogenic CO2 not counted"},
@@ -162,8 +172,10 @@ FUEL_EF_CO2 = {
 }
 
 FUEL_EF_NONCO2 = {
-    "wood": {"value": 4.03, "unit": "tCO2e/TJ", "source": "TPDDTEC methodology default (Table 4)", "note": "Includes CH4 and N2O from wood combustion. Different from charcoal due to different combustion characteristics."},
-    "charcoal": {"value": 1.59, "unit": "tCO2e/TJ", "source": "TPDDTEC methodology default (Table 4)", "note": "Includes CH4 and N2O from charcoal combustion. Lower than wood due to cleaner combustion of charcoal."},
+    "wood": {"value": 9.46, "unit": "tCO2e/TJ", "source": "VM0050 v1.0 / TPDDTEC v4.0 ICS 9 (AR5 GWP)", "note": "Includes CH4 and N2O from wood combustion. AR4 GWP equivalent: 8.692 tCO2e/TJ."},
+    "charcoal_combustion": {"value": 5.865, "unit": "tCO2e/TJ", "source": "VM0050 v1.0 / TPDDTEC v4.0 ICS 9 (combustion only, AR5 GWP)", "note": "Combustion only — does NOT include charcoal production non-CO2. AR4 GWP equivalent: 5.298 tCO2e/TJ."},
+    "charcoal_with_production": {"value": 44.83, "unit": "tCO2e/TJ", "source": "VM0050 v1.0 / TPDDTEC v4.0 ICS 9 (includes production, AR5 GWP)", "note": "Includes charcoal production non-CO2 emissions. AR4 GWP equivalent: 40.26 tCO2e/TJ. Use when charcoal is baseline fuel."},
+    "charcoal_with_production_cap": {"value": 92.29, "unit": "tCO2e/TJ", "source": "TPDDTEC v4.0 ICS 9 (methodology cap, AR5 GWP)", "note": "Maximum permitted EF_nonCO2 for charcoal including production. AR4 GWP equivalent: 82.90 tCO2e/TJ. EFs higher than this cap are not permitted."},
     "LPG": {"value": 0.10, "unit": "tCO2e/TJ", "source": "IPCC 2006 default"},
     "kerosene": {"value": 0.10, "unit": "tCO2e/TJ", "source": "IPCC 2006 default"},
     "bioethanol": {"value": 0.42, "unit": "tCO2e/TJ", "source": "IPCC 2006 estimate"},
@@ -578,7 +590,7 @@ def get_fnrb_for_country(country):
     }
 
 
-def get_fuel_defaults(fuel_type):
+def get_fuel_defaults(fuel_type, include_production_emissions=False):
     fuel_key = fuel_type.lower().replace(" ", "_").replace("-", "_")
     aliases = {
         "woody_biomass": "wood", "firewood": "wood", "fuelwood": "wood",
@@ -588,13 +600,33 @@ def get_fuel_defaults(fuel_type):
     }
     fuel_key = aliases.get(fuel_key, fuel_key)
 
+    is_charcoal = fuel_key == "charcoal"
+
     result = {}
     if fuel_key in FUEL_NCV:
         result["NCV"] = FUEL_NCV[fuel_key]
-    if fuel_key in FUEL_EF_CO2:
-        result["EF_CO2"] = FUEL_EF_CO2[fuel_key]
-    if fuel_key in FUEL_EF_NONCO2:
-        result["EF_nonCO2"] = FUEL_EF_NONCO2[fuel_key]
+
+    if is_charcoal:
+        if include_production_emissions:
+            result["EF_CO2"] = FUEL_EF_CO2["charcoal_with_production"]
+            result["EF_CO2_cap"] = FUEL_EF_CO2["charcoal_with_production_cap"]
+            result["EF_nonCO2"] = FUEL_EF_NONCO2["charcoal_with_production"]
+            result["EF_nonCO2_cap"] = FUEL_EF_NONCO2["charcoal_with_production_cap"]
+            result["EF_CO2_combustion_only"] = FUEL_EF_CO2["charcoal_combustion"]
+            result["EF_nonCO2_combustion_only"] = FUEL_EF_NONCO2["charcoal_combustion"]
+        else:
+            result["EF_CO2"] = FUEL_EF_CO2["charcoal_combustion"]
+            result["EF_nonCO2"] = FUEL_EF_NONCO2["charcoal_combustion"]
+            result["EF_CO2_with_production"] = FUEL_EF_CO2["charcoal_with_production"]
+            result["EF_CO2_with_production_cap"] = FUEL_EF_CO2["charcoal_with_production_cap"]
+            result["EF_nonCO2_with_production"] = FUEL_EF_NONCO2["charcoal_with_production"]
+            result["EF_nonCO2_with_production_cap"] = FUEL_EF_NONCO2["charcoal_with_production_cap"]
+    else:
+        if fuel_key in FUEL_EF_CO2:
+            result["EF_CO2"] = FUEL_EF_CO2[fuel_key]
+        if fuel_key in FUEL_EF_NONCO2:
+            result["EF_nonCO2"] = FUEL_EF_NONCO2[fuel_key]
+
     return result if result else None
 
 
@@ -615,19 +647,13 @@ def get_defaults_for_methodology(methodology_code, country=None, baseline_fuel=N
         is_charcoal_baseline = bl_fuel_key in ("charcoal", "green_charcoal")
 
         if baseline_fuel:
-            bf = get_fuel_defaults(baseline_fuel)
+            bf = get_fuel_defaults(baseline_fuel, include_production_emissions=is_charcoal_baseline)
             if bf:
                 for k, v in bf.items():
                     result["parameters"][f"baseline_{k}"] = v
 
         if is_charcoal_baseline:
-            result["parameters"]["charcoal_production"] = CHARCOAL_PRODUCTION_DEFAULTS["with_production_emissions"]
             result["parameters"]["CF"] = WOOD_TO_CHARCOAL_CF["default"]
-            wood_defaults = get_fuel_defaults("wood")
-            if wood_defaults:
-                result["parameters"]["wood_equivalent_NCV"] = wood_defaults.get("NCV")
-                result["parameters"]["wood_equivalent_EF_CO2"] = wood_defaults.get("EF_CO2")
-                result["parameters"]["wood_equivalent_EF_nonCO2"] = wood_defaults.get("EF_nonCO2")
 
         if project_fuel:
             pf = get_fuel_defaults(project_fuel)

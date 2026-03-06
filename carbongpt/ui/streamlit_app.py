@@ -4757,9 +4757,9 @@ def _build_tool33_lookup(meth_parsed, settings, country):
         )
         params = defaults.get("parameters", {})
         if not baseline_fuel:
-            params.setdefault("baseline_NCV", {"value": "15.6 (wood)", "unit": "TJ/Gg", "source": "IPCC 2006 default for wood (select baseline fuel for specific value)"})
-            params.setdefault("baseline_EF_CO2", {"value": "112.0 (wood)", "unit": "tCO2/TJ", "source": "IPCC 2006 default for wood (select baseline fuel for specific value)"})
-            params.setdefault("baseline_EF_nonCO2", {"value": "4.03 (wood)", "unit": "tCO2e/TJ", "source": "TPDDTEC default for wood (select baseline fuel for specific value)"})
+            params.setdefault("baseline_NCV", {"value": "15.6 (wood) / 29.5 (charcoal)", "unit": "TJ/Gg", "source": "IPCC 2006 (select baseline fuel for specific value)"})
+            params.setdefault("baseline_EF_CO2", {"value": "112.0 (wood) / 165.22 (charcoal w/ production)", "unit": "tCO2/TJ", "source": "IPCC 2006 / TPDDTEC (select baseline fuel for specific value)"})
+            params.setdefault("baseline_EF_nonCO2", {"value": "9.46 (wood) / 44.83 (charcoal w/ production)", "unit": "tCO2e/TJ", "source": "VM0050/TPDDTEC AR5 GWP (select baseline fuel for specific value)"})
         if not project_fuel:
             params.setdefault("project_NCV", {"value": "select project fuel for value", "unit": "TJ/Gg", "source": "IPCC 2006 (select project fuel in Methodology Choices)"})
             params.setdefault("project_EF_CO2", {"value": "select project fuel for value", "unit": "tCO2/TJ", "source": "IPCC 2006 (select project fuel in Methodology Choices)"})
