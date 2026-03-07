@@ -31,6 +31,7 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "baseline_efficiency", "param_name": "Baseline device thermal efficiency", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.05, "max_value": 0.50, "is_ex_ante": True, "depends_on": []},
         {"param_key": "project_efficiency", "param_name": "Project device thermal efficiency", "category": "project", "unit": "fraction", "data_type": "number", "min_value": 0.10, "max_value": 0.80, "is_ex_ante": True, "depends_on": []},
         {"param_key": "household_size", "param_name": "Average household size", "category": "activity_data", "unit": "persons/household", "data_type": "number", "min_value": 1, "max_value": 20, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "TPDDTEC": [
         {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": []},
@@ -47,6 +48,7 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": []},
         {"param_key": "household_size", "param_name": "Average household size", "category": "activity_data", "unit": "persons/household", "data_type": "number", "min_value": 1, "max_value": 20, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "ACM0002": [
         {"param_key": "EG_PJ_y", "param_name": "Net electricity generation (project)", "category": "project", "unit": "MWh/yr", "data_type": "number", "min_value": 0, "max_value": 100000000, "is_ex_ante": True, "depends_on": []},
@@ -214,6 +216,11 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         value = 5.0
         source_type = "default"
         source_reference = "Common assumption (SSA average)"
+    elif param_key == "baseline_fuel":
+        value = baseline_fuel or "wood"
+        source_type = "default"
+        source_reference = "From project intake data"
+        return value, source_type, source_reference
     elif param_key == "baseline_efficiency":
         value = 0.15
         source_type = "default"

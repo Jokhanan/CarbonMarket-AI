@@ -162,6 +162,20 @@ def _render_er_results(result):
             table_rows.append(row)
         st.table(table_rows)
 
+    params_used = result.get("parameters_used")
+    if params_used:
+        with st.expander("Parameters Used in Calculation"):
+            param_rows = []
+            for k, v in params_used.items():
+                if isinstance(v, bool):
+                    display = "Yes" if v else "No"
+                elif isinstance(v, float):
+                    display = f"{v:g}"
+                else:
+                    display = str(v)
+                param_rows.append({"Parameter": k, "Value Used": display})
+            st.table(param_rows)
+
 
 def _render_saved_scenarios(project_id):
     scenarios = get_scenarios(project_id)

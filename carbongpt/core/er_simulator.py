@@ -14,10 +14,14 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     NCV_p = _pval(params, "NCV_project", NCV_b)
     EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
     EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+    CF = _pval(params, "CF", 1.0)
     leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
     usage_rate_base = _pval(params, "usage_rate", 0.90)
     num_hh = _pval(params, "num_households", 1000)
     hh_size = _pval(params, "household_size", 5.0)
+
+    baseline_fuel = _ptext(params, "baseline_fuel", "wood")
+    is_charcoal_baseline = baseline_fuel.lower() in ("charcoal", "charbon")
 
     if methodology in ("VM0050",):
         bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.4)
@@ -27,6 +31,13 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         sfc_p = _pval(params, "SFC_project", 200.0)
         bl_consumption = sfc_b * hh_size / 1000.0
         pj_consumption = sfc_p * hh_size / 1000.0
+
+    if is_charcoal_baseline and CF > 1.0:
+        bl_consumption_wood_equiv = bl_consumption * CF
+        pj_consumption_wood_equiv = pj_consumption * CF
+    else:
+        bl_consumption_wood_equiv = bl_consumption
+        pj_consumption_wood_equiv = pj_consumption
 
     years = []
     total_er = 0.0
@@ -40,10 +51,10 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
 
         usage_rate = max(usage_rate_base - (y * 0.02), 0.50)
 
-        ec_b = bl_consumption * NCV_b / 1000.0
+        ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
         be_per_hh = ec_b * (EF_CO2_b + EF_nonCO2_b) * fNRB
 
-        ec_p = pj_consumption * NCV_p / 1000.0
+        ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
         pe_per_hh = ec_p * (EF_CO2_p + EF_nonCO2_p) * fNRB
 
         active_hh = num_hh * usage_rate
@@ -79,6 +90,26 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "average_annual_er": round(total_er / crediting_years, 2),
             "crediting_years": crediting_years,
             "methodology": methodology,
+        },
+        "parameters_used": {
+            "fNRB": fNRB,
+            "NCV_baseline": NCV_b,
+            "NCV_project": NCV_p,
+            "EF_CO2_baseline": EF_CO2_b,
+            "EF_nonCO2_baseline": EF_nonCO2_b,
+            "EF_CO2_project": EF_CO2_p,
+            "EF_nonCO2_project": EF_nonCO2_p,
+            "CF": CF,
+            "baseline_fuel": baseline_fuel,
+            "is_charcoal_baseline": is_charcoal_baseline,
+            "bl_consumption_raw": round(bl_consumption, 4),
+            "bl_consumption_wood_equiv": round(bl_consumption_wood_equiv, 4),
+            "pj_consumption_raw": round(pj_consumption, 4),
+            "pj_consumption_wood_equiv": round(pj_consumption_wood_equiv, 4),
+            "leakage_pct": leakage_pct,
+            "usage_rate": usage_rate_base,
+            "num_households": num_hh,
+            "household_size": hh_size,
         },
     }
 
