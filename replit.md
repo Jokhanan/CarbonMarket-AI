@@ -17,7 +17,7 @@ CarbonGPT is an AI-powered carbon project operating system designed for end-to-e
 The CarbonGPT platform utilizes a Python-based backend with FastAPI and a Streamlit frontend. It employs a PostgreSQL database with the pgvector extension for vector search, and raw SQL for database interactions (no ORM).
 
 **Frontend:**
-The UI is a single Streamlit application (`streamlit_app.py`) with modular UI components in separate files. Navigation includes Workspace, Portfolio, and Admin pages. Project workspace has 11 tabs: Setup, Documents, Parameters, ER Simulator, Write/Draft, Review, Audit, Findings, Lifecycle, Monitoring, Export. Uses `st.session_state` for state management and custom CSS with teal brand color (`#0d9488`). A global chat widget provides project-contextual assistance.
+The UI is a single Streamlit application (`streamlit_app.py`) with modular UI components in separate files. Navigation includes Workspace, Portfolio, and Admin pages. Project workspace has 11 tabs: Setup, Documents, Parameters, ER Simulator, Write/Draft, Review, Audit, Findings, Lifecycle, Monitoring, Export. Uses `st.session_state` for state management and custom CSS with teal brand color (`#0d9488`). An AI Copilot chat widget serves as the central interface for project management through natural language.
 
 **UI Design System:**
 - Premium SaaS-level interface with Inter font, teal/green brand gradient
@@ -28,6 +28,9 @@ The UI is a single Streamlit application (`streamlit_app.py`) with modular UI co
 - Smart "Next Steps" panel on project overview (analyzes param/doc/draft/sim/audit state, shows 2-3 prioritized next actions)
 - Cross-tab readiness banners (ER Simulator, Review, Write/Draft, Audit tabs show prerequisite status with ready/warning/info styling)
 - Post-action suggestions after key operations (ER simulation results, audit results)
+- Lifecycle-aware tab highlighting with "(Next)" suffix on the recommended next tab
+- AI Copilot chat widget with action cards, navigation buttons, and suggestion chips
+- Methodology recommendation panel in Setup tab based on project description
 - Color-coded status indicators (green=complete, amber=missing, red=error)
 - Card-based layout with subtle shadows, rounded corners, hover interactions
 - CSS variables for consistent theming (surfaces, borders, shadows, radii, transitions)
@@ -38,6 +41,14 @@ The UI is a single Streamlit application (`streamlit_app.py`) with modular UI co
 - `carbongpt/ui/lifecycle_ui.py` — Lifecycle management, monitoring, issuance tracking
 - `carbongpt/ui/portfolio_ui.py` — Portfolio analytics dashboard
 - `carbongpt/ui/audit_ui.py` — Audit simulation interface
+
+**AI Copilot System:**
+- `carbongpt/core/copilot.py` — Unified AI orchestrator with OpenAI function calling
+- Uses OpenAI tool_choice for intent detection from natural language
+- Available actions: create_project, initialize_parameters, run_er_simulation, draft_section, run_audit, run_review, suggest_methodology, get_project_status, navigate_to_tab
+- Methodology recommendation engine with keyword-to-technology mapping for cookstoves, solar, wind, biogas, waste, forestry, transport, agriculture, charcoal, rice
+- Integrated into `/projects/chat` endpoint — replaces simple GPT chat with copilot orchestration
+- Chat widget shows action cards (styled results), navigation buttons, and suggestion chips
 
 **Backend:**
 The FastAPI application organizes routes into project-specific and admin modules. It handles project CRUD, document uploads, AI intelligence extraction, drafting, review, findings response, document export, parameter management, ER calculations, lifecycle management, monitoring tasks, issuance tracking, evidence management, and audit simulation.

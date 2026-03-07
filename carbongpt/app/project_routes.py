@@ -1694,7 +1694,7 @@ class ChatMessage(BaseModel):
 
 @router.post("/chat")
 def chat_with_ai(body: ChatMessage):
-    from carbongpt.core.ai_writer import _call_openai
+    from carbongpt.core.copilot import process_copilot_message
 
     project_context = ""
     if body.project_id:
@@ -1737,63 +1737,14 @@ def chat_with_ai(body: ChatMessage):
 
             project_context = "\n".join(context_parts)
 
-    system_prompt = (
-        "You are CarbonGPT Assistant, an expert AI assistant specializing in carbon markets, "
-        "climate finance, and carbon project development.\n\n"
-        "Your expertise covers:\n"
-        "- Carbon credit standards: Gold Standard (GS4GG), Verra VCS, CDM\n"
-        "- Project Design Documents (PDDs), Monitoring Reports (MRs), PoA-DDs, VPA-DDs\n"
-        "- Validation and Verification processes and reports (ValVer)\n"
-        "- Methodologies for emission reduction calculations\n"
-        "- Baseline and additionality assessments\n"
-        "- Monitoring parameters and data collection\n"
-        "- Stakeholder consultation and safeguards\n"
-        "- Sustainable Development Goals (SDGs) in carbon projects\n"
-        "- Emission factors, fNRB, net calorific values, and technical parameters\n\n"
-        "Guidelines:\n"
-        "- Be concise and practical in your answers\n"
-        "- When answering about a specific project, use the project context provided\n"
-        "- If asked to modify project data, explain what should be changed and how\n"
-        "- Use specific numbers, references, and examples when possible\n"
-        "- If you don't know something, say so rather than guessing\n"
-    )
-
-    if project_context:
-        system_prompt += f"\n\nCURRENT PROJECT CONTEXT:\n{project_context}"
-
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in body.history[-10:]:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role in ("user", "assistant") and content:
-            messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": body.message})
-
     try:
-        import os
-        import requests as http_client
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API key not configured.")
-
-        payload = {
-            "model": os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini"),
-            "messages": messages,
-            "max_tokens": 2000,
-            "temperature": 0.5,
-        }
-        resp = http_client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
+        result = process_copilot_message(
+            message=body.message,
+            project_id=body.project_id,
+            history=body.history,
+            project_context=project_context,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        reply = data["choices"][0]["message"]["content"]
-        return {"reply": reply}
-    except HTTPException:
-        raise
+        return result
     except Exception as e:
         logger.error("Chat error: %s", e)
         err_str = str(e)

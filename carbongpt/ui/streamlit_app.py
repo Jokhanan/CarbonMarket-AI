@@ -1004,6 +1004,60 @@ st.markdown("""
         flex-shrink: 0;
     }
 
+    /* ── Copilot Action Card ── */
+    .copilot-action-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(135deg, var(--brand-primary-50) 0%, rgba(255,255,255,0.9) 100%);
+        border: 1px solid rgba(13,148,136,0.2);
+        border-radius: var(--radius-sm);
+        margin: 6px 0;
+        font-size: 0.8rem;
+    }
+    .copilot-action-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--brand-primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .copilot-action-icon svg { width: 14px; height: 14px; }
+    .copilot-action-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--brand-primary-dark);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+    }
+    .copilot-action-text {
+        color: var(--text-primary);
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    .copilot-action-error {
+        background: #fef2f2;
+        border-color: rgba(239,68,68,0.2);
+    }
+    .copilot-action-error .copilot-action-icon {
+        background: #ef4444;
+    }
+    .copilot-action-error .copilot-action-label {
+        color: #b91c1c;
+    }
+    .copilot-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 4px 0;
+    }
+
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -3029,6 +3083,24 @@ def _render_readiness_banner(banner_type, message):
     )
 
 
+def _get_recommended_tab_index(project, project_id, total_params, missing_params, doc_count, projected_er, audit_score):
+    if not project.get("methodology"):
+        return 0
+    if total_params == 0:
+        return 2
+    if missing_params > 0:
+        return 2
+    if projected_er == "--":
+        return 3
+    sessions_data = _fetch(f"/projects/{project_id}/write-sessions?doc_type={PROJECT_TYPE_INFO.get(project.get('project_type', 'standalone_pdd'), {}).get('default_doc_type', 'pdd')}")
+    has_drafts = bool(sessions_data and isinstance(sessions_data, list) and len(sessions_data) > 0)
+    if not has_drafts:
+        return 4
+    if audit_score == "--":
+        return 6
+    return 5
+
+
 def _build_activity_feed(project):
     items = []
     documents = project.get("documents", [])
@@ -3240,7 +3312,7 @@ def _render_project_workspace(project_id):
             st.session_state.selected_project_id = None
             st.rerun()
 
-    TAB_LABELS = [
+    BASE_TAB_LABELS = [
         "Setup",
         "Documents",
         "Parameters",
@@ -3254,7 +3326,15 @@ def _render_project_workspace(project_id):
         "Export",
     ]
 
-    tabs = st.tabs(TAB_LABELS)
+    recommended_idx = _get_recommended_tab_index(project, project_id, total_params, missing_params, doc_count, projected_er, audit_score)
+    tab_labels = []
+    for i, label in enumerate(BASE_TAB_LABELS):
+        if i == recommended_idx:
+            tab_labels.append(f"{label} (Next)")
+        else:
+            tab_labels.append(label)
+
+    tabs = st.tabs(tab_labels)
 
     with tabs[0]:
         _render_project_settings(project)
@@ -6707,6 +6787,31 @@ def _render_project_settings_legacy(project):
         f"settings_{project_id}", standard=new_standard,
         current_value=project.get("methodology"))
 
+    if not new_methodology:
+        desc_for_recs = project.get("description", "")
+        country_for_recs = project.get("country", "")
+        rec_text = f"{desc_for_recs} {country_for_recs}".strip()
+        if rec_text and len(rec_text) > 3:
+            from carbongpt.core.copilot import recommend_methodologies
+            recs = recommend_methodologies(description=rec_text)
+            if recs:
+                rec_items = ""
+                for r in recs[:3]:
+                    rec_items += (
+                        f'<span class="next-step-item">'
+                        f'<span class="next-step-num" style="background:#0d9488;">{r["code"][:6]}</span>'
+                        f'<span>'
+                        f'<span class="next-step-text">{r["code"]} ({r["standard"]})</span>'
+                        f'<span class="next-step-desc">{r["reason"]}</span>'
+                        f'</span></span>'
+                    )
+                st.markdown(
+                    f'<span class="next-steps-panel" data-testid="methodology-recommendations">'
+                    f'<span class="next-steps-title">Recommended Methodologies</span>'
+                    f'{rec_items}</span>',
+                    unsafe_allow_html=True,
+                )
+
     meth_detail = None
     if new_methodology:
         meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
@@ -6856,11 +6961,38 @@ def _render_project_settings_legacy(project):
                 st.rerun()
 
 
+COPILOT_ACTION_ICONS = {
+    "create_project": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
+    "initialize_parameters": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/></svg>',
+    "run_er_simulation": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+    "draft_section": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
+    "run_audit": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    "run_review": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+    "suggest_methodology": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+    "get_project_status": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>',
+    "navigate": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+}
+
+COPILOT_ACTION_LABELS = {
+    "create_project": "Project Created",
+    "initialize_parameters": "Parameters Initialized",
+    "run_er_simulation": "ER Simulation Complete",
+    "draft_section": "Section Drafted",
+    "run_audit": "Audit Complete",
+    "run_review": "Review Ready",
+    "suggest_methodology": "Methodology Recommendations",
+    "get_project_status": "Project Status",
+    "navigate": "Navigation",
+}
+
+
 def _render_chat_widget():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     if "chat_open" not in st.session_state:
         st.session_state.chat_open = False
+    if "chat_actions" not in st.session_state:
+        st.session_state.chat_actions = {}
 
     project_id = st.session_state.get("selected_project_id")
     project_name = ""
@@ -6871,7 +7003,7 @@ def _render_chat_widget():
 
     col_spacer, col_chat_toggle = st.columns([5, 1])
     with col_chat_toggle:
-        toggle_label = "Close Assistant" if st.session_state.chat_open else "AI Assistant"
+        toggle_label = "Close Copilot" if st.session_state.chat_open else "AI Copilot"
         if st.button(toggle_label, key="chat_toggle_btn", type="primary" if not st.session_state.chat_open else "secondary", use_container_width=True):
             st.session_state.chat_open = not st.session_state.chat_open
             st.rerun()
@@ -6889,7 +7021,7 @@ def _render_chat_widget():
     <div class="chat-container">
         <div class="chat-header">
             <div class="chat-header-icon">AI</div>
-            CarbonGPT Assistant{context_badge}
+            CarbonGPT Copilot{context_badge}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -6897,22 +7029,24 @@ def _render_chat_widget():
     chat_container = st.container(height=400)
     with chat_container:
         if not st.session_state.chat_history:
-            greeting = "Hello! I'm your CarbonGPT Assistant. I can help with:"
+            greeting = "Hello! I'm your CarbonGPT Copilot. I can help you manage your entire carbon project through conversation."
             if project_name:
-                greeting += f"\n- Questions about **{project_name}**"
+                greeting += f"\n\nCurrently working on: **{project_name}**"
             greeting += (
-                "\n- Carbon market concepts and terminology"
-                "\n- Methodology guidance (Gold Standard, Verra VCS, CDM)"
-                "\n- PDD/MR writing best practices"
-                "\n- Emission reduction calculations"
-                "\n- Validation and verification processes"
-                "\n\nHow can I help you?"
+                "\n\nTry asking me to:"
+                "\n- Create a new cookstove project in Ghana"
+                "\n- Estimate emission reductions"
+                "\n- Draft a PDD section"
+                "\n- Run an audit simulation"
+                "\n- Check project status"
+                "\n- Recommend a methodology"
+                "\n\nWhat would you like to do?"
             )
             st.markdown(f"""<div style="padding:8px 0;">
                 <div class="chat-msg chat-msg-assistant">{greeting.replace(chr(10), '<br>')}</div>
             </div>""", unsafe_allow_html=True)
 
-        for msg in st.session_state.chat_history:
+        for idx, msg in enumerate(st.session_state.chat_history):
             role = msg.get("role", "user")
             content = msg.get("content", "")
             css_class = "chat-msg-user" if role == "user" else "chat-msg-assistant"
@@ -6926,12 +7060,59 @@ def _render_chat_widget():
                 <div class="chat-msg {css_class}">{formatted}</div>
             </div>""", unsafe_allow_html=True)
 
+            action_data = st.session_state.chat_actions.get(idx)
+            if action_data and role == "assistant":
+                action_type = action_data.get("action", "")
+                action_success = action_data.get("success", True)
+                icon = COPILOT_ACTION_ICONS.get(action_type, COPILOT_ACTION_ICONS.get("navigate", ""))
+                label = COPILOT_ACTION_LABELS.get(action_type, "Action")
+                action_msg = action_data.get("message", "")
+                error_class = " copilot-action-error" if not action_success else ""
+                st.markdown(f"""
+                <span class="copilot-action-card{error_class}" data-testid="copilot-action-card">
+                    <span class="copilot-action-icon">{icon}</span>
+                    <span>
+                        <span class="copilot-action-label">{label}</span>
+                        <span class="copilot-action-text">{action_msg}</span>
+                    </span>
+                </span>
+                """, unsafe_allow_html=True)
+
+    nav_pending = st.session_state.get("copilot_nav_pending")
+    if nav_pending:
+        nav_col1, nav_col2 = st.columns([3, 1])
+        with nav_col2:
+            if st.button(f"Go to {nav_pending['tab']}", key="copilot_nav_btn", type="primary", use_container_width=True):
+                if project_id:
+                    st.session_state[f"ws_tab_{project_id}"] = nav_pending.get("index", 0)
+                if nav_pending.get("new_project_id"):
+                    st.session_state.selected_project_id = nav_pending["new_project_id"]
+                st.session_state.copilot_nav_pending = None
+                st.rerun()
+
+    chip_col = st.columns(1)[0]
+    with chip_col:
+        chip_cols = st.columns(6)
+        chip_suggestions = [
+            ("Project Status", "What's my project status?"),
+            ("Estimate ERs", "Estimate emission reductions for my project"),
+            ("Draft PDD", "Draft a PDD section"),
+            ("Run Audit", "Run an audit simulation"),
+            ("Suggest Methodology", "Which methodology should I use for my project?"),
+            ("Help", "What can you do?"),
+        ]
+        for i, (label, prompt) in enumerate(chip_suggestions):
+            with chip_cols[i]:
+                if st.button(label, key=f"chip_{i}", use_container_width=True):
+                    st.session_state.chat_chip_send = prompt
+                    st.rerun()
+
     ic1, ic2, ic3 = st.columns([5, 0.7, 0.7])
     with ic1:
         user_input = st.text_input(
             "Message",
             key="chat_input",
-            placeholder="Ask about carbon markets, your project, methodologies...",
+            placeholder="Tell me what to do... e.g. 'Create a cookstove project in Kenya'",
             label_visibility="collapsed",
         )
     with ic2:
@@ -6978,7 +7159,6 @@ def _render_chat_widget():
             btn.style.background = 'linear-gradient(135deg,#0d9488,#0f766e)';
             btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg> Voice Input';
 
-            // Find Streamlit's input element and set the value
             const inputs = window.parent.document.querySelectorAll('input[aria-label="Message"]');
             if (inputs.length > 0) {
                 const input = inputs[inputs.length - 1];
@@ -6986,7 +7166,6 @@ def _render_chat_widget():
                 nativeInputValueSetter.call(input, transcript);
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-                // Focus and trigger Streamlit update
                 input.focus();
                 setTimeout(() => {
                     input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
@@ -7012,25 +7191,59 @@ def _render_chat_widget():
 
     if clear_clicked:
         st.session_state.chat_history = []
+        st.session_state.chat_actions = {}
+        st.session_state.copilot_nav_pending = None
         st.rerun()
 
-    if send_clicked and user_input and user_input.strip():
-        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
+    chip_msg = st.session_state.pop("chat_chip_send", None)
+    actual_message = chip_msg or (user_input.strip() if send_clicked and user_input and user_input.strip() else None)
 
-        with st.spinner("Thinking..."):
+    if actual_message:
+        st.session_state.chat_history.append({"role": "user", "content": actual_message})
+
+        with st.spinner("Copilot is working..."):
             response = _fetch(
                 "/projects/chat",
                 method="POST",
                 json={
-                    "message": user_input.strip(),
+                    "message": actual_message,
                     "project_id": project_id,
                     "history": st.session_state.chat_history[-10:],
                 },
-                timeout=60,
+                timeout=90,
             )
 
         if response and response.get("reply"):
+            assistant_idx = len(st.session_state.chat_history)
             st.session_state.chat_history.append({"role": "assistant", "content": response["reply"]})
+
+            action_taken = response.get("action_taken")
+            if action_taken:
+                st.session_state.chat_actions[assistant_idx] = action_taken
+
+                if action_taken.get("action") == "create_project" and action_taken.get("project_id"):
+                    st.session_state.copilot_nav_pending = {
+                        "tab": "Setup",
+                        "index": 0,
+                        "new_project_id": action_taken["project_id"],
+                    }
+                elif action_taken.get("action") == "run_er_simulation" and action_taken.get("result_data") and project_id:
+                    st.session_state[f"sim_result_{project_id}"] = action_taken["result_data"]
+                    st.session_state.copilot_nav_pending = {
+                        "tab": action_taken.get("navigation_hint", "ER Simulator"),
+                        "index": action_taken.get("navigation_index", 3),
+                    }
+                elif action_taken.get("action") == "run_audit" and action_taken.get("result_data") and project_id:
+                    st.session_state[f"audit_result_{project_id}"] = action_taken["result_data"]
+                    st.session_state.copilot_nav_pending = {
+                        "tab": action_taken.get("navigation_hint", "Audit"),
+                        "index": action_taken.get("navigation_index", 6),
+                    }
+                elif action_taken.get("navigation_hint"):
+                    st.session_state.copilot_nav_pending = {
+                        "tab": action_taken["navigation_hint"],
+                        "index": action_taken.get("navigation_index", 0),
+                    }
         elif response:
             st.session_state.chat_history.append({"role": "assistant", "content": "I'm sorry, I couldn't generate a response. Please try again."})
 
