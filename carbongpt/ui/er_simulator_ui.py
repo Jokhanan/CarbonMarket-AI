@@ -16,7 +16,13 @@ def render_er_simulator(project):
     project_name = project.get("project_name") or project.get("name") or f"Project {project_id}"
     methodology = (project.get("methodology") or "").upper().replace("GS-", "")
 
-    st.subheader("Emission Reduction Scenario Simulator")
+    _er_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>'
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-green">{_er_icon}</span>
+        <span class="section-header-text">Emission Reduction Scenario Simulator</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     if methodology not in ("VM0050", "TPDDTEC", "ACM0002", "AMS-I.D.", "AMSID"):
         st.warning(f"ER simulation is not yet available for methodology: {methodology}")

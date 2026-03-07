@@ -18,7 +18,13 @@ from carbongpt.core.lifecycle_manager import (
 
 def render_lifecycle_dashboard(project):
     project_id = project["id"]
-    st.subheader("Project Lifecycle")
+    _lifecycle_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-blue">{_lifecycle_icon}</span>
+        <span class="section-header-text">Project Lifecycle</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     lifecycle = get_lifecycle(project_id)
     if not lifecycle.get("stages") or not any(s["status"] != "upcoming" for s in lifecycle.get("stages", [])):
@@ -250,7 +256,13 @@ def render_monitoring_dashboard(project):
     project_id = project["id"]
     methodology = (project.get("methodology") or "").upper().replace("GS-", "")
 
-    st.subheader("Monitoring Management")
+    _mon_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-green">{_mon_icon}</span>
+        <span class="section-header-text">Monitoring Management</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     tasks = get_monitoring_tasks(project_id)
     if not tasks:

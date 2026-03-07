@@ -17,7 +17,17 @@ CarbonGPT is an AI-powered carbon project operating system designed for end-to-e
 The CarbonGPT platform utilizes a Python-based backend with FastAPI and a Streamlit frontend. It employs a PostgreSQL database with the pgvector extension for vector search, and raw SQL for database interactions (no ORM).
 
 **Frontend:**
-The UI is a single Streamlit application (`streamlit_app.py`) with modular UI components in separate files. Navigation includes Workspace, Portfolio, and Admin pages. Project workspace has 11 tabs: Project Setup, Documents, Parameters, ER Simulator, Write/Draft, Review, Audit Simulation, Respond to Findings, Lifecycle, Monitoring, Export. Uses `st.session_state` for state management and custom CSS with teal brand color (`#0d9488`). A global chat widget provides project-contextual assistance.
+The UI is a single Streamlit application (`streamlit_app.py`) with modular UI components in separate files. Navigation includes Workspace, Portfolio, and Admin pages. Project workspace has 11 tabs: Setup, Documents, Parameters, ER Simulator, Write/Draft, Review, Audit, Findings, Lifecycle, Monitoring, Export. Uses `st.session_state` for state management and custom CSS with teal brand color (`#0d9488`). A global chat widget provides project-contextual assistance.
+
+**UI Design System:**
+- Premium SaaS-level interface with Inter font, teal/green brand gradient
+- Overview metric cards (4-column grid) on both workspace home and project workspace pages
+- Project header with type/standard/status badges, methodology/country with icons, and quick action buttons
+- Section header icons for all 11 workspace tabs (SVG icons with colored backgrounds)
+- Activity feed in project workspace (collapsible expander)
+- Color-coded status indicators (green=complete, amber=missing, red=error)
+- Card-based layout with subtle shadows, rounded corners, hover interactions
+- CSS variables for consistent theming (surfaces, borders, shadows, radii, transitions)
 
 **UI Modules:**
 - `carbongpt/ui/parameter_ui.py` — Parameter Intelligence Dashboard

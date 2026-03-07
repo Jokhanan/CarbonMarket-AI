@@ -732,6 +732,189 @@ st.markdown("""
         border-radius: var(--radius-sm) !important;
     }
 
+    /* ── Overview Metric Cards ── */
+    .overview-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 1.5rem;
+    }
+    .overview-metric-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.2rem 1.4rem;
+        box-shadow: var(--shadow-xs);
+        transition: all var(--transition-base);
+        position: relative;
+        overflow: hidden;
+    }
+    .overview-metric-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--border-default);
+        transform: translateY(-2px);
+    }
+    .overview-metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+    }
+    .overview-metric-card.metric-teal::before { background: var(--brand-gradient); }
+    .overview-metric-card.metric-blue::before { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+    .overview-metric-card.metric-amber::before { background: linear-gradient(90deg, #d97706, #f59e0b); }
+    .overview-metric-card.metric-green::before { background: linear-gradient(90deg, #059669, #10b981); }
+    .overview-metric-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-tertiary);
+        margin-bottom: 6px;
+    }
+    .overview-metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+    }
+    .overview-metric-sub {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        margin-top: 4px;
+        font-weight: 400;
+    }
+
+    /* ── Quick Actions Bar ── */
+    .quick-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+    .quick-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.4rem 0.85rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-subtle);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+    }
+    .quick-action-btn:hover {
+        color: var(--brand-primary-dark);
+        background: var(--brand-primary-50);
+        border-color: rgba(13,148,136,0.2);
+    }
+
+    /* ── Activity Feed ── */
+    .activity-feed {
+        display: block;
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.2rem 1.4rem;
+        box-shadow: var(--shadow-xs);
+    }
+    .activity-feed-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .activity-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    .activity-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 5px;
+        display: inline-block;
+    }
+    .activity-dot-green { background: #10b981; }
+    .activity-dot-blue { background: #3b82f6; }
+    .activity-dot-amber { background: #f59e0b; }
+    .activity-dot-teal { background: #0d9488; }
+    .activity-dot-purple { background: #8b5cf6; }
+    .activity-text {
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+    .activity-time {
+        font-size: 0.7rem;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+    }
+
+    /* ── Status Indicator Dots ── */
+    .status-dot {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+    .status-dot::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .status-dot-green::before { background: #10b981; }
+    .status-dot-amber::before { background: #f59e0b; }
+    .status-dot-red::before { background: #ef4444; }
+
+    /* ── Enhanced Section Headers ── */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.5rem 0;
+        margin-bottom: 0.5rem;
+    }
+    .section-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .section-header-icon-teal { background: rgba(13,148,136,0.1); color: #0d9488; }
+    .section-header-icon-blue { background: rgba(37,99,235,0.1); color: #2563eb; }
+    .section-header-icon-amber { background: rgba(217,119,6,0.1); color: #d97706; }
+    .section-header-icon-green { background: rgba(5,150,105,0.1); color: #059669; }
+    .section-header-icon-purple { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+    .section-header-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -816,6 +999,17 @@ SVG_ICONS = {
     "docs": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>',
     "globe": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
     "methodology": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+    "setup": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+    "parameters": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>',
+    "er_model": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+    "write": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    "review": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+    "audit": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    "findings": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    "lifecycle": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    "monitoring": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    "export": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
+    "activity": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
 }
 
 with st.sidebar:
@@ -2288,7 +2482,36 @@ def _render_home():
     st.markdown("""
     <div class="page-header">
         <h1>Workspace</h1>
-        <div class="page-subtitle">Manage your carbon projects and explore market intelligence</div>
+        <div class="page-subtitle">Manage your carbon projects, track progress, and explore market intelligence</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    all_projects = _fetch("/projects") or []
+    active_count = sum(1 for p in all_projects if p.get("status") in ("in_progress", "under_review"))
+    draft_count = sum(1 for p in all_projects if p.get("status") == "draft")
+    total_docs = sum(p.get("doc_count", 0) for p in all_projects)
+    st.markdown(f"""
+    <div class="overview-metrics" data-testid="workspace-overview">
+        <div class="overview-metric-card metric-teal" data-testid="metric-total-projects">
+            <div class="overview-metric-label">Total Projects</div>
+            <div class="overview-metric-value">{len(all_projects)}</div>
+            <div class="overview-metric-sub">Across all standards</div>
+        </div>
+        <div class="overview-metric-card metric-blue" data-testid="metric-active-projects">
+            <div class="overview-metric-label">Active</div>
+            <div class="overview-metric-value">{active_count}</div>
+            <div class="overview-metric-sub">In progress or review</div>
+        </div>
+        <div class="overview-metric-card metric-amber" data-testid="metric-draft-projects">
+            <div class="overview-metric-label">Drafts</div>
+            <div class="overview-metric-value">{draft_count}</div>
+            <div class="overview-metric-sub">Pending completion</div>
+        </div>
+        <div class="overview-metric-card metric-green" data-testid="metric-total-docs">
+            <div class="overview-metric-label">Total Documents</div>
+            <div class="overview-metric-value">{total_docs}</div>
+            <div class="overview-metric-sub">Across all projects</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -2566,6 +2789,37 @@ def _render_new_project_wizard(existing_projects):
                         st.rerun()
 
 
+def _build_activity_feed(project):
+    items = []
+    documents = project.get("documents", [])
+    for doc in documents:
+        items.append({
+            "text": f"Document uploaded: {doc.get('file_name', 'file')}",
+            "dot": "green",
+            "time": doc.get("uploaded_at", ""),
+        })
+    status = project.get("status", "draft")
+    if status != "draft":
+        items.append({
+            "text": f"Project status changed to {STATUS_LABELS.get(status, status)}",
+            "dot": "blue",
+            "time": "",
+        })
+    if project.get("methodology"):
+        items.append({
+            "text": f"Methodology set: {project['methodology']}",
+            "dot": "teal",
+            "time": "",
+        })
+    if not items:
+        items.append({
+            "text": "Project created",
+            "dot": "teal",
+            "time": "",
+        })
+    return items[:8]
+
+
 def _render_project_workspace(project_id):
     project = _fetch(f"/projects/{project_id}")
     if not project:
@@ -2591,9 +2845,9 @@ def _render_project_workspace(project_id):
 
     meta_items = []
     if project.get("methodology"):
-        meta_items.append(f'<span class="workspace-meta-item">{project["methodology"]}</span>')
+        meta_items.append(f'<span class="workspace-meta-item">{SVG_ICONS.get("methodology", "")} {project["methodology"]}</span>')
     if project.get("country"):
-        meta_items.append(f'<span class="workspace-meta-item">{project["country"]}</span>')
+        meta_items.append(f'<span class="workspace-meta-item">{SVG_ICONS.get("globe", "")} {project["country"]}</span>')
     meta_html = '<span class="workspace-meta-dot"></span>'.join(meta_items)
 
     parent_html = ""
@@ -2606,7 +2860,7 @@ def _render_project_workspace(project_id):
 
     desc_html = ""
     if project.get("description"):
-        desc_html = f'<span style="display:block;margin-top:8px;font-size:0.85rem;color:var(--text-secondary);">{project["description"]}</span>'
+        desc_html = f'<span style="display:block;margin-top:10px;font-size:0.85rem;color:var(--text-secondary);line-height:1.5;">{project["description"]}</span>'
 
     with st.container(border=True):
         st.markdown(
@@ -2615,7 +2869,7 @@ def _render_project_workspace(project_id):
             f'<span class="status-badge {status_class}">{status_label}</span>',
             unsafe_allow_html=True,
         )
-        st.markdown(f"### {project['name']}")
+        st.markdown(f"## {project['name']}")
         st.markdown(
             f'<span class="workspace-header-meta">{meta_html}</span>',
             unsafe_allow_html=True,
@@ -2624,6 +2878,100 @@ def _render_project_workspace(project_id):
             st.markdown(parent_html, unsafe_allow_html=True)
         if desc_html:
             st.markdown(desc_html, unsafe_allow_html=True)
+
+        qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
+        with qa_col1:
+            if st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True):
+                st.session_state[f"ws_tab_{project_id}"] = 4
+                st.rerun()
+        with qa_col2:
+            if st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True):
+                st.session_state[f"ws_tab_{project_id}"] = 6
+                st.rerun()
+        with qa_col3:
+            if st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True):
+                st.session_state[f"ws_tab_{project_id}"] = 3
+                st.rerun()
+        with qa_col4:
+            if st.button("AI Assistant", key=f"qa_chat_{project_id}", use_container_width=True):
+                st.session_state.chat_open = True
+                st.rerun()
+
+    documents = project.get("documents", [])
+    doc_count = len(documents)
+
+    params_data = _fetch(f"/projects/{project_id}/parameters")
+    param_list = params_data if isinstance(params_data, list) else (params_data.get("parameters", []) if isinstance(params_data, dict) else [])
+    total_params = len(param_list)
+    configured_params = sum(1 for p in param_list if p.get("value") is not None)
+    missing_params = total_params - configured_params
+
+    projected_er = "--"
+    er_cache_key = f"sim_result_{project_id}"
+    if er_cache_key in st.session_state and st.session_state[er_cache_key]:
+        cached_er = st.session_state[er_cache_key]
+        yr_results = cached_er.get("year_by_year", [])
+        if yr_results:
+            total_er = sum(y.get("net_er", 0) for y in yr_results)
+            avg_er = total_er / len(yr_results) if yr_results else 0
+            projected_er = f"{avg_er:,.0f}"
+
+    audit_score = "--"
+    audit_cache_key = f"audit_result_{project_id}"
+    if audit_cache_key in st.session_state and st.session_state[audit_cache_key]:
+        cached_audit = st.session_state[audit_cache_key]
+        score = cached_audit.get("overall_score")
+        if score is not None:
+            audit_score = f"{score}%"
+
+    param_status_text = f"{configured_params} / {total_params}" if total_params > 0 else "Not initialized"
+    param_sub = f"{missing_params} missing" if missing_params > 0 and total_params > 0 else "All configured" if total_params > 0 else "Initialize parameters first"
+    param_sub_class = "status-dot-amber" if missing_params > 0 else "status-dot-green" if total_params > 0 else ""
+
+    st.markdown(f"""
+    <div class="overview-metrics" data-testid="overview-metrics">
+        <div class="overview-metric-card metric-teal" data-testid="metric-projected-er">
+            <div class="overview-metric-label">Projected ER (tCO2e/yr)</div>
+            <div class="overview-metric-value">{projected_er}</div>
+            <div class="overview-metric-sub">Average annual emission reductions</div>
+        </div>
+        <div class="overview-metric-card metric-blue" data-testid="metric-parameters">
+            <div class="overview-metric-label">Parameters</div>
+            <div class="overview-metric-value">{param_status_text}</div>
+            <div class="overview-metric-sub"><span class="status-dot {param_sub_class}">{param_sub}</span></div>
+        </div>
+        <div class="overview-metric-card metric-amber" data-testid="metric-documents">
+            <div class="overview-metric-label">Documents</div>
+            <div class="overview-metric-value">{doc_count}</div>
+            <div class="overview-metric-sub">Project documents uploaded</div>
+        </div>
+        <div class="overview-metric-card metric-green" data-testid="metric-audit-readiness">
+            <div class="overview-metric-label">Audit Readiness</div>
+            <div class="overview-metric-value">{audit_score}</div>
+            <div class="overview-metric-sub">Run audit simulation to assess</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("Recent Activity", expanded=False):
+        activity_items = _build_activity_feed(project)
+        items_html = ""
+        for item in activity_items:
+            time_html = f'<span class="activity-time">{item["time"][:10]}</span>' if item["time"] else ""
+            items_html += f"""
+            <span class="activity-item">
+                <span class="activity-dot activity-dot-{item['dot']}"></span>
+                <span>
+                    <span class="activity-text">{item['text']}</span>
+                    {time_html}
+                </span>
+            </span>"""
+        st.markdown(f"""
+        <span class="activity-feed" data-testid="activity-feed">
+            <span class="activity-feed-title">{SVG_ICONS.get("activity", "")} Recent Activity</span>
+            {items_html}
+        </span>
+        """, unsafe_allow_html=True)
 
     if project_type == "poa_programme":
         children = _fetch(f"/projects/{project_id}/children") or []
@@ -2650,7 +2998,21 @@ def _render_project_workspace(project_id):
             st.session_state.selected_project_id = None
             st.rerun()
 
-    tabs = st.tabs(["Project Setup", "Documents", "Parameters", "ER Simulator", "Write / Draft", "Review", "Audit Simulation", "Respond to Findings", "Lifecycle", "Monitoring", "Export"])
+    TAB_LABELS = [
+        "Setup",
+        "Documents",
+        "Parameters",
+        "ER Simulator",
+        "Write / Draft",
+        "Review",
+        "Audit",
+        "Findings",
+        "Lifecycle",
+        "Monitoring",
+        "Export",
+    ]
+
+    tabs = st.tabs(TAB_LABELS)
 
     with tabs[0]:
         _render_project_settings(project)
@@ -3039,7 +3401,12 @@ def _render_findings_response_tab(project):
     methodology = project.get("methodology", "")
     project_type = project.get("project_type", "standalone_pdd")
 
-    st.subheader("Respond to Findings")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-amber">{SVG_ICONS.get("findings", "")}</span>
+        <span class="section-header-text">Respond to Findings</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown(
         "Upload VVB findings or PRR comments, and the AI will draft responses "
@@ -3600,7 +3967,12 @@ def _render_export_tab(project):
     standard = project.get("standard", "GoldStandard")
     methodology = project.get("methodology")
 
-    st.subheader("Export Documents")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-green">{SVG_ICONS.get("export", "")}</span>
+        <span class="section-header-text">Export Documents</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.write("Generate filled templates with your drafted content, or download calculation spreadsheets.")
 
     st.markdown("### Template Export")
@@ -3723,7 +4095,12 @@ def _render_documents_tab(project):
     project_id = project["id"]
     project_type = project.get("project_type", "standalone_pdd")
 
-    st.subheader("Documents & Knowledge Base")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-blue">{SVG_ICONS.get("docs", "")}</span>
+        <span class="section-header-text">Documents & Knowledge Base</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.write("Upload project documents. Toggle which ones the AI uses when writing and reviewing your documents.")
 
     documents = project.get("documents", [])
@@ -4066,7 +4443,12 @@ def _render_review_tab(project):
     standard = project.get("standard", "GoldStandard")
     project_type = project.get("project_type", "standalone_pdd")
 
-    st.subheader("Review")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-purple">{SVG_ICONS.get("review", "")}</span>
+        <span class="section-header-text">AI Review</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     review_tabs = st.tabs(["Review Your Draft", "Review Uploaded Document", "Consistency Check"])
 
@@ -4472,7 +4854,12 @@ def _render_write_tab(project):
     standard = project.get("standard", "GoldStandard")
     project_type = project.get("project_type", "standalone_pdd")
 
-    st.subheader("AI Writing Assistant")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-teal">{SVG_ICONS.get("write", "")}</span>
+        <span class="section-header-text">AI Writing Assistant</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.write("Draft your document section by section or generate the full document at once.")
 
     available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
@@ -5869,7 +6256,12 @@ def _render_project_settings(project):
         import json as _json
         intake = _json.loads(intake)
 
-    st.subheader("Project Setup")
+    st.markdown(f"""
+    <div class="section-header">
+        <span class="section-header-icon section-header-icon-teal">{SVG_ICONS.get("setup", "")}</span>
+        <span class="section-header-text">Project Setup</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
 
     with st.container(border=True):

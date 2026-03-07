@@ -1,0 +1,120 @@
+73852"}
+Redesign and upgrade the CarbonGPT UI to a premium SaaS-level interface (target quality: 9–9.5/10).
+
+The application already works functionally. Do not change core logic. Focus on UI structure, hierarchy, and usability.
+
+Your goal is to transform the interface into a modern AI SaaS product similar to high-quality platforms like Stripe, Notion, Linear, and Vercel.
+
+Implement the following improvements.
+
+1. PROJECT OVERVIEW DASHBOARD
+
+When a user opens a project, show a Project Overview dashboard before the setup form.
+
+The overview should display key project metrics as cards:
+
+• Projected ER (tCO2/year)
+• Parameters configured vs missing
+• Number of project documents
+• Audit readiness score
+
+Display these as large metric cards at the top of the page.
+
+2. PROJECT HEADER IMPROVEMENT
+
+Redesign the project header to include:
+
+• Project name
+• Methodology
+• Country
+• Status
+• Quick actions (Generate section, Run audit, Ask AI)
+
+Make the header visually stronger with clear typography hierarchy.
+
+3. CARD-BASED DESIGN SYSTEM
+
+Convert the UI to a card-based layout:
+
+• project cards
+• metric cards
+• document cards
+• parameter cards
+
+Each card should have:
+• subtle shadow
+• rounded corners
+• clean spacing
+• hover interaction
+
+4. VISUAL HIERARCHY
+
+Improve layout hierarchy:
+
+• larger project titles
+• section headers
+• increased spacing between blocks
+• consistent typography scale
+
+5. STATUS INDICATORS
+
+Add color-coded status indicators:
+
+Green → completed  
+Yellow → missing information  
+Red → error or validation issue  
+
+Use these for parameters, documents, and audit checks.
+
+6. ACTIVITY FEED
+
+Add a project activity timeline showing recent events:
+
+• document uploads
+• parameter updates
+• AI-generated sections
+• audit simulations
+• review actions
+
+7. ICONS AND VISUAL CLARITY
+
+Add simple icons for key sections:
+
+Parameters  
+Documents  
+ER model  
+Audit  
+Monitoring  
+
+Icons should improve navigation clarity.
+
+8. AI ASSISTANT PANEL
+
+Add a visible CarbonGPT assistant panel where users can ask:
+
+• Explain methodology requirements
+• Identify missing parameters
+• Generate document sections
+• Run audit simulation
+• Analyze uploaded documents
+
+9. MODERN SPACING AND LAYOUT
+
+Apply SaaS best practices:
+
+• generous whitespace
+• consistent padding
+• grid-based layout
+• responsive cards
+
+10. DESIGN STYLE
+
+Use a clean modern style:
+
+Primary color: teal/green (current branding)  
+Background: light neutral gray  
+Cards: white with subtle shadows  
+
+Typography should follow a clear hierarchy for titles, subtitles, and body text.
+
+The goal is to make CarbonGPT feel like a professional AI platform for carbon project development, not just a form-based int
