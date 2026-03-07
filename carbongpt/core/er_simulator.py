@@ -193,41 +193,125 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     eg_hist = _pval(params, "EG_historical", 0)
     subtype = _ptext(params, "project_subtype", "greenfield")
 
+    if subtype == "greenfield":
+        be_formula_desc = f"EG_PJ * EF_grid = {eg_pj:,.0f} * {ef_grid}"
+        be_annual = eg_pj * ef_grid
+    elif subtype == "capacity_addition":
+        net_gen = max(eg_pj - eg_hist, 0)
+        be_formula_desc = f"max(EG_PJ - EG_historical, 0) * EF_grid = max({eg_pj:,.0f} - {eg_hist:,.0f}, 0) * {ef_grid} = {net_gen:,.0f} * {ef_grid}"
+        be_annual = net_gen * ef_grid
+    else:
+        be_formula_desc = f"EG_PJ * EF_grid = {eg_pj:,.0f} * {ef_grid}"
+        be_annual = eg_pj * ef_grid
+
+    calculation_steps = [
+        {
+            "step": 1,
+            "name": "Net electricity generation (project activity)",
+            "formula": f"EG_PJ_y = {eg_pj:,.0f} MWh/yr",
+            "value": eg_pj,
+            "unit": "MWh/yr",
+        },
+        {
+            "step": 2,
+            "name": "Grid emission factor",
+            "formula": f"EF_grid = {ef_grid} tCO2/MWh",
+            "value": ef_grid,
+            "unit": "tCO2/MWh",
+        },
+    ]
+
+    if subtype == "capacity_addition":
+        calculation_steps.append({
+            "step": 3,
+            "name": "Historical electricity generation (baseline)",
+            "formula": f"EG_historical = {eg_hist:,.0f} MWh/yr",
+            "value": eg_hist,
+            "unit": "MWh/yr",
+        })
+        calculation_steps.append({
+            "step": 4,
+            "name": "Baseline emissions (annual)",
+            "formula": be_formula_desc,
+            "value": round(be_annual, 2),
+            "unit": "tCO2e/yr",
+        })
+    else:
+        calculation_steps.append({
+            "step": 3,
+            "name": "Baseline emissions (annual)",
+            "formula": be_formula_desc,
+            "value": round(be_annual, 2),
+            "unit": "tCO2e/yr",
+        })
+
+    calculation_steps.append({
+        "step": len(calculation_steps) + 1,
+        "name": "Project emissions",
+        "formula": "PE_y = 0 (renewable energy, zero direct emissions)",
+        "value": 0.0,
+        "unit": "tCO2e/yr",
+    })
+    calculation_steps.append({
+        "step": len(calculation_steps) + 1,
+        "name": "Leakage",
+        "formula": "LE_y = 0 (no leakage for grid-connected renewable energy)",
+        "value": 0.0,
+        "unit": "tCO2e/yr",
+    })
+    calculation_steps.append({
+        "step": len(calculation_steps) + 1,
+        "name": "Net emission reductions (annual)",
+        "formula": f"ER_y = BE_y - PE_y - LE_y = {be_annual:,.2f} - 0 - 0",
+        "value": round(be_annual, 2),
+        "unit": "tCO2e/yr",
+    })
+
     years = []
     total_er = 0.0
+    total_be = 0.0
 
     for y in range(crediting_years):
         year_num = y + 1
         cal_year = start_year + y
-
-        if subtype == "greenfield":
-            be_y = eg_pj * ef_grid
-        elif subtype == "capacity_addition":
-            be_y = max(eg_pj - eg_hist, 0) * ef_grid
-        else:
-            be_y = eg_pj * ef_grid
-
+        be_y = be_annual
         pe_y = 0.0
         le_y = 0.0
         er_y = be_y - pe_y - le_y
         total_er += er_y
+        total_be += be_y
 
         years.append({
             "year_number": year_num,
             "calendar_year": cal_year,
             "baseline_emissions": round(be_y, 2),
+            "baseline_formula": f"{eg_pj:,.0f} * {ef_grid}" if subtype == "greenfield" else f"max({eg_pj:,.0f} - {eg_hist:,.0f}, 0) * {ef_grid}",
             "project_emissions": round(pe_y, 2),
+            "project_formula": "0 (renewable)",
+            "gross_er": round(er_y, 2),
             "leakage": round(le_y, 2),
+            "leakage_formula": "0",
             "net_er": round(er_y, 2),
+            "net_er_formula": f"{be_y:,.2f} - 0 - 0",
         })
 
     return {
+        "calculation_steps": calculation_steps,
         "years": years,
         "summary": {
             "total_er": round(total_er, 2),
+            "total_baseline": round(total_be, 2),
+            "total_project": 0.0,
+            "total_leakage": 0.0,
             "average_annual_er": round(total_er / crediting_years, 2),
             "crediting_years": crediting_years,
             "methodology": methodology,
+        },
+        "parameters_used": {
+            "EG_PJ_y": {"value": eg_pj, "unit": "MWh/yr", "description": "Net electricity generation (project)"},
+            "EF_grid": {"value": ef_grid, "unit": "tCO2/MWh", "description": "Grid emission factor"},
+            "EG_historical": {"value": eg_hist, "unit": "MWh/yr", "description": "Historical electricity generation"},
+            "project_subtype": {"value": subtype, "unit": "", "description": "Project subtype (greenfield/capacity_addition)"},
         },
     }
 
