@@ -6,12 +6,14 @@ from carbongpt.core.er_simulator import (
     get_scenario_detail,
     delete_scenario,
     run_sensitivity,
+    export_er_to_excel,
 )
 from carbongpt.core.parameter_engine import get_parameters_as_dict, get_project_parameters
 
 
 def render_er_simulator(project):
     project_id = project["id"]
+    project_name = project.get("project_name") or project.get("name") or f"Project {project_id}"
     methodology = (project.get("methodology") or "").upper().replace("GS-", "")
 
     st.subheader("Emission Reduction Scenario Simulator")
@@ -23,7 +25,7 @@ def render_er_simulator(project):
     sim_tabs = st.tabs(["Live Simulator", "Saved Scenarios", "Sensitivity Analysis", "Carbon Finance"])
 
     with sim_tabs[0]:
-        _render_live_simulator(project_id, methodology)
+        _render_live_simulator(project_id, methodology, project_name)
 
     with sim_tabs[1]:
         _render_saved_scenarios(project_id)
@@ -35,7 +37,7 @@ def render_er_simulator(project):
         _render_finance(project_id, methodology)
 
 
-def _render_live_simulator(project_id, methodology):
+def _render_live_simulator(project_id, methodology, project_name="Project"):
     st.markdown("**Adjust parameters to see emission reduction projections**")
 
     params = get_parameters_as_dict(project_id)
@@ -125,7 +127,7 @@ def _render_live_simulator(project_id, methodology):
 
     result = st.session_state.get(f"sim_result_{project_id}")
     if result:
-        _render_er_results(result)
+        _render_er_results(result, project_name=project_name)
 
         st.markdown("---")
         save_col1, save_col2 = st.columns([2, 1])
@@ -149,7 +151,7 @@ def _render_live_simulator(project_id, methodology):
                     st.success(f"Scenario '{scenario_name}' saved (ID: {saved['scenario_id']})")
 
 
-def _render_er_results(result):
+def _render_er_results(result, project_name="Project"):
     summary = result["summary"]
 
     col1, col2, col3 = st.columns(3)
@@ -169,49 +171,99 @@ def _render_er_results(result):
         with col6:
             st.metric("Carbon Price", f"${summary.get('carbon_price', 0):,.2f}/tCO2e")
 
+    excel_data = export_er_to_excel(result, project_name=project_name)
+    if excel_data:
+        st.download_button(
+            label="Download Excel Workbook",
+            data=excel_data,
+            file_name=f"ER_Calculation_{project_name.replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_excel_{id(result)}",
+        )
+
+    steps = result.get("calculation_steps", [])
+    if steps:
+        with st.expander("Step-by-Step Calculation (Formulas)", expanded=True):
+            for s in steps:
+                step_num = s.get("step", "")
+                name = s.get("name", "")
+                formula = s.get("formula", "")
+                val = s.get("value", s.get("value_baseline", ""))
+                unit = s.get("unit", "")
+                if isinstance(val, float):
+                    val_str = f"{val:g}"
+                else:
+                    val_str = str(val)
+                st.markdown(f"**Step {step_num}: {name}**")
+                st.code(f"{formula}\n= {val_str} {unit}", language=None)
+
+    params_used = result.get("parameters_used")
+    if params_used:
+        with st.expander("Input Parameters"):
+            param_rows = []
+            for k, info in params_used.items():
+                if isinstance(info, dict):
+                    val = info.get("value", "")
+                    unit = info.get("unit", "")
+                    desc = info.get("description", "")
+                    if isinstance(val, bool):
+                        val_str = "Yes" if val else "No"
+                    elif isinstance(val, float):
+                        val_str = f"{val:g}"
+                    else:
+                        val_str = str(val)
+                    param_rows.append({"Parameter": k, "Value": val_str, "Unit": unit, "Description": desc})
+                else:
+                    if isinstance(info, bool):
+                        val_str = "Yes" if info else "No"
+                    elif isinstance(info, float):
+                        val_str = f"{info:g}"
+                    else:
+                        val_str = str(info)
+                    param_rows.append({"Parameter": k, "Value": val_str, "Unit": "", "Description": ""})
+            st.table(param_rows)
+
     years = result["years"]
     chart_data = {
-        "Year": [y["calendar_year"] for y in years],
         "Baseline (tCO2e)": [y["baseline_emissions"] for y in years],
         "Project (tCO2e)": [y["project_emissions"] for y in years],
         "Net ER (tCO2e)": [y["net_er"] for y in years],
     }
+    st.bar_chart(data=chart_data, use_container_width=True)
 
-    st.bar_chart(
-        data={k: v for k, v in chart_data.items() if k != "Year"},
-        use_container_width=True,
-    )
-
-    with st.expander("Year-by-Year Details"):
-        table_rows = []
+    with st.expander("Year-by-Year Details (with formulas)"):
         for y in years:
-            row = {
-                "Year": y["calendar_year"],
-                "Baseline (tCO2e)": f"{y['baseline_emissions']:,.1f}",
-                "Project (tCO2e)": f"{y['project_emissions']:,.1f}",
-                "Leakage (tCO2e)": f"{y['leakage']:,.1f}",
-                "Net ER (tCO2e)": f"{y['net_er']:,.1f}",
-            }
-            if "usage_rate" in y:
-                row["Usage Rate"] = f"{y['usage_rate']:.1%}"
-            if "gross_revenue" in y and y["gross_revenue"] > 0:
-                row["Revenue ($)"] = f"${y['gross_revenue']:,.0f}"
-            table_rows.append(row)
-        st.table(table_rows)
+            yr_label = f"Year {y['year_number']} ({y['calendar_year']})"
+            st.markdown(f"**{yr_label}**")
+            details = []
+            details.append(f"Usage Rate = {y.get('usage_rate', 0):.2%}")
+            details.append(f"Active HH = {y.get('active_households', 0):,.0f}")
+            if y.get("baseline_formula"):
+                details.append(f"BE_y = {y['baseline_formula']} = {y['baseline_emissions']:,.2f} tCO2e")
+            else:
+                details.append(f"BE_y = {y['baseline_emissions']:,.2f} tCO2e")
+            if y.get("project_formula"):
+                details.append(f"PE_y = {y['project_formula']} = {y['project_emissions']:,.2f} tCO2e")
+            else:
+                details.append(f"PE_y = {y['project_emissions']:,.2f} tCO2e")
+            details.append(f"Gross ER = {y.get('gross_er', 0):,.2f} tCO2e")
+            if y.get("leakage_formula"):
+                details.append(f"LE_y = {y['leakage_formula']} = {y['leakage']:,.2f} tCO2e")
+            if y.get("net_er_formula"):
+                details.append(f"Net ER_y = {y['net_er_formula']} = {y['net_er']:,.2f} tCO2e")
+            else:
+                details.append(f"Net ER_y = {y['net_er']:,.2f} tCO2e")
+            st.code("\n".join(details), language=None)
 
-    params_used = result.get("parameters_used")
-    if params_used:
-        with st.expander("Parameters Used in Calculation"):
-            param_rows = []
-            for k, v in params_used.items():
-                if isinstance(v, bool):
-                    display = "Yes" if v else "No"
-                elif isinstance(v, float):
-                    display = f"{v:g}"
-                else:
-                    display = str(v)
-                param_rows.append({"Parameter": k, "Value Used": display})
-            st.table(param_rows)
+        st.markdown("**TOTALS**")
+        st.code(
+            f"Total Baseline Emissions = {summary.get('total_baseline', 0):,.2f} tCO2e\n"
+            f"Total Project Emissions  = {summary.get('total_project', 0):,.2f} tCO2e\n"
+            f"Total Leakage            = {summary.get('total_leakage', 0):,.2f} tCO2e\n"
+            f"Total Net ER             = {summary['total_er']:,.2f} tCO2e\n"
+            f"Average Annual ER        = {summary['average_annual_er']:,.2f} tCO2e/yr",
+            language=None,
+        )
 
 
 def _render_saved_scenarios(project_id):
