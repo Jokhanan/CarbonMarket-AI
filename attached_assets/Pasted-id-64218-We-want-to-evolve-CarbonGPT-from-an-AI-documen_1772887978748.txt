@@ -1,0 +1,141 @@
+id="64218"}
+We want to evolve CarbonGPT from an AI document generator into a full Carbon Project Operating System.
+
+Please design the architecture and implementation plan for five major modules that will form the core intelligence layer of the platform.
+
+These modules must work together and integrate with the existing system (AI drafting, knowledge base, RAG, document review, methodology parsing, calculation engine, etc.).
+
+MODULE 1 — Methodology Interpreter
+
+Goal:
+Create an AI system that can interpret carbon methodologies and guide users through their requirements.
+
+Capabilities should include:
+- explaining methodology applicability
+- comparing methodologies for a project
+- identifying required parameters
+- identifying allowed calculation approaches
+- identifying referenced tools (e.g. Tool 33, Tool 30, Tool 07)
+- mapping methodology sections to PDD sections
+- identifying required evidence and monitoring requirements
+
+The system should deeply support the following methodologies first:
+- Verra VM0050
+- Gold Standard TPDDTEC
+- ACM0002
+- AMS-I.D
+
+Please propose:
+- methodology knowledge structure
+- tool knowledge structure
+- how AI will query this knowledge
+
+MODULE 2 — Parameter Intelligence Engine
+
+Goal:
+Create a centralized parameter management system.
+
+The system should:
+- track all parameters used in a project
+- store parameter values
+- store parameter sources
+- store evidence for parameter values
+- track whether the value is default, calculated, or user-defined
+- track parameter dependencies
+- validate parameter ranges and units
+
+Example parameters:
+- fNRB
+- NCV
+- emission factors
+- baseline efficiency
+- usage rate
+- leakage factors
+- monitoring parameters
+
+Please propose:
+- database schema for parameters
+- dependency tracking system
+- validation rules
+- UI for a Parameter Dashboard
+
+MODULE 3 — ER Scenario Simulator
+
+Goal:
+Create an interactive emission reduction modeling system.
+
+Capabilities:
+- calculate ex-ante emission reductions
+- show year-by-year credit projections
+- allow scenario analysis (change usage rate, fNRB, efficiency, etc.)
+- visualize crediting period results
+- show sensitivity analysis
+
+The simulator should integrate with:
+- parameter engine
+- methodology equations
+- calculation engine
+
+Please propose:
+- architecture
+- UI dashboard
+- calculation workflow
+- visualization options
+
+MODULE 4 — Automatic Audit Simulation
+
+Goal:
+Simulate a VVB audit before document submission.
+
+Capabilities:
+- detect inconsistencies across sections
+- detect parameter inconsistencies
+- check methodology compliance
+- identify missing evidence
+- identify weak justifications
+- simulate CAR/CL/Observation findings
+
+The system should produce a structured "Audit Simulation Report".
+
+Please propose:
+- rule engine design
+- AI review workflow
+- integration with document review system
+- scoring system
+
+MODULE 5 — Evidence and Citation Engine
+
+Goal:
+Ensure every claim in generated documents can be linked to a source.
+
+Capabilities:
+- link parameter values to sources
+- link text statements to evidence
+- generate footnotes and endnotes automatically
+- support citations from:
+  - uploaded project documents
+  - methodology documents
+  - tools
+  - external references
+- track page numbers and tables when possible
+
+The system should automatically generate citations in exported documents.
+
+Please propose:
+- citation data model
+- evidence linking logic
+- footnote generation system
+- integration with document drafting
+
+OUTPUT REQUIREMENTS
+
+Please produce:
+
+1. Overall system architecture
+2. Data models for each module
+3. How the modules interact with each other
+4. How AI components interact with these modules
+5. UI structure and dashboards
+6. Implementation phases (recommended development order)
+
+The goal is to make CarbonGPT a professional platform for carbon project development, not just an AI writin
