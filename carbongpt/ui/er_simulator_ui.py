@@ -28,6 +28,39 @@ def render_er_simulator(project):
         st.warning(f"ER simulation is not yet available for methodology: {methodology}")
         return
 
+    all_params = get_project_parameters(project_id)
+    pending_count = sum(1 for p in all_params if p.get("value") is None)
+    if not all_params:
+        st.markdown(
+            '<span class="readiness-banner readiness-banner-warning">'
+            '<span class="readiness-banner-icon">'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+            '</span>'
+            'Parameters not yet initialized. Go to the Parameters tab first to set up your project inputs.'
+            '</span>',
+            unsafe_allow_html=True,
+        )
+    elif pending_count > 0:
+        st.markdown(
+            f'<span class="readiness-banner readiness-banner-warning">'
+            f'<span class="readiness-banner-icon">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+            f'</span>'
+            f'{pending_count} parameter{"s" if pending_count != 1 else ""} still missing values. The simulator will use defaults, but results may be less accurate.'
+            f'</span>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<span class="readiness-banner readiness-banner-ready">'
+            f'<span class="readiness-banner-icon">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>'
+            f'</span>'
+            f'All {len(all_params)} parameters configured. Simulation results will reflect your project data.'
+            f'</span>',
+            unsafe_allow_html=True,
+        )
+
     sim_tabs = st.tabs(["Live Simulator", "Saved Scenarios", "Sensitivity Analysis", "Carbon Finance"])
 
     with sim_tabs[0]:
@@ -155,6 +188,17 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                     st.error(saved["error"])
                 else:
                     st.success(f"Scenario '{scenario_name}' saved (ID: {saved['scenario_id']})")
+
+        st.markdown("---")
+        st.markdown(
+            '<span class="readiness-banner readiness-banner-info">'
+            '<span class="readiness-banner-icon">'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>'
+            '</span>'
+            'Next: Use these results when drafting your PDD (Write / Draft tab) or run an Audit Simulation to check project readiness.'
+            '</span>',
+            unsafe_allow_html=True,
+        )
 
 
 def _render_er_results(result, project_name="Project"):

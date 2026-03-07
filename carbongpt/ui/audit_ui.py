@@ -17,6 +17,44 @@ def render_audit_simulation(project):
     """, unsafe_allow_html=True)
     st.caption("Simulate a VVB audit to identify potential findings before submission")
 
+    has_sim = f"sim_result_{project_id}" in st.session_state and bool(st.session_state.get(f"sim_result_{project_id}"))
+    doc_count = len(project.get("documents", []))
+    if has_sim and doc_count > 0:
+        st.markdown(
+            '<span class="readiness-banner readiness-banner-ready">'
+            '<span class="readiness-banner-icon">'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>'
+            '</span>'
+            'ER simulation and documents available. The audit will have full context for a thorough review.'
+            '</span>',
+            unsafe_allow_html=True,
+        )
+    elif not has_sim and doc_count == 0:
+        st.markdown(
+            '<span class="readiness-banner readiness-banner-warning">'
+            '<span class="readiness-banner-icon">'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+            '</span>'
+            'For a meaningful audit, run the ER Simulator and upload supporting documents first.'
+            '</span>',
+            unsafe_allow_html=True,
+        )
+    else:
+        tips = []
+        if not has_sim:
+            tips.append("running the ER Simulator")
+        if doc_count == 0:
+            tips.append("uploading supporting documents")
+        st.markdown(
+            f'<span class="readiness-banner readiness-banner-info">'
+            f'<span class="readiness-banner-icon">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>'
+            f'</span>'
+            f'Tip: You can improve audit accuracy by {" and ".join(tips)} first.'
+            f'</span>',
+            unsafe_allow_html=True,
+        )
+
     audit_tabs = st.tabs(["Run Simulation", "History"])
 
     with audit_tabs[0]:
@@ -38,6 +76,37 @@ def _render_run_simulation(project_id):
     result = st.session_state.get(f"audit_result_{project_id}")
     if result:
         _render_audit_results(result)
+        score = result.get("overall_score", 0)
+        if score >= 80:
+            st.markdown(
+                '<span class="readiness-banner readiness-banner-ready">'
+                '<span class="readiness-banner-icon">'
+                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>'
+                '</span>'
+                'Strong audit score. Consider exporting your document or advancing the project lifecycle status.'
+                '</span>',
+                unsafe_allow_html=True,
+            )
+        elif score >= 50:
+            st.markdown(
+                '<span class="readiness-banner readiness-banner-warning">'
+                '<span class="readiness-banner-icon">'
+                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+                '</span>'
+                'Review the findings above. Address critical and major issues, then re-run the audit to improve your score.'
+                '</span>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<span class="readiness-banner readiness-banner-warning">'
+                '<span class="readiness-banner-icon">'
+                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+                '</span>'
+                'Significant gaps found. Focus on configuring parameters and uploading evidence documents before re-running.'
+                '</span>',
+                unsafe_allow_html=True,
+            )
 
 
 def _render_audit_results(result):

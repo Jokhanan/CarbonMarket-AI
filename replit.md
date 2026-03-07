@@ -25,6 +25,9 @@ The UI is a single Streamlit application (`streamlit_app.py`) with modular UI co
 - Project header with type/standard/status badges, methodology/country with icons, and quick action buttons
 - Section header icons for all 11 workspace tabs (SVG icons with colored backgrounds)
 - Activity feed in project workspace (collapsible expander)
+- Smart "Next Steps" panel on project overview (analyzes param/doc/draft/sim/audit state, shows 2-3 prioritized next actions)
+- Cross-tab readiness banners (ER Simulator, Review, Write/Draft, Audit tabs show prerequisite status with ready/warning/info styling)
+- Post-action suggestions after key operations (ER simulation results, audit results)
 - Color-coded status indicators (green=complete, amber=missing, red=error)
 - Card-based layout with subtle shadows, rounded corners, hover interactions
 - CSS variables for consistent theming (surfaces, borders, shadows, radii, transitions)

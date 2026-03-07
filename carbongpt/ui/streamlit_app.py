@@ -915,6 +915,95 @@ st.markdown("""
         color: var(--text-primary);
     }
 
+    /* ── Next Steps Panel ── */
+    .next-steps-panel {
+        background: linear-gradient(135deg, var(--brand-primary-50) 0%, rgba(255,255,255,0.8) 100%);
+        border: 1px solid rgba(13,148,136,0.15);
+        border-radius: var(--radius-md);
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .next-steps-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--brand-primary-dark);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .next-step-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 12px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        margin-bottom: 6px;
+        transition: all var(--transition-fast);
+    }
+    .next-step-item:hover {
+        border-color: var(--brand-primary-light);
+        box-shadow: var(--shadow-sm);
+    }
+    .next-step-num {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--brand-primary);
+        color: white;
+        font-size: 0.68rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    .next-step-text {
+        font-size: 0.82rem;
+        color: var(--text-primary);
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    .next-step-desc {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-weight: 400;
+        margin-top: 2px;
+    }
+
+    /* ── Readiness Banner ── */
+    .readiness-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.6rem 1rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+    }
+    .readiness-banner-ready {
+        background: #ecfdf5;
+        border: 1px solid rgba(16,185,129,0.2);
+        color: #065f46;
+    }
+    .readiness-banner-warning {
+        background: #fffbeb;
+        border: 1px solid rgba(245,158,11,0.2);
+        color: #92400e;
+    }
+    .readiness-banner-info {
+        background: #eff6ff;
+        border: 1px solid rgba(59,130,246,0.2);
+        color: #1e40af;
+    }
+    .readiness-banner-icon {
+        flex-shrink: 0;
+    }
+
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -2789,6 +2878,157 @@ def _render_new_project_wizard(existing_projects):
                         st.rerun()
 
 
+def _get_project_readiness(project, project_id):
+    readiness = {
+        "has_methodology": bool(project.get("methodology")),
+        "has_country": bool(project.get("country")),
+        "params_total": 0,
+        "params_configured": 0,
+        "params_pending": 0,
+        "doc_count": len(project.get("documents", [])),
+        "has_drafts": False,
+        "has_sim": False,
+        "has_audit": False,
+        "audit_score": None,
+    }
+
+    params_data = _fetch(f"/projects/{project_id}/parameters")
+    param_list = params_data if isinstance(params_data, list) else (params_data.get("parameters", []) if isinstance(params_data, dict) else [])
+    readiness["params_total"] = len(param_list)
+    readiness["params_configured"] = sum(1 for p in param_list if p.get("value") is not None)
+    readiness["params_pending"] = readiness["params_total"] - readiness["params_configured"]
+
+    sessions_data = _fetch(f"/projects/{project_id}/write-sessions?doc_type={PROJECT_TYPE_INFO.get(project.get('project_type', 'standalone_pdd'), {}).get('default_doc_type', 'pdd')}")
+    if sessions_data and isinstance(sessions_data, list) and len(sessions_data) > 0:
+        readiness["has_drafts"] = True
+
+    if f"sim_result_{project_id}" in st.session_state and st.session_state[f"sim_result_{project_id}"]:
+        readiness["has_sim"] = True
+    else:
+        scenarios = _fetch(f"/projects/{project_id}/er-scenarios")
+        if scenarios and isinstance(scenarios, list) and len(scenarios) > 0:
+            readiness["has_sim"] = True
+
+    if f"audit_result_{project_id}" in st.session_state and st.session_state[f"audit_result_{project_id}"]:
+        readiness["has_audit"] = True
+        cached = st.session_state[f"audit_result_{project_id}"]
+        readiness["audit_score"] = cached.get("overall_score")
+    else:
+        audit_history = _fetch(f"/projects/{project_id}/audit-simulation/history")
+        if audit_history and isinstance(audit_history, list) and len(audit_history) > 0:
+            readiness["has_audit"] = True
+            readiness["audit_score"] = audit_history[0].get("overall_score")
+
+    return readiness
+
+
+def _build_next_steps(readiness):
+    steps = []
+    if not readiness["has_methodology"]:
+        steps.append({
+            "text": "Select a methodology",
+            "desc": "Go to Setup and choose a carbon standard and methodology for your project.",
+            "tab": "Setup",
+        })
+        return steps
+
+    if not readiness["has_country"]:
+        steps.append({
+            "text": "Set the project country",
+            "desc": "The country determines default emission factors and regulatory requirements.",
+            "tab": "Setup",
+        })
+
+    if readiness["params_total"] == 0:
+        steps.append({
+            "text": "Initialize parameters from methodology",
+            "desc": "Parameters define the technical inputs for your emission reduction calculations.",
+            "tab": "Parameters",
+        })
+    elif readiness["params_pending"] > 0:
+        steps.append({
+            "text": f"Configure {readiness['params_pending']} missing parameter{'s' if readiness['params_pending'] != 1 else ''}",
+            "desc": "Set measured or estimated values so the ER Simulator can run accurate calculations.",
+            "tab": "Parameters",
+        })
+
+    if readiness["params_total"] > 0 and readiness["params_pending"] == 0 and not readiness["has_sim"]:
+        steps.append({
+            "text": "Run the ER Simulator",
+            "desc": "All parameters are configured. Estimate your project's annual emission reductions.",
+            "tab": "ER Simulator",
+        })
+
+    if readiness["doc_count"] == 0:
+        steps.append({
+            "text": "Upload supporting documents",
+            "desc": "Upload KPT reports, feasibility studies, or existing documents as AI context.",
+            "tab": "Documents",
+        })
+
+    if not readiness["has_drafts"] and readiness["has_methodology"]:
+        steps.append({
+            "text": "Draft your first document section",
+            "desc": "Use the AI writer to generate PDD or MR sections based on your project data.",
+            "tab": "Write / Draft",
+        })
+
+    if readiness["has_drafts"] and not readiness["has_audit"]:
+        steps.append({
+            "text": "Run an audit simulation",
+            "desc": "Check your project's readiness for VVB review before submission.",
+            "tab": "Audit",
+        })
+
+    if readiness["has_sim"] and readiness["has_drafts"]:
+        steps.append({
+            "text": "Review your draft",
+            "desc": "Run an AI compliance review to identify gaps in your document.",
+            "tab": "Review",
+        })
+
+    return steps[:3]
+
+
+def _render_next_steps_panel(project, project_id):
+    readiness = _get_project_readiness(project, project_id)
+    steps = _build_next_steps(readiness)
+    if not steps:
+        return
+
+    items_html = ""
+    for i, step in enumerate(steps, 1):
+        items_html += f"""
+        <span class="next-step-item">
+            <span class="next-step-num">{i}</span>
+            <span>
+                <span class="next-step-text">{step['text']}</span>
+                <span class="next-step-desc">{step['desc']}</span>
+            </span>
+        </span>"""
+
+    st.markdown(f"""
+    <span class="next-steps-panel" data-testid="next-steps-panel">
+        <span class="next-steps-title">Suggested Next Steps</span>
+        {items_html}
+    </span>
+    """, unsafe_allow_html=True)
+
+
+def _render_readiness_banner(banner_type, message):
+    icon_map = {
+        "ready": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
+        "warning": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+        "info": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+    }
+    css_class = f"readiness-banner readiness-banner-{banner_type}"
+    icon = icon_map.get(banner_type, icon_map["info"])
+    st.markdown(
+        f'<span class="{css_class}" data-testid="readiness-banner"><span class="readiness-banner-icon">{icon}</span> {message}</span>',
+        unsafe_allow_html=True,
+    )
+
+
 def _build_activity_feed(project):
     items = []
     documents = project.get("documents", [])
@@ -2952,6 +3192,8 @@ def _render_project_workspace(project_id):
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    _render_next_steps_panel(project, project_id)
 
     with st.expander("Recent Activity", expanded=False):
         activity_items = _build_activity_feed(project)
@@ -4450,6 +4692,14 @@ def _render_review_tab(project):
     </div>
     """, unsafe_allow_html=True)
 
+    default_dt = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
+    sessions_data = _fetch(f"/projects/{project_id}/write-sessions?doc_type={default_dt}")
+    has_drafts = bool(sessions_data and isinstance(sessions_data, list) and len(sessions_data) > 0)
+    if not has_drafts:
+        _render_readiness_banner("info", "No draft sections yet. Write at least one section in the Write / Draft tab before running a review.")
+    else:
+        _render_readiness_banner("ready", "Draft sections available for review.")
+
     review_tabs = st.tabs(["Review Your Draft", "Review Uploaded Document", "Consistency Check"])
 
     with review_tabs[0]:
@@ -4861,6 +5111,15 @@ def _render_write_tab(project):
     </div>
     """, unsafe_allow_html=True)
     st.write("Draft your document section by section or generate the full document at once.")
+
+    doc_count = len(project.get("documents", []))
+    has_methodology = bool(project.get("methodology"))
+    if not has_methodology:
+        _render_readiness_banner("warning", "No methodology selected. Set up your project methodology in the Setup tab first.")
+    elif doc_count > 0:
+        _render_readiness_banner("info", f"{doc_count} supporting document{'s' if doc_count != 1 else ''} uploaded. The AI writer will use them as context for your drafts.")
+    else:
+        _render_readiness_banner("info", "Tip: Upload supporting documents in the Documents tab to give the AI writer more context.")
 
     available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
     if not available_doc_types:
