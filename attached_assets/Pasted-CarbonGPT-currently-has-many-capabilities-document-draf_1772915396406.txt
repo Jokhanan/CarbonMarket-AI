@@ -1,0 +1,71 @@
+CarbonGPT currently has many capabilities (document drafting, parameter management, ER calculations, research, etc.), but the user experience still feels like a collection of forms rather than an intelligent system.
+
+We need to redesign the product around an AI orchestrator that guides the user through the carbon project lifecycle.
+
+Design and implement an AI Copilot system that acts as the central interface for CarbonGPT.
+
+Requirements:
+
+1. AI COPILOT INTERFACE
+
+Create a conversational interface where users can interact with the system using natural language.
+
+Example user requests:
+• "I want to develop a cookstove project in Ghana."
+• "Estimate emission reductions for 100,000 households."
+• "Generate a concept note."
+• "Generate a PDD draft."
+• "Run an audit simulation."
+
+The AI should understand the request and automatically trigger the appropriate modules.
+
+2. PROJECT ORCHESTRATOR
+
+Implement an orchestration layer that coordinates all modules.
+
+The orchestrator should decide which systems to use:
+
+• Methodology Interpreter
+• Parameter Engine
+• ER Simulator
+• Document Generator
+• Audit Simulation
+
+3. PROJECT KNOWLEDGE MEMORY
+
+Create a centralized project memory so information entered once is reused everywhere.
+
+Example stored data:
+• country
+• technology
+• households
+• baseline fuel
+• parameters
+• documents
+
+All modules should read from the same project knowledge layer.
+
+4. GUIDED PROJECT WORKFLOW
+
+Replace the current form-driven workflow with a guided lifecycle:
+
+Idea → Simulation → Methodology Selection → Parameter Setup → Document Generation → Audit Check → Monitoring
+
+The AI should guide the user through these stages.
+
+5. SMART RECOMMENDATIONS
+
+The AI should automatically suggest:
+
+• applicable methodologies
+• missing parameters
+• next actions
+• possible improvements to the project design.
+
+6. UX GOAL
+
+CarbonGPT should feel like an intelligent assistant for carbon project development, not just a set of forms.
+
+The user should be able to manage most of the project through conversation and intelligent recommendations.
+
+Provide the architecture for this AI orchestrator system and how it integrates with existing modules.
