@@ -1864,3 +1864,317 @@ def get_research_results_endpoint(project_id: int, status: str = None):
         logger.error("Get research results failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get results: {e}")
     return {"results": results}
+
+
+@router.post("/{project_id}/parameters/initialize")
+def initialize_parameters_endpoint(project_id: int):
+    from carbongpt.core.parameter_engine import initialize_project_parameters
+    try:
+        result = initialize_project_parameters(project_id)
+    except Exception as e:
+        logger.error("Parameter init failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/parameters")
+def get_parameters_endpoint(project_id: int, category: str = None):
+    from carbongpt.core.parameter_engine import get_project_parameters
+    try:
+        params = get_project_parameters(project_id, category)
+    except Exception as e:
+        logger.error("Get parameters failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"parameters": params}
+
+
+@router.get("/{project_id}/parameters/summary")
+def get_parameters_summary_endpoint(project_id: int):
+    from carbongpt.core.parameter_engine import get_parameter_summary
+    try:
+        summary = get_parameter_summary(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return summary
+
+
+class ParameterUpdate(BaseModel):
+    value: str | None = None
+    source_type: str | None = None
+    source_reference: str | None = None
+    notes: str | None = None
+
+
+@router.put("/{project_id}/parameters/{param_key}")
+def update_parameter_endpoint(project_id: int, param_key: str, data: ParameterUpdate):
+    from carbongpt.core.parameter_engine import update_parameter
+    try:
+        result = update_parameter(project_id, param_key, data.value, data.source_type, data.source_reference, data.notes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if not result:
+        raise HTTPException(status_code=404, detail="Parameter not found")
+    return result
+
+
+@router.post("/{project_id}/parameters/validate")
+def validate_parameters_endpoint(project_id: int):
+    from carbongpt.core.parameter_engine import validate_all_parameters
+    try:
+        result = validate_all_parameters(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.post("/{project_id}/er-scenarios/calculate")
+def calculate_er_endpoint(project_id: int):
+    from carbongpt.core.er_simulator import run_scenario
+    try:
+        result = run_scenario(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+class ScenarioSave(BaseModel):
+    name: str
+    description: str = ""
+    parameter_overrides: dict = {}
+    carbon_price: float | None = None
+    price_escalation: float = 0
+    developer_share: float = 100
+    buffer_pool: float = 0
+    admin_fee: float = 0
+    is_baseline: bool = False
+
+
+@router.post("/{project_id}/er-scenarios")
+def save_scenario_endpoint(project_id: int, data: ScenarioSave):
+    from carbongpt.core.er_simulator import save_scenario
+    try:
+        result = save_scenario(
+            project_id, data.name, data.description, data.parameter_overrides,
+            data.carbon_price, data.price_escalation, data.developer_share,
+            data.buffer_pool, data.admin_fee, data.is_baseline,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/er-scenarios")
+def get_scenarios_endpoint(project_id: int):
+    from carbongpt.core.er_simulator import get_scenarios
+    try:
+        scenarios = get_scenarios(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"scenarios": scenarios}
+
+
+@router.post("/{project_id}/er-scenarios/{param_key}/sensitivity")
+def run_sensitivity_endpoint(project_id: int, param_key: str, variation: int = 20):
+    from carbongpt.core.er_simulator import run_sensitivity
+    try:
+        result = run_sensitivity(project_id, param_key, variation_pct=variation)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/lifecycle")
+def get_lifecycle_endpoint(project_id: int):
+    from carbongpt.core.lifecycle_manager import get_lifecycle
+    try:
+        result = get_lifecycle(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.post("/{project_id}/lifecycle/initialize")
+def initialize_lifecycle_endpoint(project_id: int):
+    from carbongpt.core.lifecycle_manager import initialize_lifecycle
+    try:
+        result = initialize_lifecycle(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.post("/{project_id}/lifecycle/advance")
+def advance_stage_endpoint(project_id: int, to_stage: str = None):
+    from carbongpt.core.lifecycle_manager import advance_stage
+    try:
+        result = advance_stage(project_id, to_stage)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+class TaskCreate(BaseModel):
+    title: str
+    stage: str | None = None
+    task_type: str = "general"
+    priority: str = "medium"
+    due_date: str | None = None
+    description: str | None = None
+
+
+@router.get("/{project_id}/tasks")
+def get_tasks_endpoint(project_id: int, stage: str = None, status: str = None):
+    from carbongpt.core.lifecycle_manager import get_tasks
+    try:
+        tasks = get_tasks(project_id, stage, status)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"tasks": tasks}
+
+
+@router.post("/{project_id}/tasks")
+def add_task_endpoint(project_id: int, data: TaskCreate):
+    from carbongpt.core.lifecycle_manager import add_task
+    try:
+        result = add_task(project_id, data.title, data.stage, data.task_type, data.priority, data.due_date, data.description)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+class TaskUpdate(BaseModel):
+    status: str | None = None
+    title: str | None = None
+    due_date: str | None = None
+    priority: str | None = None
+
+
+@router.put("/tasks/{task_id}")
+def update_task_endpoint(task_id: int, data: TaskUpdate):
+    from carbongpt.core.lifecycle_manager import update_task
+    try:
+        result = update_task(task_id, data.status, data.title, data.due_date, data.priority)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/evidence")
+def get_evidence_endpoint(project_id: int, target_type: str = None, target_id: str = None):
+    from carbongpt.core.evidence_engine import get_evidence_links
+    try:
+        links = get_evidence_links(project_id, target_type, target_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"evidence": links}
+
+
+@router.get("/{project_id}/evidence/completeness")
+def get_evidence_completeness_endpoint(project_id: int):
+    from carbongpt.core.evidence_engine import get_evidence_completeness
+    try:
+        result = get_evidence_completeness(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/evidence/citations")
+def get_citations_endpoint(project_id: int):
+    from carbongpt.core.evidence_engine import generate_citation_list
+    try:
+        citations = generate_citation_list(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"citations": citations}
+
+
+@router.post("/{project_id}/audit-simulation")
+def run_audit_simulation_endpoint(project_id: int):
+    from carbongpt.core.audit_simulator import run_audit_simulation
+    try:
+        result = run_audit_simulation(project_id)
+    except Exception as e:
+        logger.error("Audit simulation failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/{project_id}/audit-simulation/history")
+def get_audit_history_endpoint(project_id: int):
+    from carbongpt.core.audit_simulator import get_simulation_history
+    try:
+        history = get_simulation_history(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"history": history}
+
+
+@router.get("/{project_id}/monitoring-tasks")
+def get_monitoring_tasks_endpoint(project_id: int):
+    from carbongpt.core.lifecycle_manager import get_monitoring_tasks
+    try:
+        tasks = get_monitoring_tasks(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"tasks": tasks}
+
+
+@router.post("/{project_id}/monitoring-tasks/initialize")
+def initialize_monitoring_endpoint(project_id: int):
+    from carbongpt.core.lifecycle_manager import initialize_monitoring_tasks
+    try:
+        tasks = initialize_monitoring_tasks(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"tasks": tasks}
+
+
+@router.get("/{project_id}/issuances")
+def get_issuances_endpoint(project_id: int):
+    from carbongpt.core.lifecycle_manager import get_issuances
+    try:
+        issuances = get_issuances(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"issuances": issuances}
+
+
+class IssuanceCreate(BaseModel):
+    vintage_year: int
+    credits_requested: float | None = None
+    credits_issued: float | None = None
+    monitoring_period_start: str | None = None
+    monitoring_period_end: str | None = None
+    verification_date: str | None = None
+    issuance_date: str | None = None
+    buffer_contribution: float | None = None
+    vvb_name: str | None = None
+    registry_status: str = "planned"
+    notes: str | None = None
+
+
+@router.post("/{project_id}/issuances")
+def add_issuance_endpoint(project_id: int, data: IssuanceCreate):
+    from carbongpt.core.lifecycle_manager import add_issuance
+    try:
+        result = add_issuance(
+            project_id, data.vintage_year, data.credits_requested,
+            data.credits_issued, data.monitoring_period_start,
+            data.monitoring_period_end, data.verification_date,
+            data.issuance_date, data.buffer_contribution,
+            data.vvb_name, data.registry_status, data.notes,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@router.get("/portfolio/summary")
+def get_portfolio_summary_endpoint():
+    from carbongpt.core.lifecycle_manager import get_portfolio_summary
+    try:
+        summary = get_portfolio_summary()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return summary

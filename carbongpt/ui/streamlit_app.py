@@ -3,6 +3,12 @@ import time
 import requests
 import streamlit as st
 
+from carbongpt.ui.parameter_ui import render_parameter_dashboard
+from carbongpt.ui.er_simulator_ui import render_er_simulator
+from carbongpt.ui.lifecycle_ui import render_lifecycle_dashboard, render_monitoring_dashboard
+from carbongpt.ui.portfolio_ui import render_portfolio_dashboard
+from carbongpt.ui.audit_ui import render_audit_simulation
+
 API_BASE = os.getenv("CARBONGPT_API_URL", "http://localhost:3000")
 
 st.set_page_config(page_title="CarbonGPT", layout="wide", page_icon="C")
@@ -801,7 +807,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-PAGES = ["Workspace", "Admin"]
+PAGES = ["Workspace", "Portfolio", "Admin"]
 
 SVG_ICONS = {
     "projects": '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>',
@@ -2644,19 +2650,29 @@ def _render_project_workspace(project_id):
             st.session_state.selected_project_id = None
             st.rerun()
 
-    tabs = st.tabs(["Project Setup", "Documents", "Write / Draft", "Review", "Respond to Findings", "Export"])
+    tabs = st.tabs(["Project Setup", "Documents", "Parameters", "ER Simulator", "Write / Draft", "Review", "Audit Simulation", "Respond to Findings", "Lifecycle", "Monitoring", "Export"])
 
     with tabs[0]:
         _render_project_settings(project)
     with tabs[1]:
         _render_documents_tab(project)
     with tabs[2]:
-        _render_write_tab(project)
+        render_parameter_dashboard(project)
     with tabs[3]:
-        _render_review_tab(project)
+        render_er_simulator(project)
     with tabs[4]:
-        _render_findings_response_tab(project)
+        _render_write_tab(project)
     with tabs[5]:
+        _render_review_tab(project)
+    with tabs[6]:
+        render_audit_simulation(project)
+    with tabs[7]:
+        _render_findings_response_tab(project)
+    with tabs[8]:
+        render_lifecycle_dashboard(project)
+    with tabs[9]:
+        render_monitoring_dashboard(project)
+    with tabs[10]:
         _render_export_tab(project)
 
 
@@ -6378,6 +6394,8 @@ if page == "Workspace":
         _render_project_workspace(st.session_state.selected_project_id)
     else:
         _render_home()
+elif page == "Portfolio":
+    render_portfolio_dashboard()
 elif page == "Admin":
     render_repository()
 

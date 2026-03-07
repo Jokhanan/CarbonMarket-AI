@@ -395,6 +395,225 @@ INSERT INTO standard_versions (standard_id, version, effective_date, status) VAL
     ((SELECT id FROM standards WHERE slug = 'goldstandard'), '1.x', '2020-01-01', 'active'),
     ((SELECT id FROM standards WHERE slug = 'verra'), '4.4', '2023-01-01', 'active')
 ON CONFLICT (standard_id, version) DO NOTHING;
+
+-- ============================================================
+-- CARBON OPERATING SYSTEM TABLES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS project_parameters (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    param_key VARCHAR(100) NOT NULL,
+    param_name VARCHAR(300) NOT NULL,
+    category VARCHAR(50) NOT NULL CHECK (category IN (
+        'baseline', 'project', 'monitoring', 'leakage', 'emission_factor',
+        'fuel_property', 'activity_data', 'calculated', 'financial', 'other'
+    )),
+    value TEXT,
+    unit VARCHAR(100),
+    data_type VARCHAR(20) DEFAULT 'number' CHECK (data_type IN ('number', 'text', 'date', 'boolean', 'percentage')),
+    source_type VARCHAR(30) DEFAULT 'default' CHECK (source_type IN (
+        'default', 'measured', 'calculated', 'user_override', 'national_inventory', 'ipcc', 'methodology'
+    )),
+    source_reference TEXT,
+    evidence_doc_id INTEGER REFERENCES project_documents(id) ON DELETE SET NULL,
+    evidence_detail TEXT,
+    methodology_code VARCHAR(100),
+    tool_reference VARCHAR(100),
+    min_value DOUBLE PRECISION,
+    max_value DOUBLE PRECISION,
+    validation_status VARCHAR(20) DEFAULT 'pending' CHECK (validation_status IN ('valid', 'invalid', 'pending', 'warning')),
+    validation_message TEXT,
+    is_ex_ante BOOLEAN DEFAULT true,
+    uncertainty_pct DOUBLE PRECISION,
+    depends_on TEXT[],
+    year_specific BOOLEAN DEFAULT false,
+    applicable_year INTEGER,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(project_id, param_key, applicable_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pp_project ON project_parameters(project_id);
+CREATE INDEX IF NOT EXISTS idx_pp_category ON project_parameters(category);
+CREATE INDEX IF NOT EXISTS idx_pp_key ON project_parameters(param_key);
+CREATE INDEX IF NOT EXISTS idx_pp_validation ON project_parameters(validation_status);
+
+CREATE TABLE IF NOT EXISTS project_lifecycle (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    stage VARCHAR(50) NOT NULL CHECK (stage IN (
+        'feasibility', 'pdd_design', 'internal_review', 'validation',
+        'registration', 'monitoring', 'verification', 'issuance', 'closed'
+    )),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'skipped')),
+    started_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pl_project ON project_lifecycle(project_id);
+CREATE INDEX IF NOT EXISTS idx_pl_stage ON project_lifecycle(stage);
+
+CREATE TABLE IF NOT EXISTS project_tasks (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    lifecycle_stage VARCHAR(50),
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
+    task_type VARCHAR(50) DEFAULT 'general' CHECK (task_type IN (
+        'general', 'document', 'data_collection', 'review', 'submission',
+        'monitoring', 'verification', 'stakeholder', 'financial'
+    )),
+    priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('critical', 'high', 'medium', 'low')),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'blocked', 'cancelled')),
+    due_date DATE,
+    completed_at TIMESTAMP,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pt_project ON project_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_pt_stage ON project_tasks(lifecycle_stage);
+CREATE INDEX IF NOT EXISTS idx_pt_status ON project_tasks(status);
+
+CREATE TABLE IF NOT EXISTS evidence_links (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    target_type VARCHAR(30) NOT NULL CHECK (target_type IN ('parameter', 'section', 'claim')),
+    target_id VARCHAR(200) NOT NULL,
+    target_description TEXT,
+    source_type VARCHAR(30) NOT NULL CHECK (source_type IN (
+        'project_document', 'methodology', 'tool', 'external', 'calculation', 'field_data'
+    )),
+    source_doc_id INTEGER,
+    source_chunk_id INTEGER,
+    source_title VARCHAR(500),
+    source_detail TEXT,
+    page_number INTEGER,
+    table_reference VARCHAR(100),
+    quote TEXT,
+    confidence REAL DEFAULT 1.0,
+    verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_el_project ON evidence_links(project_id);
+CREATE INDEX IF NOT EXISTS idx_el_target ON evidence_links(target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS er_scenarios (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    name VARCHAR(300) NOT NULL,
+    description TEXT,
+    is_baseline BOOLEAN DEFAULT false,
+    parameter_overrides JSONB DEFAULT '{}',
+    methodology_code VARCHAR(100),
+    crediting_years INTEGER DEFAULT 7,
+    carbon_price_usd DOUBLE PRECISION,
+    price_escalation_pct DOUBLE PRECISION DEFAULT 0,
+    developer_share_pct DOUBLE PRECISION DEFAULT 100,
+    buffer_pool_pct DOUBLE PRECISION DEFAULT 0,
+    admin_fee_pct DOUBLE PRECISION DEFAULT 0,
+    results_summary JSONB DEFAULT '{}',
+    calculated_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ers_project ON er_scenarios(project_id);
+
+CREATE TABLE IF NOT EXISTS er_scenario_years (
+    id SERIAL PRIMARY KEY,
+    scenario_id INTEGER NOT NULL REFERENCES er_scenarios(id) ON DELETE CASCADE,
+    year_number INTEGER NOT NULL,
+    calendar_year INTEGER,
+    baseline_emissions DOUBLE PRECISION DEFAULT 0,
+    project_emissions DOUBLE PRECISION DEFAULT 0,
+    leakage DOUBLE PRECISION DEFAULT 0,
+    net_er DOUBLE PRECISION DEFAULT 0,
+    gross_revenue DOUBLE PRECISION DEFAULT 0,
+    deductions DOUBLE PRECISION DEFAULT 0,
+    net_revenue DOUBLE PRECISION DEFAULT 0,
+    details JSONB DEFAULT '{}',
+    UNIQUE(scenario_id, year_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_esy_scenario ON er_scenario_years(scenario_id);
+
+CREATE TABLE IF NOT EXISTS issuance_records (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    vintage_year INTEGER NOT NULL,
+    monitoring_period_start DATE,
+    monitoring_period_end DATE,
+    verification_date DATE,
+    issuance_date DATE,
+    credits_requested DOUBLE PRECISION,
+    credits_issued DOUBLE PRECISION,
+    buffer_contribution DOUBLE PRECISION,
+    registry_serial_start VARCHAR(100),
+    registry_serial_end VARCHAR(100),
+    registry_status VARCHAR(30) DEFAULT 'planned' CHECK (registry_status IN (
+        'planned', 'monitoring', 'under_verification', 'verified', 'issued', 'retired', 'cancelled'
+    )),
+    vvb_name VARCHAR(300),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ir_project ON issuance_records(project_id);
+CREATE INDEX IF NOT EXISTS idx_ir_vintage ON issuance_records(vintage_year);
+CREATE INDEX IF NOT EXISTS idx_ir_status ON issuance_records(registry_status);
+
+CREATE TABLE IF NOT EXISTS monitoring_tasks (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    param_key VARCHAR(100),
+    task_name VARCHAR(500) NOT NULL,
+    description TEXT,
+    frequency VARCHAR(50) DEFAULT 'annual' CHECK (frequency IN (
+        'continuous', 'daily', 'weekly', 'monthly', 'quarterly',
+        'semi_annual', 'annual', 'biennial', 'once', 'per_crediting_period'
+    )),
+    method VARCHAR(200),
+    responsible_party VARCHAR(200),
+    qaqc_procedure TEXT,
+    next_due_date DATE,
+    last_completed_date DATE,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'scheduled', 'in_progress', 'completed', 'overdue')),
+    monitoring_period INTEGER,
+    data_collected JSONB DEFAULT '{}',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mt_project ON monitoring_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_mt_status ON monitoring_tasks(status);
+
+CREATE TABLE IF NOT EXISTS audit_simulation_results (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    simulation_type VARCHAR(30) DEFAULT 'full' CHECK (simulation_type IN ('full', 'parameters', 'evidence', 'consistency', 'compliance')),
+    overall_score INTEGER DEFAULT 0,
+    risk_level VARCHAR(20) DEFAULT 'UNKNOWN' CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN')),
+    findings JSONB DEFAULT '[]',
+    summary TEXT,
+    parameter_issues JSONB DEFAULT '[]',
+    evidence_gaps JSONB DEFAULT '[]',
+    consistency_issues JSONB DEFAULT '[]',
+    compliance_issues JSONB DEFAULT '[]',
+    recommendations JSONB DEFAULT '[]',
+    simulated_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_asr_project ON audit_simulation_results(project_id);
 """
 
 
