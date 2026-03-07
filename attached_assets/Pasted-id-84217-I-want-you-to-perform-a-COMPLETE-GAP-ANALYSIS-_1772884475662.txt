@@ -1,0 +1,94 @@
+id="84217"}
+I want you to perform a COMPLETE GAP ANALYSIS of the CarbonGPT platform.
+
+You already analyzed the current architecture and features. Now I want you to identify everything that is still missing for CarbonGPT to become a professional platform used by carbon project developers, consultants, and auditors.
+
+Please evaluate the system from the perspective of a real carbon project workflow.
+
+Your analysis should cover the following areas.
+
+1. PRODUCT CAPABILITIES
+Compare the current features with what a professional carbon project development platform should offer.
+Identify missing capabilities such as:
+- project structuring
+- parameter management
+- methodology logic
+- evidence tracking
+- audit preparation
+
+2. METHODOLOGY INTELLIGENCE
+Evaluate whether the current system fully supports the methodologies we target:
+- Verra VM0050
+- Gold Standard TPDDTEC
+- ACM0002
+- AMS-I.D
+
+Identify missing elements such as:
+- full parameter extraction
+- equations
+- tool integration
+- applicability checks
+- monitoring requirements
+
+3. KNOWLEDGE BASE COVERAGE
+Analyze the knowledge base and identify what important sources are missing:
+- methodology tools
+- parameter definitions
+- monitoring requirements
+- compliance rules
+- common VVB findings
+
+4. PARAMETER MANAGEMENT
+Evaluate whether the platform has a robust system for handling project parameters:
+- emission factors
+- baseline assumptions
+- monitoring parameters
+- sampling parameters
+Identify missing functionality such as:
+- parameter validation
+- parameter source tracking
+- default vs project-specific values
+
+5. DOCUMENT INTELLIGENCE
+Evaluate whether the system fully supports working with project documents:
+- extracting data from feasibility studies
+- extracting parameters from monitoring reports
+- linking evidence to sections
+Identify missing capabilities.
+
+6. AI QUALITY CONTROL
+Identify missing safeguards such as:
+- hallucination prevention
+- cross-section consistency checks
+- parameter validation
+- source verification.
+
+7. USER WORKFLOW
+Evaluate whether the platform supports a real project workflow:
+- project setup
+- parameter definition
+- document generation
+- internal review
+- audit preparation.
+
+8. COLLABORATION
+Identify missing features for real teams:
+- multi-user projects
+- comments
+- version history
+- change tracking
+- approval workflows.
+
+9. SCALABILITY
+Identify technical limitations that would prevent scaling the platform to many users.
+
+10. STRATEGIC PRODUCT GAPS
+Identify the biggest missing features that would make CarbonGPT truly unique and valuable in the carbon market.
+
+For each gap, please provide:
+- description of the missing feature
+- why it matters
+- implementation complexity (low / medium / high)
+- expected impact.
+
+The goal is to identify everything that still needs to be built for CarbonGPT to become a professional carbon project developme
