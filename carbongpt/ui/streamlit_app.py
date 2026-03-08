@@ -3009,6 +3009,9 @@ def _render_next_steps_panel(project, project_id):
         "Lifecycle": 8, "Monitoring": 9, "Export": 10,
     }
 
+    def _go_to_tab(pid, idx):
+        st.session_state[f"ws_tab_{pid}"] = idx
+
     st.markdown("**Suggested Next Steps**")
     for i, step in enumerate(steps, 1):
         cols = st.columns([0.4, 4, 1.2])
@@ -3020,9 +3023,9 @@ def _render_next_steps_panel(project, project_id):
         with cols[2]:
             tab_name = step.get("tab", "")
             if tab_name in TAB_LABEL_TO_INDEX:
-                if st.button(f"Go", key=f"nextstep_{project_id}_{i}", use_container_width=True):
-                    st.session_state[f"ws_tab_{project_id}"] = TAB_LABEL_TO_INDEX[tab_name]
-                    st.rerun()
+                target_idx = TAB_LABEL_TO_INDEX[tab_name]
+                st.button("Go", key=f"nextstep_{project_id}_{i}", use_container_width=True,
+                          on_click=_go_to_tab, args=(project_id, target_idx))
 
 
 def _render_readiness_banner(banner_type, message):
@@ -3147,19 +3150,19 @@ def _render_project_workspace(project_id):
         if desc_html:
             st.markdown(desc_html, unsafe_allow_html=True)
 
+    def _nav_to_tab(pid, idx):
+        st.session_state[f"ws_tab_{pid}"] = idx
+
     qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
     with qa_col1:
-        if st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True):
-            st.session_state[f"ws_tab_{project_id}"] = 4
-            st.rerun()
+        st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True,
+                  on_click=_nav_to_tab, args=(project_id, 4))
     with qa_col2:
-        if st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True):
-            st.session_state[f"ws_tab_{project_id}"] = 6
-            st.rerun()
+        st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True,
+                  on_click=_nav_to_tab, args=(project_id, 6))
     with qa_col3:
-        if st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True):
-            st.session_state[f"ws_tab_{project_id}"] = 3
-            st.rerun()
+        st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True,
+                  on_click=_nav_to_tab, args=(project_id, 3))
     with qa_col4:
         if st.button("AI Assistant", key=f"qa_chat_{project_id}", use_container_width=True):
             st.session_state.chat_open = True
@@ -3275,30 +3278,40 @@ def _render_project_workspace(project_id):
         else:
             tab_labels.append(label)
 
-    tabs = st.tabs(tab_labels)
+    tab_state_key = f"ws_tab_{project_id}"
+    radio_key = f"tab_radio_{project_id}"
 
-    with tabs[0]:
-        _render_project_settings(project)
-    with tabs[1]:
-        _render_documents_tab(project)
-    with tabs[2]:
-        render_parameter_dashboard(project)
-    with tabs[3]:
-        render_er_simulator(project)
-    with tabs[4]:
-        _render_write_tab(project)
-    with tabs[5]:
-        _render_review_tab(project)
-    with tabs[6]:
-        render_audit_simulation(project)
-    with tabs[7]:
-        _render_findings_response_tab(project)
-    with tabs[8]:
-        render_lifecycle_dashboard(project)
-    with tabs[9]:
-        render_monitoring_dashboard(project)
-    with tabs[10]:
-        _render_export_tab(project)
+    if tab_state_key in st.session_state:
+        pending_idx = st.session_state.pop(tab_state_key)
+        if 0 <= pending_idx < len(tab_labels):
+            st.session_state[radio_key] = tab_labels[pending_idx]
+
+    if radio_key not in st.session_state:
+        st.session_state[radio_key] = tab_labels[0]
+
+    selected_label = st.radio(
+        "Navigate to section",
+        tab_labels,
+        horizontal=True,
+        key=radio_key,
+        label_visibility="collapsed",
+    )
+    selected_idx = tab_labels.index(selected_label) if selected_label in tab_labels else 0
+
+    TAB_RENDERERS = [
+        _render_project_settings,
+        _render_documents_tab,
+        render_parameter_dashboard,
+        render_er_simulator,
+        _render_write_tab,
+        _render_review_tab,
+        render_audit_simulation,
+        _render_findings_response_tab,
+        render_lifecycle_dashboard,
+        render_monitoring_dashboard,
+        _render_export_tab,
+    ]
+    TAB_RENDERERS[selected_idx](project)
 
 
 def _render_calculations_tab(project):
@@ -6996,13 +7009,15 @@ def _render_chat_widget():
     if nav_pending:
         nav_col1, nav_col2 = st.columns([3, 1])
         with nav_col2:
-            if st.button(f"Go to {nav_pending['tab']}", key="copilot_nav_btn", type="primary", use_container_width=True):
-                if project_id:
-                    st.session_state[f"ws_tab_{project_id}"] = nav_pending.get("index", 0)
-                if nav_pending.get("new_project_id"):
-                    st.session_state.selected_project_id = nav_pending["new_project_id"]
+            def _copilot_nav(pid, pending):
+                if pid:
+                    st.session_state[f"ws_tab_{pid}"] = pending.get("index", 0)
+                if pending.get("new_project_id"):
+                    st.session_state.selected_project_id = pending["new_project_id"]
                 st.session_state.copilot_nav_pending = None
-                st.rerun()
+
+            st.button(f"Go to {nav_pending['tab']}", key="copilot_nav_btn", type="primary", use_container_width=True,
+                      on_click=_copilot_nav, args=(project_id, nav_pending))
 
     chip_col = st.columns(1)[0]
     with chip_col:
