@@ -65,7 +65,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - **TOOL33 Defaults Module**: `tool_defaults.py` provides structured defaults from CDM TOOL33 v03.0, IPCC 2006, VM0050, TPDDTEC, ACM0002, AMS-I.D. Key functions: `get_fnrb_for_country()`, `get_fuel_defaults()`, `get_defaults_for_methodology()`
 
 **Core Engine Modules:**
-- `carbongpt/core/parameter_engine.py` — Centralized parameter management with validation, source tracking, dependency tracking, and auto-initialization from methodology defaults
+- `carbongpt/core/parameter_engine.py` — Centralized parameter management with validation, source tracking, dependency tracking, auto-initialization from methodology defaults. Phase 1 enhancements: canonical fuel normalization (`normalize_fuel_type()`, `FUEL_CANONICAL_OPTIONS`, `FUEL_DISPLAY_LABELS`), `param_status` tracking (confirmed/default/estimated/missing), `confirm_parameter()`, activity data params (`num_devices`, `devices_per_household`, `num_beneficiaries`), TOOL33 intake seeding
 - `carbongpt/core/er_simulator.py` — Deterministic emission reduction calculations for cookstove (VM0050/TPDDTEC) and grid (ACM0002/AMS-I.D.) methodologies, year-by-year projections, scenario management, sensitivity analysis, carbon finance modeling. Includes cohort-based deployment engine (`calculate_cookstove_er_cohort`) supporting: deployment ramp-up (instant/fixed monthly/custom schedule), deployment timing (start/mid/end of period), technology lifetime, drop-off/survival models (annual rate or custom curve), usage rate models (fixed or custom curve). `run_scenario()` accepts `deployment_config` dict to toggle cohort mode.
 - `carbongpt/core/lifecycle_manager.py` — Project lifecycle stages (Feasibility through Issuance), task management, monitoring task initialization, issuance tracking, portfolio analytics
 - `carbongpt/core/evidence_engine.py` — Evidence linking (parameters/sections to source documents), evidence completeness scoring, citation generation
@@ -88,7 +88,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `research_results`, `research_source_priority` — Research orchestrator data
 
 ### Carbon Operating System Tables (New)
-- `project_parameters` — Centralized parameter store (value, source, validation, evidence, min/max, uncertainty, ex-ante/ex-post, dependencies)
+- `project_parameters` — Centralized parameter store (value, source, validation, evidence, min/max, uncertainty, ex-ante/ex-post, dependencies, param_status for confirmed/default/estimated/missing tracking)
 - `project_lifecycle` — Stage transitions with timestamps
 - `project_tasks` — Tasks per lifecycle stage with priorities and deadlines
 - `evidence_links` — Links claims/parameters to source documents/chunks

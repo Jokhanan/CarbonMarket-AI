@@ -239,6 +239,69 @@ def _format_project_context(project_info):
     return "### Detailed Project Data (from intake form):\n" + "\n\n".join(parts) + "\n"
 
 
+def _format_confirmed_parameters_context(project_info):
+    project_id = project_info.get("id")
+    if not project_id:
+        return ""
+    try:
+        from carbongpt.core.parameter_engine import get_parameters_as_dict, get_fuel_display_label
+        params = get_parameters_as_dict(project_id)
+        if not params:
+            return ""
+
+        confirmed_lines = []
+        default_lines = []
+        for key, pdata in sorted(params.items()):
+            val = pdata.get("value")
+            if val is None or (isinstance(val, str) and not val.strip()):
+                continue
+            unit = pdata.get("unit", "")
+            source = pdata.get("source_type", "default")
+            p_status = pdata.get("param_status", "default")
+            reference = pdata.get("source_reference", "")
+            if key in ("baseline_fuel",) and isinstance(val, str):
+                display_val = get_fuel_display_label(val)
+                line = f"  - {key}: {display_val} (canonical: {val})"
+            elif isinstance(val, float):
+                line = f"  - {key}: {val:g}"
+            else:
+                line = f"  - {key}: {val}"
+            if unit:
+                line += f" {unit}"
+            line += f" (source: {source}"
+            if reference:
+                line += f", reference: {reference}"
+            line += ")"
+            if p_status == "confirmed":
+                confirmed_lines.append(line)
+            else:
+                default_lines.append(line)
+
+        parts = []
+        if confirmed_lines:
+            parts.append(
+                "### PRIORITY 1 -- Confirmed Project Calculation Values\n"
+                "These are the authoritative parameter values for this project. "
+                "Use these exact values in all calculations, equations, and references. "
+                "If these differ from generic methodology defaults below, use THESE values.\n\n"
+                + "\n".join(confirmed_lines)
+            )
+        if default_lines:
+            parts.append(
+                "### Project Parameter Defaults (not yet confirmed)\n"
+                "These values are auto-populated defaults. They may be used as reasonable estimates "
+                "but should be noted as provisional where referenced in calculations.\n\n"
+                + "\n".join(default_lines)
+            )
+
+        if not parts:
+            return ""
+        return "\n\n".join(parts) + "\n"
+    except Exception as e:
+        logger.warning("Failed to format confirmed parameters context: %s", e)
+        return ""
+
+
 def _format_methodology_parameters_context(project_info):
     intake = project_info.get("project_intake") or {}
     meth_params = intake.get("methodology_parameters")
@@ -261,9 +324,10 @@ def _format_methodology_parameters_context(project_info):
     pi_lines = []
     mon_lines = []
     def_lines = []
-    qual_lines = []
     for key, val in meth_params.items():
         if not val or not str(val).strip():
+            continue
+        if key.startswith("tool33_"):
             continue
         label = key.replace("_", " ").title()
         if key.startswith("mon_"):
@@ -282,7 +346,7 @@ def _format_methodology_parameters_context(project_info):
 
     if not parts:
         return ""
-    return "### Methodology-Specific Data (from methodology setup):\n" + "\n\n".join(parts) + "\n"
+    return "### PRIORITY 2 -- Project Identity and Methodology Choices\n" + "\n\n".join(parts) + "\n"
 
 
 def _format_tool33_defaults_context(project_info):
@@ -332,9 +396,10 @@ def _format_tool33_defaults_context(project_info):
         if not parts:
             return ""
         return (
-            "### Official Default Values and Equations (from CDM TOOL33, IPCC, methodology documents):\n"
-            "USE these real values in your writing instead of placeholders where applicable. "
-            "These are official defaults from the methodology and IPCC guidelines.\n\n"
+            "### PRIORITY 3 -- Methodology Reference Defaults (CDM TOOL33, IPCC)\n"
+            "These are official reference ranges and equations from the methodology and IPCC guidelines. "
+            "Use as citation sources. If the Confirmed Project Values (PRIORITY 1) above provide "
+            "specific values, use THOSE instead of these generic defaults.\n\n"
             + "\n\n".join(parts) + "\n"
         )
     except Exception as e:
@@ -653,6 +718,10 @@ def generate_section_draft(
     if project_info.get("description"):
         user_prompt += f"- Project description: {project_info['description']}\n"
     user_prompt += "\n"
+
+    confirmed_params_context = _format_confirmed_parameters_context(project_info)
+    if confirmed_params_context:
+        user_prompt += confirmed_params_context + "\n"
 
     intake_context = _format_filtered_project_context(project_info, section_id)
     if intake_context:

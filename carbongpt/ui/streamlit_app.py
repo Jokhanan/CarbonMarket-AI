@@ -5794,8 +5794,14 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                 )
                 meth_inputs[f"mon_{safe_key}"] = val
 
-    _render_tool33_defaults(project_id, meth_parsed, new_settings, meth_inputs,
-                            country=country)
+    with st.container(border=True):
+        st.markdown("#### Calculation Parameters")
+        st.caption("Emission factors, fuel properties, and activity data are managed centrally in the Parameters tab.")
+
+        def _go_to_params():
+            st.session_state[f"ws_tab_{project_id}"] = 2
+
+        st.button("Go to Parameters tab", key=f"goto_params_from_setup_{project_id}", on_click=_go_to_params)
 
     tool33_lookup = _build_tool33_lookup(meth_parsed, new_settings, country)
 

@@ -13,6 +13,39 @@ from carbongpt.core.tool_defaults import (
 
 logger = logging.getLogger(__name__)
 
+FUEL_CANONICAL_MAP = {
+    "wood": "wood", "firewood": "wood", "biomass": "wood", "fuelwood": "wood", "bois": "wood",
+    "charcoal": "charcoal", "charbon": "charcoal", "green_charcoal": "charcoal",
+    "dung": "dung", "animal_dung": "dung", "cow_dung": "dung",
+    "crop_residue": "crop_residue", "agricultural_residue": "crop_residue", "residue": "crop_residue",
+    "kerosene": "kerosene",
+    "lpg": "lpg", "gas": "lpg", "propane": "lpg",
+}
+
+FUEL_DISPLAY_LABELS = {
+    "wood": "Wood / Firewood",
+    "charcoal": "Charcoal",
+    "dung": "Animal Dung",
+    "crop_residue": "Crop Residue",
+    "kerosene": "Kerosene",
+    "lpg": "LPG",
+    "other": "Other",
+}
+
+FUEL_CANONICAL_OPTIONS = list(FUEL_DISPLAY_LABELS.keys())
+
+
+def normalize_fuel_type(raw_value):
+    if not raw_value:
+        return "wood"
+    key = raw_value.strip().lower().replace(" ", "_").replace("-", "_")
+    return FUEL_CANONICAL_MAP.get(key, "other")
+
+
+def get_fuel_display_label(canonical_value):
+    return FUEL_DISPLAY_LABELS.get(canonical_value, canonical_value)
+
+
 PARAMETER_DEFINITIONS = {
     "VM0050": [
         {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": []},
@@ -24,7 +57,10 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "EF_nonCO2_project", "param_name": "Non-CO2 emission factor (project fuel)", "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "baseline_fuel_consumption", "param_name": "Baseline fuel consumption per household", "category": "baseline", "unit": "tonnes/household/year", "data_type": "number", "min_value": 0.01, "max_value": 20.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "project_fuel_consumption", "param_name": "Project fuel consumption per household", "category": "project", "unit": "tonnes/household/year", "data_type": "number", "min_value": 0.0, "max_value": 20.0, "is_ex_ante": False, "depends_on": []},
-        {"param_key": "num_households", "param_name": "Number of households", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_devices", "param_name": "Number of devices/technologies deployed", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_households", "param_name": "Number of households served", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "devices_per_household", "param_name": "Devices per household", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_beneficiaries", "param_name": "Number of beneficiaries", "category": "activity_data", "unit": "persons", "data_type": "number", "min_value": 1, "max_value": 100000000, "is_ex_ante": True, "depends_on": ["num_households", "household_size"]},
         {"param_key": "usage_rate", "param_name": "Usage rate (proportion of devices in use)", "category": "monitoring", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": False, "depends_on": []},
         {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": []},
@@ -43,7 +79,10 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "EF_nonCO2_project", "param_name": "Non-CO2 emission factor (project fuel)", "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "SFC_baseline", "param_name": "Baseline specific fuel consumption", "category": "baseline", "unit": "kg/person/year", "data_type": "number", "min_value": 0.01, "max_value": 5000, "is_ex_ante": False, "depends_on": []},
         {"param_key": "SFC_project", "param_name": "Project specific fuel consumption", "category": "project", "unit": "kg/person/year", "data_type": "number", "min_value": 0.0, "max_value": 5000, "is_ex_ante": False, "depends_on": []},
-        {"param_key": "num_households", "param_name": "Number of households", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_devices", "param_name": "Number of devices/technologies deployed", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_households", "param_name": "Number of households served", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "devices_per_household", "param_name": "Devices per household", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_beneficiaries", "param_name": "Number of beneficiaries", "category": "activity_data", "unit": "persons", "data_type": "number", "min_value": 1, "max_value": 100000000, "is_ex_ante": True, "depends_on": ["num_households", "household_size"]},
         {"param_key": "usage_rate", "param_name": "Usage rate (proportion of devices in use)", "category": "monitoring", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": False, "depends_on": []},
         {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
         {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": []},
@@ -63,6 +102,29 @@ PARAMETER_DEFINITIONS = {
 }
 
 
+def _get_tool33_intake_value(intake, param_key):
+    meth_params = (intake.get("methodology_parameters") or {})
+    tool33_key_map = {
+        "fNRB": "tool33_fNRB",
+        "NCV_baseline": "tool33_bl_NCV",
+        "NCV_project": "tool33_pj_NCV",
+        "EF_CO2_baseline": "tool33_bl_EF_CO2",
+        "EF_CO2_project": "tool33_pj_EF_CO2",
+        "EF_nonCO2_baseline": "tool33_bl_EF_nonCO2",
+        "EF_nonCO2_project": "tool33_pj_EF_nonCO2",
+        "CF": "tool33_CF",
+    }
+    intake_key = tool33_key_map.get(param_key)
+    if intake_key:
+        val = meth_params.get(intake_key)
+        if val is not None and str(val).strip():
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
 def initialize_project_parameters(project_id):
     with get_cursor() as cur:
         cur.execute("SELECT methodology, country, project_settings, project_intake FROM user_projects WHERE id = %s", (project_id,))
@@ -75,44 +137,90 @@ def initialize_project_parameters(project_id):
         settings = project.get("project_settings") or {}
         intake = project.get("project_intake") or {}
 
-        baseline_fuel = settings.get("baseline_fuel") or intake.get("baseline_fuel", "wood")
-        project_fuel = settings.get("project_fuel") or intake.get("project_fuel", "")
-        is_charcoal = baseline_fuel.lower() in ("charcoal", "green_charcoal")
+        raw_baseline_fuel = settings.get("baseline_fuel") or intake.get("baseline_fuel", "wood")
+        baseline_fuel = normalize_fuel_type(raw_baseline_fuel)
+        raw_project_fuel = settings.get("project_fuel") or intake.get("project_fuel", "")
+        project_fuel = normalize_fuel_type(raw_project_fuel) if raw_project_fuel else ""
+        is_charcoal = baseline_fuel == "charcoal"
 
         definitions = PARAMETER_DEFINITIONS.get(methodology, [])
         if not definitions:
             return {"error": f"No parameter definitions for methodology: {methodology}"}
 
-        cur.execute("SELECT param_key, value, source_type FROM project_parameters WHERE project_id = %s AND source_type IN ('measured', 'user_override')", (project_id,))
+        cur.execute("SELECT param_key, value, source_type, param_status FROM project_parameters WHERE project_id = %s AND source_type IN ('measured', 'user_override')", (project_id,))
         preserved = {row["param_key"]: row for row in cur.fetchall()}
+
+        cur.execute("SELECT param_key, value, source_type, param_status FROM project_parameters WHERE project_id = %s AND param_status = 'confirmed'", (project_id,))
+        for row in cur.fetchall():
+            if row["param_key"] not in preserved:
+                preserved[row["param_key"]] = row
 
         cur.execute("DELETE FROM project_parameters WHERE project_id = %s", (project_id,))
 
-        defaults = get_defaults_for_methodology(methodology, country=country, baseline_fuel=baseline_fuel, project_fuel=project_fuel)
+        defaults = get_defaults_for_methodology(methodology, country=country, baseline_fuel=raw_baseline_fuel, project_fuel=raw_project_fuel)
         param_values = defaults.get("parameters", {})
+
+        intake_num_units = None
+        po = intake.get("project_overview") or {}
+        raw_units = po.get("num_units")
+        if raw_units:
+            try:
+                intake_num_units = float(str(raw_units).replace(",", "").strip())
+            except (ValueError, TypeError):
+                pass
+
+        intake_beneficiaries = None
+        loc = intake.get("location") or {}
+        raw_ben = loc.get("beneficiaries")
+        if raw_ben:
+            try:
+                intake_beneficiaries = float(str(raw_ben).replace(",", "").strip())
+            except (ValueError, TypeError):
+                pass
 
         inserted = 0
         for defn in definitions:
             value = None
             source_type = "default"
             source_reference = None
+            param_status = "default"
 
             if defn["param_key"] in preserved:
                 old = preserved[defn["param_key"]]
                 value = old["value"]
                 source_type = old["source_type"]
                 source_reference = "Preserved from previous initialization"
+                param_status = old.get("param_status", "confirmed")
             else:
-                value, source_type, source_reference = _resolve_parameter_value(
-                    defn["param_key"], methodology, param_values, country, baseline_fuel, project_fuel, is_charcoal, intake, settings
-                )
+                tool33_val = _get_tool33_intake_value(intake, defn["param_key"])
+                if tool33_val is not None:
+                    value = tool33_val
+                    source_type = "user_override"
+                    source_reference = "Seeded from TOOL33 setup values"
+                    param_status = "confirmed"
+                else:
+                    value, source_type, source_reference = _resolve_parameter_value(
+                        defn["param_key"], methodology, param_values, country,
+                        baseline_fuel, project_fuel, is_charcoal, intake, settings,
+                        intake_num_units=intake_num_units,
+                        intake_beneficiaries=intake_beneficiaries,
+                    )
+
+            if value is None or (isinstance(value, str) and not value.strip()):
+                param_status = "missing"
+            elif param_status not in ("confirmed",) and source_type == "calculated":
+                param_status = "estimated"
+            elif param_status not in ("confirmed",) and source_type in ("default", "ipcc", "methodology"):
+                param_status = "default"
+
+            validation_status = "valid" if value is not None and str(value).strip() else "pending"
 
             cur.execute("""
                 INSERT INTO project_parameters
                 (project_id, param_key, param_name, category, value, unit, data_type,
                  source_type, source_reference, methodology_code, tool_reference,
-                 min_value, max_value, is_ex_ante, depends_on, validation_status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 min_value, max_value, is_ex_ante, depends_on, validation_status, param_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 project_id, defn["param_key"], defn["param_name"], defn["category"],
                 str(value) if value is not None else None,
@@ -122,14 +230,15 @@ def initialize_project_parameters(project_id):
                 defn.get("min_value"), defn.get("max_value"),
                 defn.get("is_ex_ante", True),
                 defn.get("depends_on", []),
-                "valid" if value is not None else "pending",
+                validation_status,
+                param_status,
             ))
             inserted += 1
 
         return {"inserted": inserted, "methodology": methodology, "preserved": len(preserved)}
 
 
-def _resolve_parameter_value(param_key, methodology, param_values, country, baseline_fuel, project_fuel, is_charcoal, intake, settings):
+def _resolve_parameter_value(param_key, methodology, param_values, country, baseline_fuel, project_fuel, is_charcoal, intake, settings, intake_num_units=None, intake_beneficiaries=None):
     value = None
     source_type = "default"
     source_reference = None
@@ -208,10 +317,37 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         value = 0.90
         source_type = "default"
         source_reference = "Conservative ex-ante assumption (90%)"
+    elif param_key == "num_devices":
+        if intake_num_units is not None:
+            value = intake_num_units
+            source_type = "user_override"
+            source_reference = "From project setup (Number of units)"
+        else:
+            value = None
+            source_type = "default"
+            source_reference = "Must be provided by project developer"
     elif param_key == "num_households":
-        value = None
+        if intake_num_units is not None:
+            value = intake_num_units
+            source_type = "default"
+            source_reference = "Derived from num_devices (1 device per household assumed)"
+        else:
+            value = None
+            source_type = "default"
+            source_reference = "Must be provided by project developer"
+    elif param_key == "devices_per_household":
+        value = 1
         source_type = "default"
-        source_reference = "Must be provided by project developer"
+        source_reference = "Default: 1 device per household"
+    elif param_key == "num_beneficiaries":
+        if intake_beneficiaries is not None:
+            value = intake_beneficiaries
+            source_type = "user_override"
+            source_reference = "From project setup (beneficiaries)"
+        else:
+            value = None
+            source_type = "calculated"
+            source_reference = "Derived: num_households x household_size (set value to override)"
     elif param_key == "household_size":
         value = 5.0
         source_type = "default"
@@ -219,7 +355,7 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
     elif param_key == "baseline_fuel":
         value = baseline_fuel or "wood"
         source_type = "default"
-        source_reference = "From project intake data"
+        source_reference = "From project intake data (normalized)"
         return value, source_type, source_reference
     elif param_key == "baseline_efficiency":
         value = 0.15
@@ -279,8 +415,42 @@ def update_parameter(project_id, param_key, value, source_type=None, source_refe
 
         updated = cur.fetchone()
         if updated:
-            _run_validation(cur, updated)
+            validation_result = _run_validation(cur, updated)
+            is_valid = validation_result.get("status") == "valid"
+            has_value = value is not None and str(value).strip() != ""
+            if has_value and is_valid:
+                cur.execute("""
+                    UPDATE project_parameters SET param_status = 'confirmed'
+                    WHERE id = %s
+                """, (updated["id"],))
+            elif not has_value:
+                cur.execute("""
+                    UPDATE project_parameters SET param_status = 'missing'
+                    WHERE id = %s
+                """, (updated["id"],))
         return updated
+
+
+def confirm_parameter(project_id, param_key):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT * FROM project_parameters
+            WHERE project_id = %s AND param_key = %s AND applicable_year IS NULL
+        """, (project_id, param_key))
+        param = cur.fetchone()
+        if not param:
+            return None
+        validation_result = _run_validation(cur, param)
+        is_valid = validation_result.get("status") == "valid"
+        has_value = param["value"] is not None and str(param["value"]).strip() != ""
+        if has_value and is_valid:
+            cur.execute("""
+                UPDATE project_parameters SET param_status = 'confirmed', updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+            """, (param["id"],))
+            return cur.fetchone()
+        return param
 
 
 def validate_all_parameters(project_id):
@@ -357,6 +527,7 @@ def get_parameters_as_dict(project_id):
             "source_type": p["source_type"],
             "source_reference": p["source_reference"],
             "validation_status": p["validation_status"],
+            "param_status": p.get("param_status", "default"),
             "is_ex_ante": p["is_ex_ante"],
             "category": p["category"],
         }
@@ -374,7 +545,11 @@ def get_parameter_summary(project_id):
                 COUNT(CASE WHEN validation_status = 'warning' THEN 1 END) as warnings,
                 COUNT(CASE WHEN source_type = 'default' THEN 1 END) as defaults,
                 COUNT(CASE WHEN source_type = 'measured' THEN 1 END) as measured,
-                COUNT(CASE WHEN source_type = 'user_override' THEN 1 END) as overrides
+                COUNT(CASE WHEN source_type = 'user_override' THEN 1 END) as overrides,
+                COUNT(CASE WHEN param_status = 'confirmed' THEN 1 END) as confirmed,
+                COUNT(CASE WHEN param_status = 'default' THEN 1 END) as status_default,
+                COUNT(CASE WHEN param_status = 'estimated' THEN 1 END) as estimated,
+                COUNT(CASE WHEN param_status = 'missing' THEN 1 END) as missing
             FROM project_parameters WHERE project_id = %s
         """, (project_id,))
         return cur.fetchone()

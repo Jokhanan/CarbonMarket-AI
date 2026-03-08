@@ -424,6 +424,7 @@ CREATE TABLE IF NOT EXISTS project_parameters (
     max_value DOUBLE PRECISION,
     validation_status VARCHAR(20) DEFAULT 'pending' CHECK (validation_status IN ('valid', 'invalid', 'pending', 'warning')),
     validation_message TEXT,
+    param_status VARCHAR(20) DEFAULT 'default' CHECK (param_status IN ('confirmed', 'default', 'estimated', 'missing')),
     is_ex_ante BOOLEAN DEFAULT true,
     uncertainty_pct DOUBLE PRECISION,
     depends_on TEXT[],

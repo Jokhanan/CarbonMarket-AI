@@ -5,6 +5,9 @@ from carbongpt.core.parameter_engine import (
     update_parameter,
     validate_all_parameters,
     get_parameter_summary,
+    confirm_parameter,
+    FUEL_CANONICAL_OPTIONS,
+    get_fuel_display_label,
 )
 from carbongpt.core.evidence_engine import get_evidence_links
 
@@ -36,17 +39,28 @@ def render_parameter_dashboard(project):
     with col1:
         st.metric("Total Parameters", summary["total"])
     with col2:
-        valid_color = "normal" if summary["valid"] == summary["total"] else "off"
-        st.metric("Valid", summary["valid"], delta=None if summary["valid"] == summary["total"] else f"{summary['pending']} pending", delta_color=valid_color)
+        confirmed = summary.get("confirmed", 0)
+        st.metric("Confirmed", confirmed, delta=None if confirmed == summary["total"] else f"{summary['total'] - confirmed} remaining")
     with col3:
-        st.metric("Using Defaults", summary["defaults"])
+        st.metric("Using Defaults", summary.get("status_default", summary["defaults"]))
     with col4:
-        st.metric("Measured/Override", summary["measured"] + summary["overrides"])
+        missing = summary.get("missing", summary["pending"])
+        st.metric("Missing", missing, delta=None if missing == 0 else f"{missing} need values", delta_color="inverse" if missing > 0 else "normal")
+
+    status_col1, status_col2, status_col3, status_col4 = st.columns(4)
+    with status_col1:
+        st.caption(f"Confirmed: {summary.get('confirmed', 0)}")
+    with status_col2:
+        st.caption(f"Default: {summary.get('status_default', 0)}")
+    with status_col3:
+        st.caption(f"Estimated: {summary.get('estimated', 0)}")
+    with status_col4:
+        st.caption(f"Missing: {summary.get('missing', 0)}")
 
     if summary["invalid"] > 0:
         st.warning(f"{summary['invalid']} parameter(s) have invalid values. Review and fix them below.")
-    if summary["pending"] > 0:
-        st.info(f"{summary['pending']} parameter(s) are still missing values.")
+    if summary.get("missing", summary["pending"]) > 0:
+        st.info(f"{summary.get('missing', summary['pending'])} parameter(s) are still missing values.")
 
     action_col1, action_col2, action_col3 = st.columns(3)
     with action_col1:
@@ -57,7 +71,7 @@ def render_parameter_dashboard(project):
             else:
                 st.success("All parameters are valid")
     with action_col2:
-        if st.button("Re-initialize from Methodology", key="reinit_params", help="Resets default values but preserves any measured or user-override values"):
+        if st.button("Re-initialize from Methodology", key="reinit_params", help="Resets default values but preserves any measured, user-override, or confirmed values"):
             result = initialize_project_parameters(project_id)
             if "error" in result:
                 st.error(result["error"])
@@ -121,7 +135,7 @@ def render_parameter_dashboard(project):
                     same_value = str(bl_val) == str(pr_val) and bl_val != ""
                     if same_value:
                         clean_name = bl["param_name"].replace("(baseline fuel)", "").replace("(baseline)", "").strip()
-                        st.markdown(f"**{clean_name}** — Baseline and Project use the same value")
+                        st.markdown(f"**{clean_name}** -- Baseline and Project use the same value")
                         combined_evidence = dict(evidence_by_param)
                         pr_evidence = evidence_by_param.get(pr["param_key"], [])
                         if pr_evidence:
@@ -137,45 +151,68 @@ def render_parameter_dashboard(project):
                     globally_rendered.add(key)
 
 
+def _get_param_status_display(param):
+    p_status = param.get("param_status", "default")
+    status_map = {
+        "confirmed": ("[OK]", "green"),
+        "default": ("[DEF]", "gray"),
+        "estimated": ("[EST]", "orange"),
+        "missing": ("[--]", "red"),
+    }
+    label, color = status_map.get(p_status, ("[?]", "gray"))
+    return label, color, p_status
+
+
 def _render_parameter_row(project_id, param, evidence_by_param):
     param_key = param["param_key"]
-    status = param["validation_status"]
+    status_label, status_color, p_status = _get_param_status_display(param)
 
-    status_indicator = {
-        "valid": "[OK]",
-        "invalid": "[X]",
-        "pending": "[?]",
-        "warning": "[!]",
-    }.get(status, "[ ]")
-
-    status_color = {
-        "valid": "green",
-        "invalid": "red",
-        "pending": "orange",
-        "warning": "orange",
-    }.get(status, "gray")
+    v_status = param.get("validation_status", "pending")
+    v_indicator = ""
+    if v_status == "invalid":
+        v_indicator = ' <span style="color:red;font-size:0.85em;">[invalid]</span>'
+    elif v_status == "warning":
+        v_indicator = ' <span style="color:orange;font-size:0.85em;">[warning]</span>'
 
     has_evidence = param_key in evidence_by_param
     evidence_indicator = " [E]" if has_evidence else ""
 
-    col1, col2, col3 = st.columns([3, 2, 2])
+    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
 
     with col1:
-        st.markdown(f"<span style='color:{status_color};font-weight:bold;'>{status_indicator}</span> **{param['param_name']}**{evidence_indicator}", unsafe_allow_html=True)
+        st.markdown(
+            f"<span style='color:{status_color};font-weight:bold;'>{status_label}</span> "
+            f"**{param['param_name']}**{v_indicator}{evidence_indicator}",
+            unsafe_allow_html=True,
+        )
         source_label = param.get("source_type", "default")
         source_ref = param.get("source_reference", "")
-        st.caption(f"Source: {source_label} | {source_ref}")
+        st.caption(f"Status: {p_status} | Source: {source_label} | {source_ref}")
 
     with col2:
         current_val = param["value"] if param["value"] is not None else ""
         unit = param.get("unit", "")
-        new_val = st.text_input(
-            f"Value ({unit})",
-            value=str(current_val),
-            key=f"param_val_{param_key}_{param['id']}",
-            label_visibility="collapsed",
-            placeholder=f"Enter value ({unit})",
-        )
+
+        if param_key == "baseline_fuel":
+            fuel_options = FUEL_CANONICAL_OPTIONS
+            current_fuel = str(current_val) if current_val else "wood"
+            fuel_idx = fuel_options.index(current_fuel) if current_fuel in fuel_options else 0
+            new_val = st.selectbox(
+                f"Fuel Type",
+                fuel_options,
+                index=fuel_idx,
+                key=f"param_val_{param_key}_{param['id']}",
+                label_visibility="collapsed",
+                format_func=get_fuel_display_label,
+            )
+        else:
+            new_val = st.text_input(
+                f"Value ({unit})",
+                value=str(current_val),
+                key=f"param_val_{param_key}_{param['id']}",
+                label_visibility="collapsed",
+                placeholder=f"Enter value ({unit})",
+            )
 
     with col3:
         source_options = ["default", "measured", "calculated", "user_override", "national_inventory", "ipcc", "methodology"]
@@ -188,6 +225,16 @@ def _render_parameter_row(project_id, param, evidence_by_param):
             key=f"param_src_{param_key}_{param['id']}",
             label_visibility="collapsed",
         )
+
+    with col4:
+        if p_status in ("default", "estimated") and current_val and str(current_val).strip():
+            if st.button("Confirm", key=f"confirm_{param_key}_{param['id']}", help="Accept this value as confirmed for your project"):
+                result = confirm_parameter(project_id, param_key)
+                if result and result.get("param_status") == "confirmed":
+                    st.success("Confirmed")
+                    st.rerun()
+                else:
+                    st.warning("Cannot confirm: value may be invalid or missing")
 
     if str(new_val) != str(current_val) or new_source != current_source:
         if st.button("Save", key=f"save_param_{param_key}_{param['id']}"):

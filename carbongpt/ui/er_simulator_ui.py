@@ -9,7 +9,13 @@ from carbongpt.core.er_simulator import (
     run_sensitivity,
     export_er_to_excel,
 )
-from carbongpt.core.parameter_engine import get_parameters_as_dict, get_project_parameters
+from carbongpt.core.parameter_engine import (
+    get_parameters_as_dict,
+    get_project_parameters,
+    FUEL_CANONICAL_OPTIONS,
+    FUEL_DISPLAY_LABELS,
+    get_fuel_display_label,
+)
 
 
 def render_er_simulator(project):
@@ -77,8 +83,29 @@ def render_er_simulator(project):
         _render_finance(project_id, methodology)
 
 
+def _render_param_value_display(label, value, unit, param_status, source_type):
+    status_icons = {
+        "confirmed": '<span style="color:green;font-weight:bold;">OK</span>',
+        "default": '<span style="color:gray;">DEF</span>',
+        "estimated": '<span style="color:orange;">EST</span>',
+        "missing": '<span style="color:red;">--</span>',
+    }
+    icon = status_icons.get(param_status, '<span style="color:gray;">--</span>')
+    if isinstance(value, float):
+        val_str = f"{value:g}"
+    elif value is not None:
+        val_str = str(value)
+    else:
+        val_str = "(not set)"
+    unit_str = f" {unit}" if unit else ""
+    st.markdown(
+        f'{icon} **{label}**: {val_str}{unit_str} <span style="color:gray;font-size:0.85em;">({source_type})</span>',
+        unsafe_allow_html=True,
+    )
+
+
 def _render_live_simulator(project_id, methodology, project_name="Project"):
-    st.markdown("**Adjust parameters to see emission reduction projections**")
+    st.markdown("**Project parameter values are shown below. Enable overrides to adjust for this scenario.**")
 
     params = get_parameters_as_dict(project_id)
     if not params:
@@ -100,16 +127,88 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
         )
         is_advanced = sim_mode == "Advanced"
 
-        st.markdown("**Activity Data**")
-        col1, col2 = st.columns(2)
-        with col1:
-            hh = st.number_input("Total Units to Deploy", min_value=1, value=int(_safe_float(params, "num_households", 1000)), step=100, key="sim_hh")
-            overrides["num_households"] = hh
-        with col2:
-            hh_size = st.number_input("Household Size (persons)", min_value=1.0, value=_safe_float(params, "household_size", 5.0), step=0.5, key="sim_hh_size")
-            overrides["household_size"] = hh_size
+        with st.container(border=True):
+            st.markdown("**Project Values** (from Parameters tab)")
+
+            pv_col1, pv_col2, pv_col3 = st.columns(3)
+            with pv_col1:
+                _render_param_value_display("Devices", _safe_float(params, "num_devices", None), "", _safe_status(params, "num_devices"), _safe_source(params, "num_devices"))
+                _render_param_value_display("Households", _safe_float(params, "num_households", None), "", _safe_status(params, "num_households"), _safe_source(params, "num_households"))
+                _render_param_value_display("HH Size", _safe_float(params, "household_size", None), "persons", _safe_status(params, "household_size"), _safe_source(params, "household_size"))
+            with pv_col2:
+                _render_param_value_display("fNRB", _safe_float(params, "fNRB", None), "", _safe_status(params, "fNRB"), _safe_source(params, "fNRB"))
+                _render_param_value_display("NCV bl", _safe_float(params, "NCV_baseline", None), "TJ/Gg", _safe_status(params, "NCV_baseline"), _safe_source(params, "NCV_baseline"))
+                _render_param_value_display("EF CO2 bl", _safe_float(params, "EF_CO2_baseline", None), "tCO2/TJ", _safe_status(params, "EF_CO2_baseline"), _safe_source(params, "EF_CO2_baseline"))
+            with pv_col3:
+                fuel_val = _safe_text(params, "baseline_fuel", "wood")
+                _render_param_value_display("Fuel", get_fuel_display_label(fuel_val), "", _safe_status(params, "baseline_fuel"), _safe_source(params, "baseline_fuel"))
+                _render_param_value_display("Leakage", _safe_float(params, "leakage_discount", None), "", _safe_status(params, "leakage_discount"), _safe_source(params, "leakage_discount"))
+                _render_param_value_display("Usage", _safe_float(params, "usage_rate", None), "", _safe_status(params, "usage_rate"), _safe_source(params, "usage_rate"))
+
+        enable_overrides = st.checkbox("Override parameter values for this scenario", key=f"sim_override_toggle_{project_id}")
+
+        if enable_overrides:
+            st.markdown("**Scenario Overrides** (these values apply to this scenario only)")
+            col1, col2 = st.columns(2)
+            with col1:
+                hh = st.number_input("Devices to Deploy", min_value=1, value=int(_safe_float(params, "num_devices", _safe_float(params, "num_households", 1000))), step=100, key="sim_hh")
+                overrides["num_devices"] = hh
+                overrides["num_households"] = hh
+                hh_size = st.number_input("Household Size (persons)", min_value=1.0, value=_safe_float(params, "household_size", 5.0), step=0.5, key="sim_hh_size")
+                overrides["household_size"] = hh_size
+            with col2:
+                fuel_options = [f for f in FUEL_CANONICAL_OPTIONS if f not in ("other",)]
+                current_fuel = _safe_text(params, "baseline_fuel", "wood")
+                fuel_idx = fuel_options.index(current_fuel) if current_fuel in fuel_options else 0
+                baseline_fuel = st.selectbox("Baseline Fuel", fuel_options, index=fuel_idx, key="sim_bl_fuel", format_func=get_fuel_display_label)
+                overrides["baseline_fuel"] = baseline_fuel
+
+            st.markdown("**Fuel Consumption**")
+            fc_col1, fc_col2 = st.columns(2)
+            with fc_col1:
+                if methodology == "VM0050":
+                    bl_cons = st.number_input("Baseline Fuel (t/hh/yr)", min_value=0.01, value=_safe_float(params, "baseline_fuel_consumption", 2.0), step=0.1, key="sim_bl_cons")
+                    overrides["baseline_fuel_consumption"] = bl_cons
+                else:
+                    sfc_b = st.number_input("Baseline SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_baseline", 400.0), step=10.0, key="sim_sfc_b")
+                    overrides["SFC_baseline"] = sfc_b
+            with fc_col2:
+                if methodology == "VM0050":
+                    pj_cons = st.number_input("Project Fuel (t/hh/yr)", min_value=0.0, value=_safe_float(params, "project_fuel_consumption", 1.0), step=0.1, key="sim_pj_cons")
+                    overrides["project_fuel_consumption"] = pj_cons
+                else:
+                    sfc_p = st.number_input("Project SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_project", 200.0), step=10.0, key="sim_sfc_p")
+                    overrides["SFC_project"] = sfc_p
+
+            st.markdown("**Emission Factors & Fuel Properties**")
+            ef_col1, ef_col2 = st.columns(2)
+            with ef_col1:
+                fNRB = st.slider("fNRB", 0.0, 1.0, _safe_float(params, "fNRB", 0.30), 0.01, key="sim_fNRB")
+                overrides["fNRB"] = fNRB
+                ncv_b = st.number_input("NCV Baseline (TJ/Gg)", min_value=1.0, value=_safe_float(params, "NCV_baseline", 15.6), step=0.1, key="sim_ncv_b")
+                overrides["NCV_baseline"] = ncv_b
+                ef_co2_b = st.number_input("EF CO2 Baseline (tCO2/TJ)", min_value=0.0, value=_safe_float(params, "EF_CO2_baseline", 112.0), step=1.0, key="sim_ef_co2_b")
+                overrides["EF_CO2_baseline"] = ef_co2_b
+                ef_nco2_b = st.number_input("EF non-CO2 Baseline (tCO2e/TJ)", min_value=0.0, value=_safe_float(params, "EF_nonCO2_baseline", 9.46), step=0.1, key="sim_ef_nco2_b")
+                overrides["EF_nonCO2_baseline"] = ef_nco2_b
+            with ef_col2:
+                cf = st.number_input("CF (wood-to-charcoal)", min_value=1.0, value=_safe_float(params, "CF", 4.0), step=0.1, key="sim_cf", help="Only applied when baseline fuel is charcoal")
+                overrides["CF"] = cf
+                ncv_p = st.number_input("NCV Project (TJ/Gg)", min_value=1.0, value=_safe_float(params, "NCV_project", 15.6), step=0.1, key="sim_ncv_p")
+                overrides["NCV_project"] = ncv_p
+                ef_co2_p = st.number_input("EF CO2 Project (tCO2/TJ)", min_value=0.0, value=_safe_float(params, "EF_CO2_project", 112.0), step=1.0, key="sim_ef_co2_p")
+                overrides["EF_CO2_project"] = ef_co2_p
+                ef_nco2_p = st.number_input("EF non-CO2 Project (tCO2e/TJ)", min_value=0.0, value=_safe_float(params, "EF_nonCO2_project", 9.46), step=0.1, key="sim_ef_nco2_p")
+                overrides["EF_nonCO2_project"] = ef_nco2_p
+
+            st.markdown("**Leakage**")
+            leakage = st.slider("Leakage Discount", 0.80, 1.0, _safe_float(params, "leakage_discount", 0.95), 0.01, key="sim_leak", help="0.95 = 5% leakage deduction")
+            overrides["leakage_discount"] = leakage
 
         st.markdown("**Deployment Ramp-up**")
+        deploy_hh = int(_safe_float(params, "num_devices", _safe_float(params, "num_households", 1000)))
+        if "num_devices" in overrides:
+            deploy_hh = int(overrides["num_devices"])
         deploy_options = ["Instant deployment", "Fixed monthly deployment"]
         if is_advanced:
             deploy_options.append("Custom deployment schedule")
@@ -121,11 +220,11 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
             deployment_config["deployment_mode"] = "fixed_monthly"
             monthly_rate = st.number_input(
                 "Units deployed per month", min_value=1,
-                value=min(500, hh),
+                value=min(500, deploy_hh),
                 step=100, key="sim_monthly_deploy",
             )
             deployment_config["monthly_deployment"] = monthly_rate
-            months_needed = (hh + monthly_rate - 1) // monthly_rate
+            months_needed = (deploy_hh + monthly_rate - 1) // monthly_rate
             st.caption(f"Full deployment in approximately {months_needed} months ({months_needed / 12:.1f} years)")
         elif deploy_choice == "Custom deployment schedule":
             deployment_config["deployment_mode"] = "custom"
@@ -209,62 +308,21 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
             timing_map = {"Start of period": "start", "Mid-period (default)": "mid", "End of period": "end"}
             deployment_config["deployment_timing"] = timing_map.get(timing, "mid")
 
-        st.markdown("**Fuel Consumption**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            fuel_options = ["wood", "charcoal"]
-            current_fuel = _safe_text(params, "baseline_fuel", "wood")
-            fuel_idx = fuel_options.index(current_fuel) if current_fuel in fuel_options else 0
-            baseline_fuel = st.selectbox("Baseline Fuel", fuel_options, index=fuel_idx, key="sim_bl_fuel")
-            overrides["baseline_fuel"] = baseline_fuel
-        with col2:
-            if methodology == "VM0050":
-                bl_cons = st.number_input("Baseline Fuel (t/hh/yr)", min_value=0.01, value=_safe_float(params, "baseline_fuel_consumption", 2.0), step=0.1, key="sim_bl_cons")
-                overrides["baseline_fuel_consumption"] = bl_cons
-            else:
-                sfc_b = st.number_input("Baseline SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_baseline", 400.0), step=10.0, key="sim_sfc_b")
-                overrides["SFC_baseline"] = sfc_b
-        with col3:
-            if methodology == "VM0050":
-                pj_cons = st.number_input("Project Fuel (t/hh/yr)", min_value=0.0, value=_safe_float(params, "project_fuel_consumption", 1.0), step=0.1, key="sim_pj_cons")
-                overrides["project_fuel_consumption"] = pj_cons
-            else:
-                sfc_p = st.number_input("Project SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_project", 200.0), step=10.0, key="sim_sfc_p")
-                overrides["SFC_project"] = sfc_p
-
-        st.markdown("**Emission Factors & Fuel Properties**")
-        col1, col2 = st.columns(2)
-        with col1:
-            fNRB = st.slider("fNRB", 0.0, 1.0, _safe_float(params, "fNRB", 0.30), 0.01, key="sim_fNRB")
-            overrides["fNRB"] = fNRB
-            ncv_b = st.number_input("NCV Baseline (TJ/Gg)", min_value=1.0, value=_safe_float(params, "NCV_baseline", 15.6), step=0.1, key="sim_ncv_b")
-            overrides["NCV_baseline"] = ncv_b
-            ef_co2_b = st.number_input("EF CO2 Baseline (tCO2/TJ)", min_value=0.0, value=_safe_float(params, "EF_CO2_baseline", 112.0), step=1.0, key="sim_ef_co2_b")
-            overrides["EF_CO2_baseline"] = ef_co2_b
-            ef_nco2_b = st.number_input("EF non-CO2 Baseline (tCO2e/TJ)", min_value=0.0, value=_safe_float(params, "EF_nonCO2_baseline", 9.46), step=0.1, key="sim_ef_nco2_b")
-            overrides["EF_nonCO2_baseline"] = ef_nco2_b
-        with col2:
-            cf = st.number_input("CF (wood-to-charcoal)", min_value=1.0, value=_safe_float(params, "CF", 4.0), step=0.1, key="sim_cf", help="Only applied when baseline fuel is charcoal")
-            overrides["CF"] = cf
-            ncv_p = st.number_input("NCV Project (TJ/Gg)", min_value=1.0, value=_safe_float(params, "NCV_project", 15.6), step=0.1, key="sim_ncv_p")
-            overrides["NCV_project"] = ncv_p
-            ef_co2_p = st.number_input("EF CO2 Project (tCO2/TJ)", min_value=0.0, value=_safe_float(params, "EF_CO2_project", 112.0), step=1.0, key="sim_ef_co2_p")
-            overrides["EF_CO2_project"] = ef_co2_p
-            ef_nco2_p = st.number_input("EF non-CO2 Project (tCO2e/TJ)", min_value=0.0, value=_safe_float(params, "EF_nonCO2_project", 9.46), step=0.1, key="sim_ef_nco2_p")
-            overrides["EF_nonCO2_project"] = ef_nco2_p
-
-        st.markdown("**Leakage**")
-        leakage = st.slider("Leakage Discount", 0.80, 1.0, _safe_float(params, "leakage_discount", 0.95), 0.01, key="sim_leak", help="0.95 = 5% leakage deduction")
-        overrides["leakage_discount"] = leakage
-
     elif methodology in ("ACM0002", "AMS-I.D.", "AMSID"):
-        col1, col2 = st.columns(2)
-        with col1:
-            eg = st.number_input("Net Generation (MWh/yr)", min_value=0, value=int(_safe_float(params, "EG_PJ_y", 50000)), step=1000, key="sim_eg")
-            overrides["EG_PJ_y"] = eg
-        with col2:
-            ef = st.number_input("Grid EF (tCO2/MWh)", min_value=0.0, value=_safe_float(params, "EF_grid", 0.8), step=0.01, key="sim_ef")
-            overrides["EF_grid"] = ef
+        with st.container(border=True):
+            st.markdown("**Project Values** (from Parameters tab)")
+            _render_param_value_display("Net Generation", _safe_float(params, "EG_PJ_y", None), "MWh/yr", _safe_status(params, "EG_PJ_y"), _safe_source(params, "EG_PJ_y"))
+            _render_param_value_display("Grid EF", _safe_float(params, "EF_grid", None), "tCO2/MWh", _safe_status(params, "EF_grid"), _safe_source(params, "EF_grid"))
+
+        enable_overrides = st.checkbox("Override parameter values for this scenario", key=f"sim_override_toggle_grid_{project_id}")
+        if enable_overrides:
+            col1, col2 = st.columns(2)
+            with col1:
+                eg = st.number_input("Net Generation (MWh/yr)", min_value=0, value=int(_safe_float(params, "EG_PJ_y", 50000)), step=1000, key="sim_eg")
+                overrides["EG_PJ_y"] = eg
+            with col2:
+                ef = st.number_input("Grid EF (tCO2/MWh)", min_value=0.0, value=_safe_float(params, "EF_grid", 0.8), step=0.01, key="sim_ef")
+                overrides["EF_grid"] = ef
 
     if st.button("Calculate", key="run_sim", type="primary"):
         with st.spinner("Calculating emission reductions..."):
@@ -648,3 +706,19 @@ def _safe_text(params, key, default=""):
         if v is not None:
             return str(v)
     return default
+
+
+def _safe_status(params, key):
+    if key in params:
+        v = params[key]
+        if isinstance(v, dict):
+            return v.get("param_status", "default")
+    return "default"
+
+
+def _safe_source(params, key):
+    if key in params:
+        v = params[key]
+        if isinstance(v, dict):
+            return v.get("source_type", "default")
+    return "default"
