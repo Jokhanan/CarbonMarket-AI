@@ -1157,24 +1157,19 @@ SVG_ICONS = {
 
 with st.sidebar:
     st.markdown(f"""
-    <div class="brand-header">
-        <div class="brand-logo-row">
-            <div class="brand-icon">C</div>
-            <h2>CarbonGPT</h2>
-        </div>
-        <div class="brand-tagline">AI Carbon Intelligence</div>
-    </div>
+    <span style="display:block;padding:1rem 0;">
+        <span style="display:flex;align-items:center;gap:8px;">
+            <span style="background:var(--brand-gradient);color:white;width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;">C</span>
+            <span style="font-size:1.2rem;font-weight:700;color:var(--text-primary);">CarbonGPT</span>
+        </span>
+        <span style="display:block;font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">AI Carbon Intelligence</span>
+    </span>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-section-label">Navigation</div>', unsafe_allow_html=True)
+    st.caption("Navigation")
     page = st.radio("Navigation", PAGES, key="nav_page", label_visibility="collapsed")
 
-    st.markdown(f"""
-    <div class="sidebar-footer">
-        <div class="sidebar-footer-text">CarbonGPT Platform</div>
-        <div class="sidebar-footer-version">v1.0 -- AI-Powered</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("CarbonGPT Platform v1.0")
 
 
 def _render_ai_result(ai_result):
@@ -1321,12 +1316,8 @@ CATEGORY_OPTIONS = list(CATEGORY_LABELS.keys())
 
 
 def render_repository():
-    st.markdown("""
-    <div class="page-header">
-        <h1>Administration</h1>
-        <div class="page-subtitle">Document repository, compliance rules, knowledge base, and sync tools</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Administration")
+    st.caption("Document repository, compliance rules, knowledge base, and sync tools")
     st.markdown(
         "Manage your carbon standards library. Upload standards, methodologies, guidance documents, "
         "templates, and example project documentation. Documents are automatically parsed, indexed, "
@@ -2622,41 +2613,23 @@ STATUS_COLORS = {
 
 
 def _render_home():
-    st.markdown("""
-    <div class="page-header">
-        <h1>Workspace</h1>
-        <div class="page-subtitle">Manage your carbon projects, track progress, and explore market intelligence</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Workspace")
+    st.caption("Manage your carbon projects, track progress, and explore market intelligence")
 
     all_projects = _fetch("/projects") or []
     active_count = sum(1 for p in all_projects if p.get("status") in ("in_progress", "under_review"))
     draft_count = sum(1 for p in all_projects if p.get("status") == "draft")
     total_docs = sum(p.get("doc_count", 0) for p in all_projects)
-    st.markdown(f"""
-    <div class="overview-metrics" data-testid="workspace-overview">
-        <div class="overview-metric-card metric-teal" data-testid="metric-total-projects">
-            <div class="overview-metric-label">Total Projects</div>
-            <div class="overview-metric-value">{len(all_projects)}</div>
-            <div class="overview-metric-sub">Across all standards</div>
-        </div>
-        <div class="overview-metric-card metric-blue" data-testid="metric-active-projects">
-            <div class="overview-metric-label">Active</div>
-            <div class="overview-metric-value">{active_count}</div>
-            <div class="overview-metric-sub">In progress or review</div>
-        </div>
-        <div class="overview-metric-card metric-amber" data-testid="metric-draft-projects">
-            <div class="overview-metric-label">Drafts</div>
-            <div class="overview-metric-value">{draft_count}</div>
-            <div class="overview-metric-sub">Pending completion</div>
-        </div>
-        <div class="overview-metric-card metric-green" data-testid="metric-total-docs">
-            <div class="overview-metric-label">Total Documents</div>
-            <div class="overview-metric-value">{total_docs}</div>
-            <div class="overview-metric-sub">Across all projects</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+
+    wc1, wc2, wc3, wc4 = st.columns(4)
+    with wc1:
+        st.metric(label="Total Projects", value=len(all_projects), help="Across all standards")
+    with wc2:
+        st.metric(label="Active", value=active_count, help="In progress or review")
+    with wc3:
+        st.metric(label="Drafts", value=draft_count, help="Pending completion")
+    with wc4:
+        st.metric(label="Documents", value=total_docs, help="Across all projects")
 
     home_tabs = st.tabs(["Projects", "Carbon Intelligence"])
     with home_tabs[0]:
@@ -2682,13 +2655,7 @@ def _render_project_list():
         return
 
     if not projects:
-        st.markdown("""
-        <div class="empty-state">
-            <div class="empty-state-icon">&#9670;</div>
-            <div class="empty-state-title">No projects yet</div>
-            <div class="empty-state-desc">Create your first carbon project to start drafting PDDs, Monitoring Reports, and other documents with AI assistance.</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("No projects yet. Create your first carbon project to start drafting PDDs, Monitoring Reports, and other documents with AI assistance.")
         return
 
     proj_by_parent = {}
@@ -2745,25 +2712,11 @@ def _render_project_card(proj, indent=False, child_count=0):
     with st.container(border=True):
         col_main, col_stats, col_action = st.columns([4, 1.5, 0.8])
         with col_main:
-            st.markdown(f"""
-            <div class="project-card-content" style="{'margin-left:20px;' if indent else ''}">
-                <div class="project-card-title">
-                    <span class="project-type-badge {badge_class}">{type_info['short']}</span>
-                    {proj['name']}{child_html}
-                </div>
-                <div class="project-card-meta">{meta_html}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<span class="project-type-badge {badge_class}">{type_info["short"]}</span> **{proj["name"]}**{child_html}', unsafe_allow_html=True)
+            st.markdown(f'<span style="font-size:0.8rem;color:var(--text-secondary);">{meta_html}</span>', unsafe_allow_html=True)
         with col_stats:
-            st.markdown(f"""
-            <div style="display:flex;align-items:center;gap:16px;justify-content:flex-end;padding-top:4px;">
-                <div class="project-card-stat">
-                    <div class="project-card-stat-value">{doc_count}</div>
-                    <div class="project-card-stat-label">Docs</div>
-                </div>
-                <span class="status-badge {status_class}">{status_label}</span>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'{doc_count} docs')
+            st.markdown(f'<span class="status-badge {status_class}">{status_label}</span>', unsafe_allow_html=True)
         with col_action:
             if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
                 st.session_state.selected_project_id = pid
@@ -3050,23 +3003,26 @@ def _render_next_steps_panel(project, project_id):
     if not steps:
         return
 
-    items_html = ""
-    for i, step in enumerate(steps, 1):
-        items_html += f"""
-        <span class="next-step-item">
-            <span class="next-step-num">{i}</span>
-            <span>
-                <span class="next-step-text">{step['text']}</span>
-                <span class="next-step-desc">{step['desc']}</span>
-            </span>
-        </span>"""
+    TAB_LABEL_TO_INDEX = {
+        "Setup": 0, "Documents": 1, "Parameters": 2, "ER Simulator": 3,
+        "Write / Draft": 4, "Review": 5, "Audit": 6, "Findings": 7,
+        "Lifecycle": 8, "Monitoring": 9, "Export": 10,
+    }
 
-    st.markdown(f"""
-    <span class="next-steps-panel" data-testid="next-steps-panel">
-        <span class="next-steps-title">Suggested Next Steps</span>
-        {items_html}
-    </span>
-    """, unsafe_allow_html=True)
+    st.markdown("**Suggested Next Steps**")
+    for i, step in enumerate(steps, 1):
+        cols = st.columns([0.4, 4, 1.2])
+        with cols[0]:
+            st.markdown(f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--brand-primary);color:white;font-size:0.72rem;font-weight:700;text-align:center;line-height:24px;">{i}</span>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f"**{step['text']}**")
+            st.caption(step['desc'])
+        with cols[2]:
+            tab_name = step.get("tab", "")
+            if tab_name in TAB_LABEL_TO_INDEX:
+                if st.button(f"Go", key=f"nextstep_{project_id}_{i}", use_container_width=True):
+                    st.session_state[f"ws_tab_{project_id}"] = TAB_LABEL_TO_INDEX[tab_name]
+                    st.rerun()
 
 
 def _render_readiness_banner(banner_type, message):
@@ -3191,23 +3147,23 @@ def _render_project_workspace(project_id):
         if desc_html:
             st.markdown(desc_html, unsafe_allow_html=True)
 
-        qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
-        with qa_col1:
-            if st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True):
-                st.session_state[f"ws_tab_{project_id}"] = 4
-                st.rerun()
-        with qa_col2:
-            if st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True):
-                st.session_state[f"ws_tab_{project_id}"] = 6
-                st.rerun()
-        with qa_col3:
-            if st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True):
-                st.session_state[f"ws_tab_{project_id}"] = 3
-                st.rerun()
-        with qa_col4:
-            if st.button("AI Assistant", key=f"qa_chat_{project_id}", use_container_width=True):
-                st.session_state.chat_open = True
-                st.rerun()
+    qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
+    with qa_col1:
+        if st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True):
+            st.session_state[f"ws_tab_{project_id}"] = 4
+            st.rerun()
+    with qa_col2:
+        if st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True):
+            st.session_state[f"ws_tab_{project_id}"] = 6
+            st.rerun()
+    with qa_col3:
+        if st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True):
+            st.session_state[f"ws_tab_{project_id}"] = 3
+            st.rerun()
+    with qa_col4:
+        if st.button("AI Assistant", key=f"qa_chat_{project_id}", use_container_width=True):
+            st.session_state.chat_open = True
+            st.rerun()
 
     documents = project.get("documents", [])
     doc_count = len(documents)
@@ -3240,30 +3196,15 @@ def _render_project_workspace(project_id):
     param_sub = f"{missing_params} missing" if missing_params > 0 and total_params > 0 else "All configured" if total_params > 0 else "Initialize parameters first"
     param_sub_class = "status-dot-amber" if missing_params > 0 else "status-dot-green" if total_params > 0 else ""
 
-    st.markdown(f"""
-    <div class="overview-metrics" data-testid="overview-metrics">
-        <div class="overview-metric-card metric-teal" data-testid="metric-projected-er">
-            <div class="overview-metric-label">Projected ER (tCO2e/yr)</div>
-            <div class="overview-metric-value">{projected_er}</div>
-            <div class="overview-metric-sub">Average annual emission reductions</div>
-        </div>
-        <div class="overview-metric-card metric-blue" data-testid="metric-parameters">
-            <div class="overview-metric-label">Parameters</div>
-            <div class="overview-metric-value">{param_status_text}</div>
-            <div class="overview-metric-sub"><span class="status-dot {param_sub_class}">{param_sub}</span></div>
-        </div>
-        <div class="overview-metric-card metric-amber" data-testid="metric-documents">
-            <div class="overview-metric-label">Documents</div>
-            <div class="overview-metric-value">{doc_count}</div>
-            <div class="overview-metric-sub">Project documents uploaded</div>
-        </div>
-        <div class="overview-metric-card metric-green" data-testid="metric-audit-readiness">
-            <div class="overview-metric-label">Audit Readiness</div>
-            <div class="overview-metric-value">{audit_score}</div>
-            <div class="overview-metric-sub">Run audit simulation to assess</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1:
+        st.metric(label="Projected ER (tCO2e/yr)", value=projected_er, delta=None, help="Average annual emission reductions")
+    with mc2:
+        st.metric(label="Parameters", value=param_status_text, delta=None, help=param_sub)
+    with mc3:
+        st.metric(label="Documents", value=doc_count, delta=None, help="Project documents uploaded")
+    with mc4:
+        st.metric(label="Audit Readiness", value=audit_score, delta=None, help="Run audit simulation to assess")
 
     _render_next_steps_panel(project, project_id)
 
@@ -3724,10 +3665,10 @@ def _render_findings_response_tab(project):
     project_type = project.get("project_type", "standalone_pdd")
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-amber">{SVG_ICONS.get("findings", "")}</span>
         <span class="section-header-text">Respond to Findings</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
 
     st.markdown(
@@ -4290,10 +4231,10 @@ def _render_export_tab(project):
     methodology = project.get("methodology")
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-green">{SVG_ICONS.get("export", "")}</span>
         <span class="section-header-text">Export Documents</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
     st.write("Generate filled templates with your drafted content, or download calculation spreadsheets.")
 
@@ -4418,10 +4359,10 @@ def _render_documents_tab(project):
     project_type = project.get("project_type", "standalone_pdd")
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-blue">{SVG_ICONS.get("docs", "")}</span>
         <span class="section-header-text">Documents & Knowledge Base</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
     st.write("Upload project documents. Toggle which ones the AI uses when writing and reviewing your documents.")
 
@@ -4766,10 +4707,10 @@ def _render_review_tab(project):
     project_type = project.get("project_type", "standalone_pdd")
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-purple">{SVG_ICONS.get("review", "")}</span>
         <span class="section-header-text">AI Review</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
 
     default_dt = PROJECT_TYPE_INFO.get(project_type, {}).get("default_doc_type", "pdd")
@@ -5185,10 +5126,10 @@ def _render_write_tab(project):
     project_type = project.get("project_type", "standalone_pdd")
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-teal">{SVG_ICONS.get("write", "")}</span>
         <span class="section-header-text">AI Writing Assistant</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
     st.write("Draft your document section by section or generate the full document at once.")
 
@@ -6596,10 +6537,10 @@ def _render_project_settings(project):
         intake = _json.loads(intake)
 
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-teal">{SVG_ICONS.get("setup", "")}</span>
         <span class="section-header-text">Project Setup</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
     st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
 
@@ -6795,22 +6736,11 @@ def _render_project_settings_legacy(project):
             from carbongpt.core.copilot import recommend_methodologies
             recs = recommend_methodologies(description=rec_text)
             if recs:
-                rec_items = ""
+                st.markdown("**Recommended Methodologies**")
                 for r in recs[:3]:
-                    rec_items += (
-                        f'<span class="next-step-item">'
-                        f'<span class="next-step-num" style="background:#0d9488;">{r["code"][:6]}</span>'
-                        f'<span>'
-                        f'<span class="next-step-text">{r["code"]} ({r["standard"]})</span>'
-                        f'<span class="next-step-desc">{r["reason"]}</span>'
-                        f'</span></span>'
-                    )
-                st.markdown(
-                    f'<span class="next-steps-panel" data-testid="methodology-recommendations">'
-                    f'<span class="next-steps-title">Recommended Methodologies</span>'
-                    f'{rec_items}</span>',
-                    unsafe_allow_html=True,
-                )
+                    with st.container(border=True):
+                        st.markdown(f"**{r['code']}** ({r['standard']})")
+                        st.caption(r["reason"])
 
     meth_detail = None
     if new_methodology:
@@ -7017,14 +6947,7 @@ def _render_chat_widget():
 
     st.markdown("---")
 
-    st.markdown(f"""
-    <div class="chat-container">
-        <div class="chat-header">
-            <div class="chat-header-icon">AI</div>
-            CarbonGPT Copilot{context_badge}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<span style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="background:var(--brand-primary);color:white;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">AI</span><span style="font-weight:600;font-size:0.9rem;">CarbonGPT Copilot</span>{context_badge}</span>', unsafe_allow_html=True)
 
     chat_container = st.container(height=400)
     with chat_container:
@@ -7042,23 +6965,14 @@ def _render_chat_widget():
                 "\n- Recommend a methodology"
                 "\n\nWhat would you like to do?"
             )
-            st.markdown(f"""<div style="padding:8px 0;">
-                <div class="chat-msg chat-msg-assistant">{greeting.replace(chr(10), '<br>')}</div>
-            </div>""", unsafe_allow_html=True)
+            with st.chat_message("assistant"):
+                st.markdown(greeting)
 
         for idx, msg in enumerate(st.session_state.chat_history):
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            css_class = "chat-msg-user" if role == "user" else "chat-msg-assistant"
-            if role == "assistant":
-                import re
-                formatted = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
-                formatted = formatted.replace("\n", "<br>")
-            else:
-                formatted = content.replace("\n", "<br>")
-            st.markdown(f"""<div style="padding:2px 0;display:flex;{'justify-content:flex-end' if role == 'user' else 'justify-content:flex-start'};">
-                <div class="chat-msg {css_class}">{formatted}</div>
-            </div>""", unsafe_allow_html=True)
+            with st.chat_message(role):
+                st.markdown(content)
 
             action_data = st.session_state.chat_actions.get(idx)
             if action_data and role == "assistant":

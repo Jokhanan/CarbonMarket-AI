@@ -32,7 +32,9 @@ The UI is a single Streamlit application (`streamlit_app.py`) with modular UI co
 - AI Copilot chat widget with action cards, navigation buttons, and suggestion chips
 - Methodology recommendation panel in Setup tab based on project description
 - Color-coded status indicators (green=complete, amber=missing, red=error)
-- Card-based layout with subtle shadows, rounded corners, hover interactions
+- Native Streamlit components (st.metric, st.columns, st.chat_message, st.container) for all data display — no nested <div> in st.markdown
+- Parameter deduplication: baseline/project pairs with matching values shown once with combined evidence
+- Quick action buttons (Write Section, Run Audit, ER Simulator, AI Assistant) on project overview
 - CSS variables for consistent theming (surfaces, borders, shadows, radii, transitions)
 
 **UI Modules:**

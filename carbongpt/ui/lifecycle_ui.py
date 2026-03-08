@@ -20,10 +20,10 @@ def render_lifecycle_dashboard(project):
     project_id = project["id"]
     _lifecycle_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-blue">{_lifecycle_icon}</span>
         <span class="section-header-text">Project Lifecycle</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
 
     lifecycle = get_lifecycle(project_id)
@@ -258,10 +258,10 @@ def render_monitoring_dashboard(project):
 
     _mon_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-green">{_mon_icon}</span>
         <span class="section-header-text">Monitoring Management</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
 
     tasks = get_monitoring_tasks(project_id)

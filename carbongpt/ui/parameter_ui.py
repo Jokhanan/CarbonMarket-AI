@@ -13,10 +13,10 @@ def render_parameter_dashboard(project):
     project_id = project["id"]
     _param_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>'
     st.markdown(f"""
-    <div class="section-header">
+    <span class="section-header">
         <span class="section-header-icon section-header-icon-teal">{_param_icon}</span>
         <span class="section-header-text">Parameter Intelligence Dashboard</span>
-    </div>
+    </span>
     """, unsafe_allow_html=True)
 
     summary = get_parameter_summary(project_id)
@@ -91,14 +91,50 @@ def render_parameter_dashboard(project):
     for e in evidence:
         evidence_by_param.setdefault(e["target_id"], []).append(e)
 
+    pair_map = {}
+    for p in all_params:
+        key = p["param_key"]
+        base_key = key.replace("_baseline", "").replace("_project", "")
+        if key.endswith("_baseline") or key.endswith("_project"):
+            pair_map.setdefault(base_key, {})[key] = p
+
+    globally_rendered = set()
+
     for cat in categories:
         cat_params = [p for p in all_params if p["category"] == cat]
-        if not cat_params:
+        displayable = [p for p in cat_params if p["param_key"] not in globally_rendered]
+        if not displayable:
             continue
 
-        with st.expander(f"{category_names.get(cat, cat)} ({len(cat_params)})", expanded=(cat in ("baseline", "emission_factor"))):
-            for p in cat_params:
-                _render_parameter_row(project_id, p, evidence_by_param)
+        with st.expander(f"{category_names.get(cat, cat)} ({len(displayable)})", expanded=(cat in ("baseline", "emission_factor"))):
+            for p in displayable:
+                key = p["param_key"]
+                if key in globally_rendered:
+                    continue
+                base_key = key.replace("_baseline", "").replace("_project", "")
+                pair = pair_map.get(base_key, {})
+                bl = pair.get(f"{base_key}_baseline")
+                pr = pair.get(f"{base_key}_project")
+                if bl and pr:
+                    bl_val = bl["value"] if bl["value"] is not None else ""
+                    pr_val = pr["value"] if pr["value"] is not None else ""
+                    same_value = str(bl_val) == str(pr_val) and bl_val != ""
+                    if same_value:
+                        clean_name = bl["param_name"].replace("(baseline fuel)", "").replace("(baseline)", "").strip()
+                        st.markdown(f"**{clean_name}** — Baseline and Project use the same value")
+                        combined_evidence = dict(evidence_by_param)
+                        pr_evidence = evidence_by_param.get(pr["param_key"], [])
+                        if pr_evidence:
+                            combined_evidence.setdefault(bl["param_key"], []).extend(pr_evidence)
+                        _render_parameter_row(project_id, bl, combined_evidence)
+                        globally_rendered.add(bl["param_key"])
+                        globally_rendered.add(pr["param_key"])
+                    else:
+                        _render_parameter_row(project_id, p, evidence_by_param)
+                        globally_rendered.add(key)
+                else:
+                    _render_parameter_row(project_id, p, evidence_by_param)
+                    globally_rendered.add(key)
 
 
 def _render_parameter_row(project_id, param, evidence_by_param):
