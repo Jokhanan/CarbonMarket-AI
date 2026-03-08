@@ -66,7 +66,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 
 **Core Engine Modules:**
 - `carbongpt/core/parameter_engine.py` — Centralized parameter management with validation, source tracking, dependency tracking, auto-initialization from methodology defaults. Phase 1 enhancements: canonical fuel normalization (`normalize_fuel_type()`, `FUEL_CANONICAL_OPTIONS`, `FUEL_DISPLAY_LABELS`), `param_status` tracking (confirmed/default/estimated/missing), `confirm_parameter()`, activity data params (`num_devices`, `devices_per_household`, `num_beneficiaries`), TOOL33 intake seeding
-- `carbongpt/core/er_simulator.py` — Deterministic emission reduction calculations for cookstove (VM0050/TPDDTEC) and grid (ACM0002/AMS-I.D.) methodologies, year-by-year projections, scenario management, sensitivity analysis, carbon finance modeling. Includes cohort-based deployment engine (`calculate_cookstove_er_cohort`) supporting: deployment ramp-up (instant/fixed monthly/custom schedule), deployment timing (start/mid/end of period), technology lifetime, drop-off/survival models (annual rate or custom curve), usage rate models (fixed or custom curve). `run_scenario()` accepts `deployment_config` dict to toggle cohort mode.
+- `carbongpt/core/er_simulator.py` — Deterministic emission reduction calculations for cookstove (VM0050/TPDDTEC) and grid (ACM0002/AMS-I.D.) methodologies, year-by-year projections, scenario management, sensitivity analysis, carbon finance modeling. Includes cohort-based deployment engine (`calculate_cookstove_er_cohort`) supporting: deployment ramp-up (instant/fixed monthly/custom schedule), deployment timing (start/mid/end of period), technology lifetime, drop-off/survival models (annual rate or custom curve), usage rate models (fixed or custom curve). `run_scenario()` accepts `deployment_config` dict to toggle cohort mode. Phase 2a: `scenario_purpose` lifecycle (exploratory/comparison/shortlisted/selected_for_drafting/archived), exactly-one selected scenario enforcement via `select_scenario_for_drafting()`, `deselect_scenario()`, `update_scenario_purpose()`, `get_selected_scenario()`, `compare_scenarios()`, `migrate_baseline_to_selected()`
 - `carbongpt/core/lifecycle_manager.py` — Project lifecycle stages (Feasibility through Issuance), task management, monitoring task initialization, issuance tracking, portfolio analytics
 - `carbongpt/core/evidence_engine.py` — Evidence linking (parameters/sections to source documents), evidence completeness scoring, citation generation
 - `carbongpt/core/audit_simulator.py` — Simulated VVB audit with parameter validation, evidence gap analysis, section consistency checks, compliance verification, risk scoring
@@ -79,7 +79,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `document_references` — Cross-document references
 - `compliance_rules` — YAML-based compliance rules
 - `carbon_projects` — Synced registry projects
-- `user_projects` — User project data with intake forms
+- `user_projects` — User project data with intake forms, `selected_scenario_id` FK to `er_scenarios`
 - `project_documents` — Uploaded project files
 - `project_doc_chunks` — Project document embeddings for RAG
 - `project_write_sessions` — AI-generated and user-edited drafts
@@ -92,7 +92,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `project_lifecycle` — Stage transitions with timestamps
 - `project_tasks` — Tasks per lifecycle stage with priorities and deadlines
 - `evidence_links` — Links claims/parameters to source documents/chunks
-- `er_scenarios` — Saved emission reduction scenarios with parameter overrides
+- `er_scenarios` — Saved emission reduction scenarios with parameter overrides, `scenario_purpose` (exploratory/comparison/shortlisted/selected_for_drafting/archived)
 - `er_scenario_years` — Year-by-year calculation results
 - `issuance_records` — Issued credits, vintages, verification cycles
 - `monitoring_tasks` — Scheduled monitoring activities from methodology requirements

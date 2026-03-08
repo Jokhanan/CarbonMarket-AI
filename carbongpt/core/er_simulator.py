@@ -630,9 +630,16 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
     return result
 
 
+VALID_SCENARIO_PURPOSES = ("exploratory", "comparison", "shortlisted", "selected_for_drafting", "archived")
+
+
 def save_scenario(project_id, name, description="", parameter_overrides=None,
                   carbon_price=None, price_escalation=0, developer_share=100,
-                  buffer_pool=0, admin_fee=0, is_baseline=False, deployment_config=None):
+                  buffer_pool=0, admin_fee=0, is_baseline=False, deployment_config=None,
+                  scenario_purpose="exploratory"):
+    if scenario_purpose not in VALID_SCENARIO_PURPOSES:
+        scenario_purpose = "exploratory"
+
     result = run_scenario(project_id, parameter_overrides=parameter_overrides, deployment_config=deployment_config)
     if "error" in result:
         return result
@@ -640,7 +647,16 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
     if carbon_price:
         _add_finance(result, carbon_price, price_escalation, developer_share, buffer_pool, admin_fee)
 
+    if is_baseline and scenario_purpose == "exploratory":
+        scenario_purpose = "shortlisted"
+
     with get_cursor() as cur:
+        if scenario_purpose == "selected_for_drafting":
+            cur.execute("""
+                UPDATE er_scenarios SET scenario_purpose = 'shortlisted'
+                WHERE project_id = %s AND scenario_purpose = 'selected_for_drafting'
+            """, (project_id,))
+
         cur.execute("SELECT methodology, crediting_period_years FROM user_projects WHERE id = %s", (project_id,))
         project = cur.fetchone()
 
@@ -649,8 +665,8 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
             (project_id, name, description, is_baseline, parameter_overrides,
              methodology_code, crediting_years, carbon_price_usd,
              price_escalation_pct, developer_share_pct, buffer_pool_pct,
-             admin_fee_pct, results_summary, calculated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+             admin_fee_pct, results_summary, calculated_at, scenario_purpose)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
             RETURNING id
         """, (
             project_id, name, description, is_baseline,
@@ -660,8 +676,12 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
             carbon_price, price_escalation, developer_share,
             buffer_pool, admin_fee,
             json.dumps(result["summary"]),
+            scenario_purpose,
         ))
         scenario_id = cur.fetchone()["id"]
+
+        if scenario_purpose == "selected_for_drafting":
+            cur.execute("UPDATE user_projects SET selected_scenario_id = %s WHERE id = %s", (scenario_id, project_id))
 
         for yr in result["years"]:
             cur.execute("""
@@ -679,6 +699,7 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
             ))
 
     result["scenario_id"] = scenario_id
+    result["scenario_purpose"] = scenario_purpose
     return result
 
 
@@ -709,8 +730,186 @@ def get_scenario_detail(scenario_id):
 
 def delete_scenario(scenario_id):
     with get_cursor() as cur:
+        cur.execute("SELECT project_id, scenario_purpose FROM er_scenarios WHERE id = %s", (scenario_id,))
+        row = cur.fetchone()
+        if row and row["scenario_purpose"] == "selected_for_drafting":
+            cur.execute("UPDATE user_projects SET selected_scenario_id = NULL WHERE id = %s", (row["project_id"],))
         cur.execute("DELETE FROM er_scenarios WHERE id = %s RETURNING id", (scenario_id,))
         return cur.fetchone()
+
+
+def select_scenario_for_drafting(project_id, scenario_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM er_scenarios WHERE id = %s AND project_id = %s", (scenario_id, project_id))
+        if not cur.fetchone():
+            return {"error": f"Scenario {scenario_id} not found for project {project_id}"}
+
+        cur.execute("""
+            UPDATE er_scenarios
+            SET scenario_purpose = 'shortlisted'
+            WHERE project_id = %s AND scenario_purpose = 'selected_for_drafting'
+        """, (project_id,))
+
+        cur.execute("""
+            UPDATE er_scenarios
+            SET scenario_purpose = 'selected_for_drafting'
+            WHERE id = %s AND project_id = %s
+            RETURNING id, name
+        """, (scenario_id, project_id))
+        updated = cur.fetchone()
+
+        cur.execute("""
+            UPDATE user_projects SET selected_scenario_id = %s WHERE id = %s
+        """, (scenario_id, project_id))
+
+        return {"selected_scenario_id": updated["id"], "selected_scenario_name": updated["name"]}
+
+
+def deselect_scenario(project_id):
+    with get_cursor() as cur:
+        cur.execute("""
+            UPDATE er_scenarios
+            SET scenario_purpose = 'shortlisted'
+            WHERE project_id = %s AND scenario_purpose = 'selected_for_drafting'
+            RETURNING id, name
+        """, (project_id,))
+        demoted = cur.fetchone()
+
+        cur.execute("UPDATE user_projects SET selected_scenario_id = NULL WHERE id = %s", (project_id,))
+
+        if demoted:
+            return {"demoted_scenario_id": demoted["id"], "demoted_scenario_name": demoted["name"]}
+        return {"message": "No scenario was selected"}
+
+
+def update_scenario_purpose(project_id, scenario_id, purpose):
+    if purpose not in VALID_SCENARIO_PURPOSES:
+        return {"error": f"Invalid purpose: {purpose}. Must be one of {VALID_SCENARIO_PURPOSES}"}
+
+    if purpose == "selected_for_drafting":
+        return select_scenario_for_drafting(project_id, scenario_id)
+
+    with get_cursor() as cur:
+        cur.execute("SELECT scenario_purpose FROM er_scenarios WHERE id = %s AND project_id = %s", (scenario_id, project_id))
+        row = cur.fetchone()
+        if not row:
+            return {"error": f"Scenario {scenario_id} not found for project {project_id}"}
+
+        old_purpose = row["scenario_purpose"]
+        if old_purpose == "selected_for_drafting":
+            cur.execute("UPDATE user_projects SET selected_scenario_id = NULL WHERE id = %s", (project_id,))
+
+        cur.execute("""
+            UPDATE er_scenarios SET scenario_purpose = %s WHERE id = %s AND project_id = %s RETURNING id, name
+        """, (purpose, scenario_id, project_id))
+        updated = cur.fetchone()
+        return {"scenario_id": updated["id"], "scenario_name": updated["name"], "purpose": purpose}
+
+
+def get_selected_scenario(project_id):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT es.* FROM er_scenarios es
+            JOIN user_projects up ON up.selected_scenario_id = es.id
+            WHERE up.id = %s
+        """, (project_id,))
+        scenario = cur.fetchone()
+        if not scenario:
+            return None
+
+        cur.execute("""
+            SELECT * FROM er_scenario_years WHERE scenario_id = %s ORDER BY year_number
+        """, (scenario["id"],))
+        years = cur.fetchall()
+        return {"scenario": scenario, "years": years}
+
+
+def compare_scenarios(project_id, scenario_ids=None):
+    with get_cursor() as cur:
+        if scenario_ids:
+            placeholders = ",".join(["%s"] * len(scenario_ids))
+            cur.execute(f"""
+                SELECT * FROM er_scenarios
+                WHERE project_id = %s AND id IN ({placeholders})
+                ORDER BY created_at DESC
+            """, (project_id, *scenario_ids))
+        else:
+            cur.execute("""
+                SELECT * FROM er_scenarios
+                WHERE project_id = %s AND scenario_purpose != 'archived'
+                ORDER BY created_at DESC
+            """, (project_id,))
+        scenarios = cur.fetchall()
+
+        result = []
+        for s in scenarios:
+            summary = s.get("results_summary") or {}
+            if isinstance(summary, str):
+                try:
+                    summary = json.loads(summary)
+                except Exception:
+                    summary = {}
+
+            overrides = s.get("parameter_overrides") or {}
+            if isinstance(overrides, str):
+                try:
+                    overrides = json.loads(overrides)
+                except Exception:
+                    overrides = {}
+            clean_overrides = {k: v for k, v in overrides.items() if not str(k).startswith("__")}
+
+            result.append({
+                "id": s["id"],
+                "name": s["name"],
+                "scenario_purpose": s.get("scenario_purpose", "exploratory"),
+                "is_baseline": s.get("is_baseline", False),
+                "total_er": summary.get("total_er", 0),
+                "average_annual_er": summary.get("average_annual_er", 0),
+                "crediting_years": s.get("crediting_years", 7),
+                "carbon_price_usd": s.get("carbon_price_usd"),
+                "parameter_overrides": clean_overrides,
+                "created_at": str(s.get("created_at", "")),
+            })
+        return {"scenarios": result, "count": len(result)}
+
+
+def migrate_baseline_to_selected(project_id):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT selected_scenario_id FROM user_projects WHERE id = %s
+        """, (project_id,))
+        proj = cur.fetchone()
+        if proj and proj.get("selected_scenario_id"):
+            return {"migrated": False, "reason": "already_has_selected"}
+
+        cur.execute("""
+            SELECT id FROM er_scenarios
+            WHERE project_id = %s AND scenario_purpose = 'selected_for_drafting'
+            LIMIT 1
+        """, (project_id,))
+        if cur.fetchone():
+            return {"migrated": False, "reason": "already_has_selected_purpose"}
+
+        cur.execute("""
+            SELECT id, name FROM er_scenarios
+            WHERE project_id = %s AND is_baseline = true
+              AND (scenario_purpose IS NULL OR scenario_purpose NOT IN ('selected_for_drafting'))
+            ORDER BY calculated_at DESC
+            LIMIT 1
+        """, (project_id,))
+        row = cur.fetchone()
+        if row:
+            scenario_id = row["id"]
+            cur.execute("""
+                UPDATE er_scenarios SET scenario_purpose = 'selected_for_drafting'
+                WHERE id = %s
+            """, (scenario_id,))
+            cur.execute("""
+                UPDATE user_projects SET selected_scenario_id = %s
+                WHERE id = %s
+            """, (scenario_id, project_id))
+            return {"migrated": True, "scenario_id": scenario_id, "name": row["name"]}
+    return {"migrated": False}
 
 
 def run_sensitivity(project_id, param_key, variation_pct=20, steps=5):

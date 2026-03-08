@@ -8,6 +8,12 @@ from carbongpt.core.er_simulator import (
     delete_scenario,
     run_sensitivity,
     export_er_to_excel,
+    select_scenario_for_drafting,
+    deselect_scenario,
+    update_scenario_purpose,
+    get_selected_scenario,
+    compare_scenarios,
+    VALID_SCENARIO_PURPOSES,
 )
 from carbongpt.core.parameter_engine import (
     get_parameters_as_dict,
@@ -68,7 +74,7 @@ def render_er_simulator(project):
             unsafe_allow_html=True,
         )
 
-    sim_tabs = st.tabs(["Live Simulator", "Saved Scenarios", "Sensitivity Analysis", "Carbon Finance"])
+    sim_tabs = st.tabs(["Live Simulator", "Saved Scenarios", "Compare", "Sensitivity Analysis", "Carbon Finance"])
 
     with sim_tabs[0]:
         _render_live_simulator(project_id, methodology, project_name)
@@ -77,9 +83,12 @@ def render_er_simulator(project):
         _render_saved_scenarios(project_id)
 
     with sim_tabs[2]:
-        _render_sensitivity(project_id, methodology)
+        _render_scenario_comparison(project_id)
 
     with sim_tabs[3]:
+        _render_sensitivity(project_id, methodology)
+
+    with sim_tabs[4]:
         _render_finance(project_id, methodology)
 
 
@@ -343,10 +352,26 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
             _render_deployment_charts(result)
 
         st.markdown("---")
-        save_col1, save_col2 = st.columns([2, 1])
+        save_col1, save_col2, save_col3 = st.columns([2, 1, 1])
         with save_col1:
             scenario_name = st.text_input("Scenario Name", value="", placeholder="e.g. Base Case, Optimistic", key="save_name")
         with save_col2:
+            purpose_labels = {
+                "exploratory": "Exploratory",
+                "comparison": "Comparison",
+                "shortlisted": "Shortlisted",
+                "selected_for_drafting": "Select for PDD",
+            }
+            purpose_options = list(purpose_labels.keys())
+            purpose_display = list(purpose_labels.values())
+            purpose_idx = st.selectbox(
+                "Scenario Purpose",
+                range(len(purpose_options)),
+                format_func=lambda i: purpose_display[i],
+                key="save_purpose",
+            )
+            selected_purpose = purpose_options[purpose_idx]
+        with save_col3:
             is_baseline = st.checkbox("Set as baseline scenario", key="save_baseline")
 
         if st.button("Save Scenario", key="save_scenario"):
@@ -358,11 +383,13 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                     parameter_overrides=st.session_state.get(f"sim_overrides_{project_id}", {}),
                     is_baseline=is_baseline,
                     deployment_config=st.session_state.get(f"sim_deploy_config_{project_id}"),
+                    scenario_purpose=selected_purpose,
                 )
                 if "error" in saved:
                     st.error(saved["error"])
                 else:
-                    st.success(f"Scenario '{scenario_name}' saved (ID: {saved['scenario_id']})")
+                    purpose_label = purpose_labels.get(saved.get("scenario_purpose", ""), "")
+                    st.success(f"Scenario '{scenario_name}' saved ({purpose_label})")
 
         st.markdown("---")
         st.markdown(
@@ -565,9 +592,28 @@ def _render_saved_scenarios(project_id):
         st.info("No saved scenarios yet. Use the Live Simulator to create and save scenarios.")
         return
 
-    for s in scenarios:
+    purpose_labels = {
+        "exploratory": "Exploratory",
+        "comparison": "Comparison",
+        "shortlisted": "Shortlisted",
+        "selected_for_drafting": "SELECTED FOR PDD",
+        "archived": "Archived",
+    }
+
+    show_archived = st.checkbox("Show archived scenarios", key="show_archived_scenarios", value=False)
+    visible = [s for s in scenarios if show_archived or s.get("scenario_purpose") != "archived"]
+    archived_count = sum(1 for s in scenarios if s.get("scenario_purpose") == "archived")
+    if archived_count > 0 and not show_archived:
+        st.caption(f"{archived_count} archived scenario(s) hidden")
+
+    for s in visible:
+        purpose = s.get("scenario_purpose", "exploratory")
+        purpose_label = purpose_labels.get(purpose, purpose)
         baseline_tag = " [BASELINE]" if s.get("is_baseline") else ""
-        with st.expander(f"{s['name']}{baseline_tag} -- {s.get('calculated_at', '')}"[:80]):
+        is_selected = purpose == "selected_for_drafting"
+
+        label_prefix = "[SELECTED] " if is_selected else ""
+        with st.expander(f"{label_prefix}{s['name']}{baseline_tag} -- {purpose_label}"[:90], expanded=is_selected):
             detail = get_scenario_detail(s["id"])
             if detail:
                 summary = detail["scenario"].get("results_summary", {})
@@ -578,7 +624,7 @@ def _render_saved_scenarios(project_id):
                     except Exception:
                         summary = {}
 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Total ER", f"{summary.get('total_er', 0):,.0f} tCO2e")
                 with col2:
@@ -586,6 +632,8 @@ def _render_saved_scenarios(project_id):
                 with col3:
                     if s.get("carbon_price_usd"):
                         st.metric("Carbon Price", f"${s['carbon_price_usd']:,.2f}")
+                with col4:
+                    st.metric("Purpose", purpose_label)
 
                 if detail["years"]:
                     er_data = {
@@ -594,10 +642,85 @@ def _render_saved_scenarios(project_id):
                     }
                     st.bar_chart(data={"Net ER": er_data["Net ER"]}, use_container_width=True)
 
-            if st.button("Delete", key=f"del_scenario_{s['id']}"):
-                delete_scenario(s["id"])
-                st.success("Scenario deleted")
-                st.rerun()
+            action_cols = st.columns(4)
+            with action_cols[0]:
+                if is_selected:
+                    if st.button("Deselect", key=f"deselect_{s['id']}"):
+                        deselect_scenario(project_id)
+                        st.success(f"'{s['name']}' deselected")
+                        st.rerun()
+                else:
+                    if st.button("Select for PDD", key=f"select_{s['id']}"):
+                        result = select_scenario_for_drafting(project_id, s["id"])
+                        if "error" in result:
+                            st.error(result["error"])
+                        else:
+                            st.success(f"'{s['name']}' is now the selected scenario for PDD drafting")
+                            st.rerun()
+            with action_cols[1]:
+                if purpose != "shortlisted" and not is_selected:
+                    if st.button("Shortlist", key=f"shortlist_{s['id']}"):
+                        update_scenario_purpose(project_id, s["id"], "shortlisted")
+                        st.rerun()
+            with action_cols[2]:
+                if purpose != "archived":
+                    if st.button("Archive", key=f"archive_{s['id']}"):
+                        update_scenario_purpose(project_id, s["id"], "archived")
+                        st.rerun()
+            with action_cols[3]:
+                if st.button("Delete", key=f"del_scenario_{s['id']}"):
+                    delete_scenario(s["id"])
+                    st.success("Scenario deleted")
+                    st.rerun()
+
+
+def _render_scenario_comparison(project_id):
+    result = compare_scenarios(project_id)
+    scenarios = result.get("scenarios", [])
+    if len(scenarios) < 2:
+        st.info("Save at least 2 scenarios to compare them.")
+        return
+
+    rows = []
+    for s in scenarios:
+        purpose_label = {
+            "exploratory": "Exploratory",
+            "comparison": "Comparison",
+            "shortlisted": "Shortlisted",
+            "selected_for_drafting": "SELECTED",
+            "archived": "Archived",
+        }.get(s.get("scenario_purpose", ""), s.get("scenario_purpose", ""))
+
+        rows.append({
+            "Scenario": s["name"],
+            "Purpose": purpose_label,
+            "Total ER (tCO2e)": f"{s.get('total_er', 0):,.0f}",
+            "Annual ER (tCO2e/yr)": f"{s.get('average_annual_er', 0):,.0f}",
+            "Years": s.get("crediting_years", 7),
+            "Carbon Price": f"${s['carbon_price_usd']:,.2f}" if s.get("carbon_price_usd") else "--",
+        })
+
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    overrides_rows = []
+    all_override_keys = set()
+    for s in scenarios:
+        for k in (s.get("parameter_overrides") or {}).keys():
+            all_override_keys.add(k)
+    all_override_keys = sorted(all_override_keys)
+
+    if all_override_keys:
+        st.markdown("**Parameter Differences**")
+        param_rows = []
+        for s in scenarios:
+            row = {"Scenario": s["name"]}
+            ov = s.get("parameter_overrides") or {}
+            for k in all_override_keys:
+                row[k] = ov.get(k, "--")
+            param_rows.append(row)
+        df_params = pd.DataFrame(param_rows)
+        st.dataframe(df_params, use_container_width=True, hide_index=True)
 
 
 def _render_sensitivity(project_id, methodology):

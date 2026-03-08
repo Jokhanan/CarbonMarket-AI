@@ -2895,6 +2895,9 @@ def _get_project_readiness(project, project_id):
         "doc_count": len(project.get("documents", [])),
         "has_drafts": False,
         "has_sim": False,
+        "has_selected_scenario": bool(project.get("selected_scenario_id")),
+        "selected_scenario_name": None,
+        "selected_scenario_er": None,
         "has_audit": False,
         "audit_score": None,
     }
@@ -2912,8 +2915,9 @@ def _get_project_readiness(project, project_id):
     if f"sim_result_{project_id}" in st.session_state and st.session_state[f"sim_result_{project_id}"]:
         readiness["has_sim"] = True
     else:
-        scenarios = _fetch(f"/projects/{project_id}/er-scenarios")
-        if scenarios and isinstance(scenarios, list) and len(scenarios) > 0:
+        scenarios_resp = _fetch(f"/projects/{project_id}/er-scenarios")
+        scenarios_list = scenarios_resp if isinstance(scenarios_resp, list) else (scenarios_resp.get("scenarios", []) if isinstance(scenarios_resp, dict) else [])
+        if len(scenarios_list) > 0:
             readiness["has_sim"] = True
 
     if f"audit_result_{project_id}" in st.session_state and st.session_state[f"audit_result_{project_id}"]:
@@ -2963,6 +2967,13 @@ def _build_next_steps(readiness):
         steps.append({
             "text": "Run the ER Simulator",
             "desc": "All parameters are configured. Estimate your project's annual emission reductions.",
+            "tab": "ER Simulator",
+        })
+
+    if readiness["has_sim"] and not readiness["has_selected_scenario"]:
+        steps.append({
+            "text": "Select a scenario for PDD drafting",
+            "desc": "Choose which ER scenario the AI writer should reference when drafting document sections.",
             "tab": "ER Simulator",
         })
 
@@ -5145,6 +5156,33 @@ def _render_write_tab(project):
     </span>
     """, unsafe_allow_html=True)
     st.write("Draft your document section by section or generate the full document at once.")
+
+    selected_scenario_id = project.get("selected_scenario_id")
+    if selected_scenario_id:
+        try:
+            from carbongpt.core.er_simulator import get_selected_scenario
+            sel = get_selected_scenario(project_id)
+            if sel:
+                sc = sel["scenario"]
+                summary = sc.get("results_summary") or {}
+                if isinstance(summary, str):
+                    import json
+                    try:
+                        summary = json.loads(summary)
+                    except Exception:
+                        summary = {}
+                total_er = summary.get("total_er", 0)
+                annual_er = summary.get("average_annual_er", 0)
+                _render_readiness_banner(
+                    "info",
+                    f"Selected Scenario: {sc.get('name', 'Unknown')} "
+                    f"-- {total_er:,.0f} tCO2e total, {annual_er:,.0f} tCO2e/yr. "
+                    f"ER projections from this scenario will be used in drafted sections."
+                )
+        except Exception:
+            pass
+    else:
+        _render_readiness_banner("warning", "No scenario selected for PDD drafting. Select a scenario in the ER Simulator to include ER projections in your drafts.")
 
     doc_count = len(project.get("documents", []))
     has_methodology = bool(project.get("methodology"))

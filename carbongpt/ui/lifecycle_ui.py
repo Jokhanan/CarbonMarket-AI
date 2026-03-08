@@ -264,6 +264,30 @@ def render_monitoring_dashboard(project):
     </span>
     """, unsafe_allow_html=True)
 
+    selected_scenario_id = project.get("selected_scenario_id")
+    if selected_scenario_id:
+        try:
+            from carbongpt.core.er_simulator import get_selected_scenario
+            sel = get_selected_scenario(project_id)
+            if sel:
+                sc = sel["scenario"]
+                summary = sc.get("results_summary") or {}
+                if isinstance(summary, str):
+                    import json
+                    try:
+                        summary = json.loads(summary)
+                    except Exception:
+                        summary = {}
+                total_er = summary.get("total_er", 0)
+                annual_er = summary.get("average_annual_er", 0)
+                st.info(
+                    f"Benchmark Scenario: {sc.get('name', 'Unknown')} "
+                    f"-- {total_er:,.0f} tCO2e total, {annual_er:,.0f} tCO2e/yr. "
+                    f"Monitoring targets are based on this scenario."
+                )
+        except Exception:
+            pass
+
     tasks = get_monitoring_tasks(project_id)
     if not tasks:
         st.info("Monitoring tasks have not been set up yet.")

@@ -677,12 +677,14 @@ def write_section(project_id: int, data: WriteSectionRequest, doc_type: str = "p
             logger.warning("Auto project brief generation failed: %s", e)
 
     project_info = {
+        "id": project["id"],
         "name": project["name"],
         "methodology": project.get("methodology"),
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": intake,
         "project_settings": project.get("project_settings") or {},
+        "selected_scenario_id": project.get("selected_scenario_id"),
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
@@ -780,12 +782,14 @@ def write_all_sections(project_id: int, data: WriteAllRequest, doc_type: str = "
         raise HTTPException(status_code=404, detail="Project not found.")
 
     project_info = {
+        "id": project["id"],
         "name": project["name"],
         "methodology": project.get("methodology"),
         "country": project.get("country"),
         "description": project.get("description"),
         "project_intake": project.get("project_intake") or {},
         "project_settings": project.get("project_settings") or {},
+        "selected_scenario_id": project.get("selected_scenario_id"),
     }
 
     pdd_text, reference_text = _gather_ai_context(project_id, project, doc_type)
@@ -1898,6 +1902,7 @@ class ScenarioSave(BaseModel):
     buffer_pool: float = 0
     admin_fee: float = 0
     is_baseline: bool = False
+    scenario_purpose: str = "exploratory"
 
 
 @router.post("/{project_id}/er-scenarios")
@@ -1908,6 +1913,7 @@ def save_scenario_endpoint(project_id: int, data: ScenarioSave):
             project_id, data.name, data.description, data.parameter_overrides,
             data.carbon_price, data.price_escalation, data.developer_share,
             data.buffer_pool, data.admin_fee, data.is_baseline,
+            scenario_purpose=data.scenario_purpose,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1916,12 +1922,73 @@ def save_scenario_endpoint(project_id: int, data: ScenarioSave):
 
 @router.get("/{project_id}/er-scenarios")
 def get_scenarios_endpoint(project_id: int):
-    from carbongpt.core.er_simulator import get_scenarios
+    from carbongpt.core.er_simulator import get_scenarios, migrate_baseline_to_selected
     try:
+        migrate_baseline_to_selected(project_id)
         scenarios = get_scenarios(project_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"scenarios": scenarios}
+
+
+@router.get("/{project_id}/er-scenarios/selected")
+def get_selected_scenario_endpoint(project_id: int):
+    from carbongpt.core.er_simulator import get_selected_scenario
+    try:
+        result = get_selected_scenario(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if not result:
+        return {"selected": None}
+    return {"selected": result}
+
+
+@router.post("/{project_id}/er-scenarios/{scenario_id}/select")
+def select_scenario_endpoint(project_id: int, scenario_id: int):
+    from carbongpt.core.er_simulator import select_scenario_for_drafting
+    try:
+        result = select_scenario_for_drafting(project_id, scenario_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.post("/{project_id}/er-scenarios/deselect")
+def deselect_scenario_endpoint(project_id: int):
+    from carbongpt.core.er_simulator import deselect_scenario
+    try:
+        result = deselect_scenario(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+class ScenarioPurposeUpdate(BaseModel):
+    purpose: str
+
+
+@router.patch("/{project_id}/er-scenarios/{scenario_id}/purpose")
+def update_scenario_purpose_endpoint(project_id: int, scenario_id: int, data: ScenarioPurposeUpdate):
+    from carbongpt.core.er_simulator import update_scenario_purpose
+    try:
+        result = update_scenario_purpose(project_id, scenario_id, data.purpose)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/{project_id}/er-scenarios/compare")
+def compare_scenarios_endpoint(project_id: int):
+    from carbongpt.core.er_simulator import compare_scenarios
+    try:
+        result = compare_scenarios(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
 
 @router.post("/{project_id}/er-scenarios/{param_key}/sensitivity")

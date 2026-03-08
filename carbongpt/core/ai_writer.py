@@ -302,6 +302,71 @@ def _format_confirmed_parameters_context(project_info):
         return ""
 
 
+def _format_selected_scenario_context(project_info):
+    try:
+        project_id = project_info.get("id")
+        selected_id = project_info.get("selected_scenario_id")
+        if not project_id or not selected_id:
+            return ""
+
+        from carbongpt.core.er_simulator import get_selected_scenario
+        detail = get_selected_scenario(project_id)
+        if not detail:
+            return ""
+
+        scenario = detail["scenario"]
+        years = detail["years"]
+        summary = scenario.get("results_summary") or {}
+        if isinstance(summary, str):
+            import json as _json
+            try:
+                summary = _json.loads(summary)
+            except Exception:
+                summary = {}
+
+        if not summary:
+            return ""
+
+        lines = [
+            f"  - Scenario Name: {scenario.get('name', 'Unknown')}",
+            f"  - Total Emission Reductions: {summary.get('total_er', 0):,.0f} tCO2e",
+            f"  - Average Annual ER: {summary.get('average_annual_er', 0):,.0f} tCO2e/yr",
+            f"  - Crediting Period: {scenario.get('crediting_years', 7)} years",
+            f"  - Methodology: {scenario.get('methodology_code', '')}",
+        ]
+
+        for y in years[:3]:
+            net_er = float(y.get("net_er", 0))
+            lines.append(f"  - Year {y['year_number']}: {net_er:,.0f} tCO2e net ER")
+        if len(years) > 3:
+            lines.append(f"  - ... ({len(years)} years total)")
+
+        overrides = scenario.get("parameter_overrides") or {}
+        if isinstance(overrides, str):
+            import json as _json
+            try:
+                overrides = _json.loads(overrides)
+            except Exception:
+                overrides = {}
+        clean_overrides = {k: v for k, v in overrides.items() if not str(k).startswith("__")}
+        if clean_overrides:
+            lines.append("")
+            lines.append("  Key scenario assumptions:")
+            for k, v in clean_overrides.items():
+                lines.append(f"  - {k}: {v}")
+
+        return (
+            "### Selected Scenario Results (for PDD drafting)\n"
+            "These are the emission reduction projections from the project's selected scenario. "
+            "Use these numbers when writing ER estimation, monitoring plan, and financial sections. "
+            "Reference the methodology and calculation approach.\n\n"
+            + "\n".join(lines) + "\n"
+        )
+    except Exception as e:
+        logger.warning("Failed to format selected scenario context: %s", e)
+        return ""
+
+
 def _format_methodology_parameters_context(project_info):
     intake = project_info.get("project_intake") or {}
     meth_params = intake.get("methodology_parameters")
@@ -722,6 +787,10 @@ def generate_section_draft(
     confirmed_params_context = _format_confirmed_parameters_context(project_info)
     if confirmed_params_context:
         user_prompt += confirmed_params_context + "\n"
+
+    selected_scenario_context = _format_selected_scenario_context(project_info)
+    if selected_scenario_context:
+        user_prompt += selected_scenario_context + "\n"
 
     intake_context = _format_filtered_project_context(project_info, section_id)
     if intake_context:

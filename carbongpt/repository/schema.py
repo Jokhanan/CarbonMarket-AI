@@ -615,6 +615,10 @@ CREATE TABLE IF NOT EXISTS audit_simulation_results (
 );
 
 CREATE INDEX IF NOT EXISTS idx_asr_project ON audit_simulation_results(project_id);
+
+-- Phase 2a: Scenario purpose lifecycle + selected scenario reference
+ALTER TABLE er_scenarios ADD COLUMN IF NOT EXISTS scenario_purpose VARCHAR(30) DEFAULT 'exploratory';
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS selected_scenario_id INTEGER;
 """
 
 
