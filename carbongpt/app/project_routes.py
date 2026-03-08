@@ -2001,6 +2001,18 @@ def run_sensitivity_endpoint(project_id: int, param_key: str, variation: int = 2
     return result
 
 
+@router.get("/{project_id}/state")
+def get_project_state_endpoint(project_id: int):
+    from carbongpt.core.project_state import evaluate_project_state
+    try:
+        result = evaluate_project_state(project_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
 @router.get("/{project_id}/lifecycle")
 def get_lifecycle_endpoint(project_id: int):
     from carbongpt.core.lifecycle_manager import get_lifecycle

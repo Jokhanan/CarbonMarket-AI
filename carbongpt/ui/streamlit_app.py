@@ -3009,11 +3009,154 @@ def _build_next_steps(readiness):
 
 
 def _render_next_steps_panel(project, project_id):
-    readiness = _get_project_readiness(project, project_id)
-    steps = _build_next_steps(readiness)
-    if not steps:
+    from carbongpt.core.project_state import evaluate_project_state, SEVERITY_BLOCKER, SEVERITY_WARNING, SEVERITY_SUGGESTION, SEVERITY_INSIGHT
+
+    state = evaluate_project_state(project_id)
+    if "error" in state:
+        readiness = _get_project_readiness(project, project_id)
+        steps = _build_next_steps(readiness)
+        if not steps:
+            return
+        _render_next_steps_fallback(project_id, steps)
         return
 
+    TAB_LABEL_TO_INDEX = {
+        "Setup": 0, "Documents": 1, "Parameters": 2, "ER Simulator": 3,
+        "Write / Draft": 4, "Review": 5, "Audit": 6, "Findings": 7,
+        "Lifecycle": 8, "Monitoring": 9, "Export": 10,
+    }
+
+    def _go_to_tab(pid, idx):
+        st.session_state[f"ws_tab_{pid}"] = idx
+
+    readiness_score = state.get("readiness_score", 0)
+    score_color = "#ef4444" if readiness_score < 30 else "#f59e0b" if readiness_score < 60 else "#10b981" if readiness_score < 85 else "#059669"
+
+    st.markdown(
+        f'<span style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">'
+        f'Project Readiness: <span style="color:{score_color};font-size:1.1rem;">{readiness_score}%</span>'
+        f'</span>',
+        unsafe_allow_html=True,
+    )
+    st.progress(readiness_score / 100)
+
+    _render_state_dashboard(state, project_id)
+
+    items = state.get("items", [])
+    blockers = [i for i in items if i["severity"] == SEVERITY_BLOCKER]
+    warnings = [i for i in items if i["severity"] == SEVERITY_WARNING]
+    suggestions = [i for i in items if i["severity"] == SEVERITY_SUGGESTION]
+    insights = [i for i in items if i["severity"] == SEVERITY_INSIGHT]
+
+    if blockers:
+        for item in blockers:
+            st.error(f"**{item['message']}** -- {item['detail']}")
+
+    actions = state.get("next_actions", [])
+    if actions:
+        st.markdown("**Next Actions**")
+        for i, action in enumerate(actions, 1):
+            priority_marker = {
+                "high": "!!",
+                "medium": "!",
+                "low": "",
+            }.get(action.get("priority", ""), "")
+
+            cols = st.columns([0.4, 4, 1.2])
+            with cols[0]:
+                bg = "#ef4444" if action["priority"] == "high" else "#f59e0b" if action["priority"] == "medium" else "var(--brand-primary)"
+                st.markdown(f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:{bg};color:white;font-size:0.72rem;font-weight:700;text-align:center;line-height:24px;">{i}</span>', unsafe_allow_html=True)
+            with cols[1]:
+                st.markdown(f"**{action['text']}**")
+                st.caption(action["detail"])
+            with cols[2]:
+                tab_name = action.get("tab", "")
+                if tab_name and tab_name in TAB_LABEL_TO_INDEX:
+                    target_idx = TAB_LABEL_TO_INDEX[tab_name]
+                    st.button("Go", key=f"nextstep_{project_id}_{i}", use_container_width=True,
+                              on_click=_go_to_tab, args=(project_id, target_idx))
+
+    if insights:
+        with st.expander("Insights", expanded=False):
+            for item in insights:
+                st.info(f"**{item['message']}** -- {item['detail']}")
+
+
+def _render_state_dashboard(state, project_id):
+    params = state.get("parameters", {})
+    scenario = state.get("scenario", {})
+    drafts = state.get("drafts", {})
+    audit = state.get("audit", {})
+    stage = state.get("stage", {})
+    evidence = state.get("evidence", {})
+
+    sc1, sc2, sc3 = st.columns(3)
+
+    with sc1:
+        with st.container(border=True):
+            st.markdown("**Project Stage**")
+            stage_display = stage.get("display", "Not Initialized")
+            st.markdown(f'<span style="font-size:1.1rem;font-weight:600;">{stage_display}</span>', unsafe_allow_html=True)
+
+            st.markdown("**Parameter Health**")
+            if params.get("initialized"):
+                pct = params.get("pct_complete", 0)
+                st.progress(pct / 100)
+                status_parts = []
+                if params.get("confirmed", 0) > 0:
+                    status_parts.append(f"{params['confirmed']} confirmed")
+                if params.get("default", 0) > 0:
+                    status_parts.append(f"{params['default']} default")
+                if params.get("estimated", 0) > 0:
+                    status_parts.append(f"{params['estimated']} estimated")
+                if params.get("missing", 0) > 0:
+                    status_parts.append(f"{params['missing']} missing")
+                st.caption(f"{params['configured']}/{params['total']} configured -- " + ", ".join(status_parts))
+            else:
+                st.caption("Parameters not initialized")
+
+    with sc2:
+        with st.container(border=True):
+            st.markdown("**Selected Scenario**")
+            if scenario.get("has_selected"):
+                st.markdown(f'<span style="font-size:0.95rem;font-weight:600;">{scenario["selected_name"]}</span>', unsafe_allow_html=True)
+                if scenario.get("selected_annual_er"):
+                    st.metric("Annual ER", f"{scenario['selected_annual_er']:,.0f} tCO2e/yr")
+                if scenario.get("selected_total_er"):
+                    st.caption(f"Total: {scenario['selected_total_er']:,.0f} tCO2e")
+            else:
+                st.caption(f"No scenario selected ({scenario.get('total_saved', 0)} saved)")
+
+            st.markdown("**Documents**")
+            doc_count = state.get("documents", {}).get("count", 0)
+            st.caption(f"{doc_count} supporting document{'s' if doc_count != 1 else ''} uploaded")
+
+    with sc3:
+        with st.container(border=True):
+            st.markdown("**Draft Status**")
+            if drafts.get("has_drafts"):
+                st.caption(f"{drafts['total_sections']} section{'s' if drafts['total_sections'] != 1 else ''} -- {drafts['approved']} approved, {drafts['drafted']} in draft")
+            else:
+                st.caption("No sections drafted yet")
+
+            st.markdown("**Audit Readiness**")
+            if audit.get("has_audit"):
+                score = audit.get("score", 0)
+                risk = audit.get("risk_level", "")
+                color = "#ef4444" if score < 60 else "#f59e0b" if score < 80 else "#10b981"
+                st.markdown(f'<span style="font-size:1.2rem;font-weight:700;color:{color};">{score}%</span> <span style="font-size:0.8rem;color:var(--text-secondary);">({risk})</span>', unsafe_allow_html=True)
+                st.caption(f"{audit.get('cars', 0)} CARs, {audit.get('cls', 0)} CLs, {audit.get('fwds', 0)} FWDs")
+            else:
+                st.caption("No audit simulation run")
+
+            st.markdown("**Evidence**")
+            if evidence.get("has_evidence"):
+                st.caption(f"{evidence['verified']}/{evidence['total_links']} links verified")
+            else:
+                st.caption("No evidence links")
+
+
+def _render_next_steps_fallback(project_id, steps):
     TAB_LABEL_TO_INDEX = {
         "Setup": 0, "Documents": 1, "Parameters": 2, "ER Simulator": 3,
         "Write / Draft": 4, "Review": 5, "Audit": 6, "Findings": 7,
@@ -3194,9 +3337,26 @@ def _render_project_workspace(project_id):
         cached_er = st.session_state[er_cache_key]
         yr_results = cached_er.get("year_by_year", [])
         if yr_results:
-            total_er = sum(y.get("net_er", 0) for y in yr_results)
-            avg_er = total_er / len(yr_results) if yr_results else 0
+            total_er_val = sum(y.get("net_er", 0) for y in yr_results)
+            avg_er = total_er_val / len(yr_results) if yr_results else 0
             projected_er = f"{avg_er:,.0f}"
+
+    if projected_er == "--" and project.get("selected_scenario_id"):
+        try:
+            from carbongpt.core.er_simulator import get_selected_scenario
+            sel = get_selected_scenario(project_id)
+            if sel:
+                summary = sel["scenario"].get("results_summary") or {}
+                if isinstance(summary, str):
+                    import json as _j
+                    try:
+                        summary = _j.loads(summary)
+                    except Exception:
+                        summary = {}
+                if summary.get("average_annual_er"):
+                    projected_er = f"{summary['average_annual_er']:,.0f}"
+        except Exception:
+            pass
 
     audit_score = "--"
     audit_cache_key = f"audit_result_{project_id}"
@@ -3206,18 +3366,44 @@ def _render_project_workspace(project_id):
         if score is not None:
             audit_score = f"{score}%"
 
+    if audit_score == "--":
+        try:
+            from carbongpt.repository.db import get_cursor as _gc
+            with _gc() as _cur:
+                _cur.execute("""
+                    SELECT overall_score FROM audit_simulation_results
+                    WHERE project_id = %s ORDER BY created_at DESC LIMIT 1
+                """, (project_id,))
+                _audit_row = _cur.fetchone()
+                if _audit_row and _audit_row.get("overall_score") is not None:
+                    audit_score = f"{_audit_row['overall_score']}%"
+        except Exception:
+            pass
+
     param_status_text = f"{configured_params} / {total_params}" if total_params > 0 else "Not initialized"
     param_sub = f"{missing_params} missing" if missing_params > 0 and total_params > 0 else "All configured" if total_params > 0 else "Initialize parameters first"
     param_sub_class = "status-dot-amber" if missing_params > 0 else "status-dot-green" if total_params > 0 else ""
 
-    mc1, mc2, mc3, mc4 = st.columns(4)
+    scenario_label = "--"
+    if project.get("selected_scenario_id"):
+        try:
+            from carbongpt.core.er_simulator import get_selected_scenario as _get_sel
+            sel = _get_sel(project_id)
+            if sel:
+                scenario_label = sel["scenario"].get("name", "Selected")[:20]
+        except Exception:
+            scenario_label = "Selected"
+
+    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
     with mc1:
-        st.metric(label="Projected ER (tCO2e/yr)", value=projected_er, delta=None, help="Average annual emission reductions")
+        st.metric(label="Projected ER (tCO2e/yr)", value=projected_er, delta=None, help="Average annual emission reductions from selected scenario")
     with mc2:
         st.metric(label="Parameters", value=param_status_text, delta=None, help=param_sub)
     with mc3:
-        st.metric(label="Documents", value=doc_count, delta=None, help="Project documents uploaded")
+        st.metric(label="Scenario", value=scenario_label, delta=None, help="Selected ER scenario for PDD drafting")
     with mc4:
+        st.metric(label="Documents", value=doc_count, delta=None, help="Project documents uploaded")
+    with mc5:
         st.metric(label="Audit Readiness", value=audit_score, delta=None, help="Run audit simulation to assess")
 
     _render_next_steps_panel(project, project_id)

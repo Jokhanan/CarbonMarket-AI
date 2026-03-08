@@ -70,6 +70,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `carbongpt/core/lifecycle_manager.py` — Project lifecycle stages (Feasibility through Issuance), task management, monitoring task initialization, issuance tracking, portfolio analytics
 - `carbongpt/core/evidence_engine.py` — Evidence linking (parameters/sections to source documents), evidence completeness scoring, citation generation
 - `carbongpt/core/audit_simulator.py` — Simulated VVB audit with parameter validation, evidence gap analysis, section consistency checks, compliance verification, risk scoring
+- `carbongpt/core/project_state.py` — Phase 2b Project State Engine: `evaluate_project_state(project_id)` returns comprehensive project health assessment with readiness_score (0-100), stage, parameters (by status breakdown), scenario (selected scenario as first-class element), documents, drafts, evidence, audit state. Classifies items into blocker/warning/suggestion/insight severities. Powers improved Overview dashboard with 3-column state cards, progress bar, priority-coded next actions, and insights expander. API: `GET /projects/{id}/state`
 
 ## Database Schema
 
