@@ -1,0 +1,115 @@
+I want you to perform a complete product and UX audit of the CarbonGPT application.
+
+Your task is NOT to modify code immediately. First you must deeply analyze the entire application as a product architect and AI system designer.
+
+Carefully review the entire application including:
+
+• all pages
+• all forms
+• all parameter inputs
+• all tabs
+• all workflows
+• the simulator
+• the document generation system
+• the Copilot feature
+• the project setup pages
+• the parameter pages
+• the ER simulator
+• the document review and generation modules
+
+Your goal is to identify why the system currently feels like a collection of disconnected forms rather than an intelligent platform.
+
+Please perform the following analysis.
+
+1. FULL APPLICATION WALKTHROUGH
+
+Simulate the experience of a user navigating the entire application.
+
+Analyze every page and describe:
+• what the page does
+• what data is collected
+• where the data is stored
+• whether the data is reused elsewhere
+• whether the data is duplicated in other pages.
+
+2. PARAMETER REDUNDANCY ANALYSIS
+
+Identify all parameters that appear in multiple pages.
+
+For each parameter:
+• show where it appears
+• explain whether it is correctly connected across the system
+• detect duplicate inputs.
+
+3. PROJECT MEMORY ANALYSIS
+
+Determine whether the application has a single project memory or whether information is scattered across different components.
+
+Identify cases where the user must enter the same information multiple times.
+
+4. USER EXPERIENCE ANALYSIS
+
+Evaluate the platform from the perspective of:
+
+A carbon expert  
+A new user with no carbon experience.
+
+Identify:
+• confusing flows
+• unnecessary forms
+• missing guidance
+• missing intelligence.
+
+5. AI UTILIZATION ANALYSIS
+
+Evaluate where AI is currently used and where it should be used.
+
+Determine why the application currently feels form-driven rather than AI-driven.
+
+Suggest how AI could guide the user instead of just answering questions when Copilot is manually triggered.
+
+6. WORKFLOW LOGIC ANALYSIS
+
+Evaluate whether the platform follows a logical carbon project lifecycle.
+
+A project typically follows stages such as:
+
+Idea → Simulation → Methodology selection → Parameter configuration → Document drafting → Internal review → Validation → Monitoring.
+
+Check whether the current UI reflects this lifecycle or whether the workflow is fragmented.
+
+7. SIMPLIFICATION OPPORTUNITIES
+
+Identify opportunities to simplify the platform.
+
+Examples:
+• parameters that should only be entered once
+• information that should automatically populate other modules
+• steps that could be automated by AI
+• workflows that should be guided instead of manual.
+
+8. AI ORCHESTRATION PROPOSAL
+
+Propose a new architecture where AI acts as the orchestrator of the system.
+
+Instead of users filling forms everywhere, the AI should:
+
+• understand project intent
+• suggest methodologies
+• configure parameters automatically
+• guide the user through the next steps
+• reduce manual data entry.
+
+9. FINAL PRODUCT RECOMMENDATION
+
+Provide a redesigned product architecture including:
+
+• the ideal user flow
+• simplified page structure
+• centralized parameter management
+• improved AI integration
+• removal of redundant forms.
+
+The goal is to transform CarbonGPT from a collection of technical forms into an intelligent carbon project development platform.
+
+Before proposing solutions, focus on identifying the structural issues that make the current experience confusing or inefficient.
