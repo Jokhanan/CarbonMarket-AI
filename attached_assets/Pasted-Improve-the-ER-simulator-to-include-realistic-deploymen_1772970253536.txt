@@ -1,0 +1,79 @@
+Improve the ER simulator to include realistic deployment and usage dynamics.
+
+The current simulator should no longer assume that all technologies are deployed at once and remain fully active for the entire crediting period.
+
+Please add support for the following factors:
+
+1. Deployment ramp-up
+Allow users to define how technologies are deployed over time.
+
+Provide three input options:
+- instant deployment
+- fixed monthly deployment (e.g. 5,000 stoves per month)
+- custom deployment schedule
+
+The simulator should calculate the active installed base over time.
+
+2. Deployment timing within a period
+Account for the fact that technologies deployed during a month or year are not active for the full period.
+
+Implement a default assumption of mid-period deployment (50% of the period active).
+
+Allow optional timing choices:
+- start of period
+- mid-period
+- end of period
+
+3. Technology lifetime
+Add a parameter for technology lifetime (for example 5 years for cookstoves).
+
+A deployment cohort should stop generating emission reductions once its lifetime is exceeded.
+
+4. Drop-off / survival rate
+Add a drop-off model to account for the fact that some deployed technologies stop being used or stop functioning over time.
+
+Provide two options:
+- simple annual drop-off rate (e.g. 10% per year)
+- custom survival/drop-off curve by year
+
+This should be applied at cohort level.
+
+5. Usage rate
+Separate usage rate from drop-off.
+A technology may still exist but not be fully used.
+
+Allow:
+- fixed usage rate
+- optional usage curve over time
+
+6. Cohort-based calculation model
+Implement a cohort-based model where each batch of deployed technologies has:
+- deployment date
+- timing factor
+- lifetime
+- survival/drop-off profile
+- usage rate
+
+7. Output calculations
+For each month or year, calculate:
+- technologies deployed
+- active technologies
+- surviving technologies
+- effectively used technologies
+- emission reductions generated
+- cumulative emission reductions
+
+8. Visualization
+Add charts showing:
+- deployment ramp-up over time
+- active technologies over time
+- surviving technologies over time
+- annual emission reductions
+- cumulative emission reductions
+
+9. UX requirement
+The simulator should remain simple for normal users, with:
+- a simple mode (few inputs)
+- an advanced mode (custom schedule, custom drop-off curve, custom usage curve)
+
+The goal is to make the ER simulator reflect real project development conditions for cookstove and renewable energy projects.

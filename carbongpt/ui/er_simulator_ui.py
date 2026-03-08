@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from carbongpt.core.er_simulator import (
     run_scenario,
     save_scenario,
@@ -85,18 +86,128 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
         return
 
     overrides = {}
-    if methodology in ("VM0050", "TPDDTEC"):
+    deployment_config = {}
+
+    is_cookstove = methodology in ("VM0050", "TPDDTEC")
+
+    if is_cookstove:
+        sim_mode = st.radio(
+            "Simulation mode",
+            ["Simple", "Advanced"],
+            horizontal=True,
+            key=f"sim_mode_{project_id}",
+            help="Simple: basic deployment settings. Advanced: custom schedules, curves, and timing.",
+        )
+        is_advanced = sim_mode == "Advanced"
+
         st.markdown("**Activity Data**")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            hh = st.number_input("Number of Households", min_value=1, value=int(_safe_float(params, "num_households", 1000)), step=100, key="sim_hh")
+            hh = st.number_input("Total Units to Deploy", min_value=1, value=int(_safe_float(params, "num_households", 1000)), step=100, key="sim_hh")
             overrides["num_households"] = hh
         with col2:
             hh_size = st.number_input("Household Size (persons)", min_value=1.0, value=_safe_float(params, "household_size", 5.0), step=0.5, key="sim_hh_size")
             overrides["household_size"] = hh_size
-        with col3:
-            usage = st.slider("Usage Rate", 0.0, 1.0, _safe_float(params, "usage_rate", 0.90), 0.01, key="sim_usage")
-            overrides["usage_rate"] = usage
+
+        st.markdown("**Deployment Ramp-up**")
+        deploy_options = ["Instant deployment", "Fixed monthly deployment"]
+        if is_advanced:
+            deploy_options.append("Custom deployment schedule")
+        deploy_choice = st.radio("How are technologies deployed?", deploy_options, horizontal=True, key=f"sim_deploy_mode_{project_id}")
+
+        if deploy_choice == "Instant deployment":
+            deployment_config["deployment_mode"] = "instant"
+        elif deploy_choice == "Fixed monthly deployment":
+            deployment_config["deployment_mode"] = "fixed_monthly"
+            monthly_rate = st.number_input(
+                "Units deployed per month", min_value=1,
+                value=min(500, hh),
+                step=100, key="sim_monthly_deploy",
+            )
+            deployment_config["monthly_deployment"] = monthly_rate
+            months_needed = (hh + monthly_rate - 1) // monthly_rate
+            st.caption(f"Full deployment in approximately {months_needed} months ({months_needed / 12:.1f} years)")
+        elif deploy_choice == "Custom deployment schedule":
+            deployment_config["deployment_mode"] = "custom"
+            st.caption("Define deployment batches by month (month 0 = start of crediting period)")
+            custom_df = st.data_editor(
+                pd.DataFrame({"Month": [0, 6, 12], "Units": [200, 400, 400]}),
+                num_rows="dynamic",
+                key=f"sim_custom_schedule_{project_id}",
+            )
+            schedule = []
+            for _, row in custom_df.iterrows():
+                m = int(row.get("Month", 0))
+                c = int(row.get("Units", 0))
+                if c > 0:
+                    schedule.append({"month": m, "count": c})
+            deployment_config["custom_schedule"] = schedule
+            total_custom = sum(s["count"] for s in schedule)
+            st.caption(f"Total scheduled: {total_custom:,} units")
+
+        st.markdown("**Technology Lifetime & Drop-off**")
+        lt_col1, lt_col2 = st.columns(2)
+        with lt_col1:
+            lifetime = st.number_input("Technology Lifetime (years)", min_value=1.0, max_value=30.0, value=5.0, step=1.0, key="sim_lifetime")
+            deployment_config["tech_lifetime_years"] = lifetime
+        with lt_col2:
+            if not is_advanced:
+                dropoff = st.slider("Annual Drop-off Rate", 0.0, 0.50, 0.10, 0.01, key="sim_dropoff", help="Fraction of units that stop working each year")
+                deployment_config["dropoff_mode"] = "annual_rate"
+                deployment_config["annual_dropoff_rate"] = dropoff
+            else:
+                dropoff_mode = st.radio("Drop-off model", ["Annual rate", "Custom curve"], horizontal=True, key=f"sim_dropoff_mode_{project_id}")
+                if dropoff_mode == "Annual rate":
+                    dropoff = st.slider("Annual Drop-off Rate", 0.0, 0.50, 0.10, 0.01, key="sim_dropoff_adv")
+                    deployment_config["dropoff_mode"] = "annual_rate"
+                    deployment_config["annual_dropoff_rate"] = dropoff
+                else:
+                    deployment_config["dropoff_mode"] = "custom_curve"
+                    st.caption("Define survival fraction by technology age (year)")
+                    dropoff_df = st.data_editor(
+                        pd.DataFrame({"Year": [1, 2, 3, 4, 5], "Survival Fraction": [0.95, 0.88, 0.80, 0.70, 0.55]}),
+                        num_rows="dynamic",
+                        key=f"sim_dropoff_curve_{project_id}",
+                    )
+                    curve = []
+                    for _, row in dropoff_df.iterrows():
+                        curve.append({"year": float(row.get("Year", 0)), "survival_fraction": float(row.get("Survival Fraction", 1.0))})
+                    deployment_config["custom_dropoff_curve"] = curve
+
+        st.markdown("**Usage Rate**")
+        if not is_advanced:
+            usage = st.slider("Usage Rate", 0.0, 1.0, _safe_float(params, "usage_rate", 0.90), 0.01, key="sim_usage", help="Fraction of surviving units actually being used")
+            deployment_config["usage_rate_mode"] = "fixed"
+            deployment_config["usage_rate"] = usage
+        else:
+            usage_mode = st.radio("Usage model", ["Fixed rate", "Custom curve"], horizontal=True, key=f"sim_usage_mode_{project_id}")
+            if usage_mode == "Fixed rate":
+                usage = st.slider("Usage Rate", 0.0, 1.0, _safe_float(params, "usage_rate", 0.90), 0.01, key="sim_usage_adv")
+                deployment_config["usage_rate_mode"] = "fixed"
+                deployment_config["usage_rate"] = usage
+            else:
+                deployment_config["usage_rate_mode"] = "curve"
+                st.caption("Define usage rate by technology age (year)")
+                usage_df = st.data_editor(
+                    pd.DataFrame({"Year": [1, 2, 3, 4, 5], "Usage Rate": [0.95, 0.90, 0.85, 0.78, 0.70]}),
+                    num_rows="dynamic",
+                    key=f"sim_usage_curve_{project_id}",
+                )
+                ucurve = []
+                for _, row in usage_df.iterrows():
+                    ucurve.append({"year": float(row.get("Year", 0)), "rate": float(row.get("Usage Rate", 0.9))})
+                deployment_config["usage_curve"] = ucurve
+
+        if is_advanced:
+            st.markdown("**Deployment Timing**")
+            timing = st.radio(
+                "When within a period are newly deployed units active?",
+                ["Start of period", "Mid-period (default)", "End of period"],
+                index=1, horizontal=True,
+                key=f"sim_timing_{project_id}",
+            )
+            timing_map = {"Start of period": "start", "Mid-period (default)": "mid", "End of period": "end"}
+            deployment_config["deployment_timing"] = timing_map.get(timing, "mid")
 
         st.markdown("**Fuel Consumption**")
         col1, col2, col3 = st.columns(3)
@@ -157,16 +268,21 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
 
     if st.button("Calculate", key="run_sim", type="primary"):
         with st.spinner("Calculating emission reductions..."):
-            result = run_scenario(project_id, parameter_overrides=overrides)
+            result = run_scenario(project_id, parameter_overrides=overrides,
+                                 deployment_config=deployment_config if deployment_config else None)
             if "error" in result:
                 st.error(result["error"])
             else:
                 st.session_state[f"sim_result_{project_id}"] = result
                 st.session_state[f"sim_overrides_{project_id}"] = overrides
+                st.session_state[f"sim_deploy_config_{project_id}"] = deployment_config
 
     result = st.session_state.get(f"sim_result_{project_id}")
     if result:
         _render_er_results(result, project_name=project_name)
+
+        if result.get("deployment_timeline"):
+            _render_deployment_charts(result)
 
         st.markdown("---")
         save_col1, save_col2 = st.columns([2, 1])
@@ -183,6 +299,7 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                     project_id, scenario_name,
                     parameter_overrides=st.session_state.get(f"sim_overrides_{project_id}", {}),
                     is_baseline=is_baseline,
+                    deployment_config=st.session_state.get(f"sim_deploy_config_{project_id}"),
                 )
                 if "error" in saved:
                     st.error(saved["error"])
@@ -201,6 +318,69 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
         )
 
 
+def _render_deployment_charts(result):
+    timeline = result.get("deployment_timeline", [])
+    if not timeline:
+        return
+
+    with st.expander("Deployment & Technology Dynamics", expanded=True):
+        years_labels = [str(t["year"]) for t in timeline]
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            st.markdown("**Deployment Ramp-up**")
+            deploy_df = pd.DataFrame({
+                "Year": years_labels,
+                "Deployed (year)": [t["deployed"] for t in timeline],
+                "Cumulative Deployed": [t["cumulative_deployed"] for t in timeline],
+            }).set_index("Year")
+            st.bar_chart(deploy_df[["Deployed (year)"]], use_container_width=True)
+
+        with chart_col2:
+            st.markdown("**Active vs Surviving Technologies**")
+            active_df = pd.DataFrame({
+                "Year": years_labels,
+                "Active": [t["active"] for t in timeline],
+                "Surviving": [t["surviving"] for t in timeline],
+                "Effectively Used": [t["effectively_used"] for t in timeline],
+            }).set_index("Year")
+            st.line_chart(active_df, use_container_width=True)
+
+        chart_col3, chart_col4 = st.columns(2)
+
+        with chart_col3:
+            st.markdown("**Annual Emission Reductions**")
+            er_df = pd.DataFrame({
+                "Year": years_labels,
+                "Net ER (tCO2e)": [t["net_er"] for t in timeline],
+            }).set_index("Year")
+            st.bar_chart(er_df, use_container_width=True)
+
+        with chart_col4:
+            st.markdown("**Cumulative Emission Reductions**")
+            cum_df = pd.DataFrame({
+                "Year": years_labels,
+                "Cumulative ER (tCO2e)": [t["cumulative_er"] for t in timeline],
+            }).set_index("Year")
+            st.area_chart(cum_df, use_container_width=True)
+
+        st.markdown("**Year-by-Year Deployment Summary**")
+        summary_data = []
+        for t in timeline:
+            summary_data.append({
+                "Year": t["year"],
+                "Deployed": int(t["deployed"]),
+                "Cumulative": int(t["cumulative_deployed"]),
+                "Active": int(t["active"]),
+                "Surviving": int(t["surviving"]),
+                "Effectively Used": int(t["effectively_used"]),
+                "Net ER (tCO2e)": f"{t['net_er']:,.0f}",
+                "Cumulative ER": f"{t['cumulative_er']:,.0f}",
+            })
+        st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+
+
 def _render_er_results(result, project_name="Project"):
     summary = result["summary"]
 
@@ -212,13 +392,22 @@ def _render_er_results(result, project_name="Project"):
     with col3:
         st.metric("Crediting Period", f"{summary['crediting_years']} years")
 
-    if "total_net_revenue" in summary:
+    if summary.get("deployment_mode") and summary["deployment_mode"] != "instant":
         col4, col5, col6 = st.columns(3)
         with col4:
-            st.metric("Gross Revenue", f"${summary.get('total_gross_revenue', 0):,.0f}")
+            st.metric("Peak Active Units", f"{summary.get('peak_active_units', 0):,.0f}")
         with col5:
-            st.metric("Net Revenue", f"${summary.get('total_net_revenue', 0):,.0f}")
+            st.metric("Peak Surviving", f"{summary.get('peak_surviving_units', 0):,.0f}")
         with col6:
+            st.metric("Tech Lifetime", f"{summary.get('tech_lifetime_years', 0)} years")
+
+    if "total_net_revenue" in summary:
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            st.metric("Gross Revenue", f"${summary.get('total_gross_revenue', 0):,.0f}")
+        with col_f2:
+            st.metric("Net Revenue", f"${summary.get('total_net_revenue', 0):,.0f}")
+        with col_f3:
             st.metric("Carbon Price", f"${summary.get('carbon_price', 0):,.2f}/tCO2e")
 
     excel_data = export_er_to_excel(result, project_name=project_name)
@@ -281,29 +470,25 @@ def _render_er_results(result, project_name="Project"):
     }
     st.bar_chart(data=chart_data, use_container_width=True)
 
-    with st.expander("Year-by-Year Details (with formulas)"):
+    with st.expander("Year-by-Year Details"):
+        year_detail_rows = []
         for y in years:
-            yr_label = f"Year {y['year_number']} ({y['calendar_year']})"
-            st.markdown(f"**{yr_label}**")
-            details = []
-            details.append(f"Usage Rate = {y.get('usage_rate', 0):.2%}")
-            details.append(f"Active HH = {y.get('active_households', 0):,.0f}")
-            if y.get("baseline_formula"):
-                details.append(f"BE_y = {y['baseline_formula']} = {y['baseline_emissions']:,.2f} tCO2e")
-            else:
-                details.append(f"BE_y = {y['baseline_emissions']:,.2f} tCO2e")
-            if y.get("project_formula"):
-                details.append(f"PE_y = {y['project_formula']} = {y['project_emissions']:,.2f} tCO2e")
-            else:
-                details.append(f"PE_y = {y['project_emissions']:,.2f} tCO2e")
-            details.append(f"Gross ER = {y.get('gross_er', 0):,.2f} tCO2e")
-            if y.get("leakage_formula"):
-                details.append(f"LE_y = {y['leakage_formula']} = {y['leakage']:,.2f} tCO2e")
-            if y.get("net_er_formula"):
-                details.append(f"Net ER_y = {y['net_er_formula']} = {y['net_er']:,.2f} tCO2e")
-            else:
-                details.append(f"Net ER_y = {y['net_er']:,.2f} tCO2e")
-            st.code("\n".join(details), language=None)
+            row = {
+                "Year": f"{y['year_number']} ({y['calendar_year']})",
+                "Baseline (tCO2e)": f"{y['baseline_emissions']:,.2f}",
+                "Project (tCO2e)": f"{y['project_emissions']:,.2f}",
+                "Gross ER": f"{y.get('gross_er', 0):,.2f}",
+                "Leakage": f"{y['leakage']:,.2f}",
+                "Net ER": f"{y['net_er']:,.2f}",
+            }
+            if "active_units" in y:
+                row["Active Units"] = f"{y['active_units']:,.0f}"
+                row["Surviving"] = f"{y['surviving_units']:,.0f}"
+                row["Eff. Used"] = f"{y['effectively_used']:,.0f}"
+            if "usage_rate" in y:
+                row["Usage Rate"] = f"{y['usage_rate']:.2%}"
+            year_detail_rows.append(row)
+        st.dataframe(pd.DataFrame(year_detail_rows), use_container_width=True, hide_index=True)
 
         st.markdown("**TOTALS**")
         st.code(

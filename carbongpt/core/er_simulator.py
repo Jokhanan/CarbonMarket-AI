@@ -1,5 +1,6 @@
 import logging
 import json
+import math
 from carbongpt.repository.db import get_cursor
 from carbongpt.core.parameter_engine import get_parameters_as_dict
 
@@ -187,6 +188,284 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     }
 
 
+def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, methodology="VM0050",
+                                   deployment_config=None):
+    if deployment_config is None:
+        deployment_config = {}
+
+    fNRB = _pval(params, "fNRB", 0.30)
+    NCV_b = _pval(params, "NCV_baseline", 15.6)
+    EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
+    EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", 9.46)
+    NCV_p = _pval(params, "NCV_project", NCV_b)
+    EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
+    EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+    CF = _pval(params, "CF", 1.0)
+    leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
+    num_hh = int(_pval(params, "num_households", 1000))
+    hh_size = _pval(params, "household_size", 5.0)
+
+    baseline_fuel = _ptext(params, "baseline_fuel", "wood")
+    is_charcoal_baseline = baseline_fuel.lower() in ("charcoal", "charbon")
+
+    if methodology in ("VM0050",):
+        bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.4)
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
+    else:
+        sfc_b = _pval(params, "SFC_baseline", 400.0)
+        sfc_p = _pval(params, "SFC_project", 200.0)
+        bl_consumption = sfc_b * hh_size / 1000.0
+        pj_consumption = sfc_p * hh_size / 1000.0
+
+    if is_charcoal_baseline and CF > 1.0:
+        bl_consumption_wood_equiv = bl_consumption * CF
+        pj_consumption_wood_equiv = pj_consumption * CF
+    else:
+        bl_consumption_wood_equiv = bl_consumption
+        pj_consumption_wood_equiv = pj_consumption
+
+    ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
+    be_per_unit = ec_b * (EF_CO2_b + EF_nonCO2_b) * fNRB
+    ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
+    pe_per_unit = ec_p * (EF_CO2_p + EF_nonCO2_p) * fNRB
+    er_per_unit = be_per_unit - pe_per_unit
+
+    deployment_mode = deployment_config.get("deployment_mode", "instant")
+    monthly_deployment = deployment_config.get("monthly_deployment", 500)
+    custom_schedule = deployment_config.get("custom_schedule", [])
+    deployment_timing = deployment_config.get("deployment_timing", "mid")
+    tech_lifetime_years = deployment_config.get("tech_lifetime_years", 5.0)
+    dropoff_mode = deployment_config.get("dropoff_mode", "annual_rate")
+    annual_dropoff_rate = deployment_config.get("annual_dropoff_rate", 0.10)
+    custom_dropoff_curve = deployment_config.get("custom_dropoff_curve", [])
+    usage_rate_mode = deployment_config.get("usage_rate_mode", "fixed")
+    usage_rate_fixed = deployment_config.get("usage_rate", 0.90)
+    usage_curve = deployment_config.get("usage_curve", [])
+
+    timing_factor_map = {"start": 1.0, "mid": 0.5, "end": 0.0}
+    timing_factor = timing_factor_map.get(deployment_timing, 0.5)
+
+    total_months = crediting_years * 12
+    cohorts = []
+
+    if deployment_mode == "instant":
+        cohorts.append({"month": 0, "count": num_hh})
+    elif deployment_mode == "fixed_monthly":
+        deployed_so_far = 0
+        month = 0
+        while deployed_so_far < num_hh and month < total_months:
+            batch = min(monthly_deployment, num_hh - deployed_so_far)
+            if batch > 0:
+                cohorts.append({"month": month, "count": batch})
+                deployed_so_far += batch
+            month += 1
+    elif deployment_mode == "custom":
+        if custom_schedule:
+            for entry in custom_schedule:
+                m = int(entry.get("month", 0))
+                c = int(entry.get("count", 0))
+                if c > 0 and m < total_months:
+                    cohorts.append({"month": m, "count": c})
+        if not cohorts:
+            cohorts.append({"month": 0, "count": num_hh})
+
+    def _get_survival(age_years):
+        if age_years <= 0:
+            return 1.0
+        if age_years > tech_lifetime_years:
+            return 0.0
+        if dropoff_mode == "custom_curve" and custom_dropoff_curve:
+            sorted_curve = sorted(custom_dropoff_curve, key=lambda x: x.get("year", 0))
+            for i, point in enumerate(sorted_curve):
+                py = point.get("year", 0)
+                pv = point.get("survival_fraction", 1.0)
+                if age_years <= py:
+                    if i == 0:
+                        prev_y, prev_v = 0, 1.0
+                    else:
+                        prev_y = sorted_curve[i - 1].get("year", 0)
+                        prev_v = sorted_curve[i - 1].get("survival_fraction", 1.0)
+                    if py == prev_y:
+                        return pv
+                    frac = (age_years - prev_y) / (py - prev_y)
+                    return prev_v + frac * (pv - prev_v)
+            return sorted_curve[-1].get("survival_fraction", 0.0)
+        return (1.0 - annual_dropoff_rate) ** age_years
+
+    def _get_usage(age_years):
+        if usage_rate_mode == "curve" and usage_curve:
+            sorted_uc = sorted(usage_curve, key=lambda x: x.get("year", 0))
+            for i, point in enumerate(sorted_uc):
+                py = point.get("year", 0)
+                pv = point.get("rate", 0.9)
+                if age_years <= py:
+                    if i == 0:
+                        return pv
+                    prev_y = sorted_uc[i - 1].get("year", 0)
+                    prev_v = sorted_uc[i - 1].get("rate", 0.9)
+                    if py == prev_y:
+                        return pv
+                    frac = (age_years - prev_y) / (py - prev_y)
+                    return prev_v + frac * (pv - prev_v)
+            return sorted_uc[-1].get("rate", 0.5)
+        return usage_rate_fixed
+
+    years = []
+    total_er = 0.0
+    total_be = 0.0
+    total_pe = 0.0
+    total_le = 0.0
+    cumulative_er = 0.0
+    deployment_timeline = []
+
+    for y in range(crediting_years):
+        year_num = y + 1
+        cal_year = start_year + y
+        year_start_month = y * 12
+        year_end_month = (y + 1) * 12
+
+        deployed_this_year = 0
+        active_units = 0.0
+        surviving_units = 0.0
+        effectively_used = 0.0
+        be_y = 0.0
+        pe_y = 0.0
+
+        for cohort in cohorts:
+            cm = cohort["month"]
+            cc = cohort["count"]
+
+            if cm >= year_end_month:
+                continue
+
+            if cm >= year_start_month:
+                deployed_this_year += cc
+                months_active_in_year = year_end_month - cm
+                if deployment_mode == "instant" and cm == 0:
+                    fraction_of_year = 1.0
+                else:
+                    fraction_of_year = (months_active_in_year / 12.0) * timing_factor
+                    fraction_of_year = max(fraction_of_year, 0.0)
+            else:
+                fraction_of_year = 1.0
+
+            age_mid = (year_start_month + 6 - cm) / 12.0
+            if cm >= year_start_month:
+                age_mid = (cm + (year_end_month - cm) / 2.0 - cm) / 12.0
+                age_mid = max((year_end_month - cm) / 2.0 / 12.0, 0.01)
+
+            age_end = (year_end_month - cm) / 12.0
+
+            if age_end > tech_lifetime_years:
+                if age_end - 1.0 >= tech_lifetime_years:
+                    continue
+                fraction_alive = max(tech_lifetime_years - (age_end - 1.0), 0) / 1.0
+                fraction_of_year *= fraction_alive
+
+            survival = _get_survival(age_mid)
+            surviving_count = cc * survival
+            usage = _get_usage(age_mid)
+            effective = surviving_count * usage
+
+            active_units += surviving_count
+            surviving_units += surviving_count
+            effectively_used += effective * fraction_of_year
+
+            cohort_be = be_per_unit * effective * fraction_of_year
+            cohort_pe = pe_per_unit * effective * fraction_of_year
+            be_y += cohort_be
+            pe_y += cohort_pe
+
+        gross_er = be_y - pe_y
+        le_y = gross_er * leakage_pct if leakage_pct > 0 else 0.0
+        er_y = gross_er - le_y
+
+        total_er += er_y
+        total_be += be_y
+        total_pe += pe_y
+        total_le += le_y
+        cumulative_er += er_y
+
+        cumulative_deployed = sum(c["count"] for c in cohorts if c["month"] < year_end_month)
+
+        years.append({
+            "year_number": year_num,
+            "calendar_year": cal_year,
+            "deployed_this_year": deployed_this_year,
+            "cumulative_deployed": cumulative_deployed,
+            "active_units": round(active_units, 0),
+            "surviving_units": round(surviving_units, 0),
+            "effectively_used": round(effectively_used, 0),
+            "baseline_emissions": round(be_y, 2),
+            "project_emissions": round(pe_y, 2),
+            "gross_er": round(gross_er, 2),
+            "leakage": round(le_y, 2),
+            "net_er": round(er_y, 2),
+            "cumulative_er": round(cumulative_er, 2),
+        })
+
+        deployment_timeline.append({
+            "year": cal_year,
+            "year_number": year_num,
+            "deployed": deployed_this_year,
+            "cumulative_deployed": cumulative_deployed,
+            "active": round(active_units, 0),
+            "surviving": round(surviving_units, 0),
+            "effectively_used": round(effectively_used, 0),
+            "net_er": round(er_y, 2),
+            "cumulative_er": round(cumulative_er, 2),
+        })
+
+    calculation_steps = [
+        {"step": 1, "name": "ER per unit per year (before leakage)", "formula": f"BE_unit - PE_unit = {be_per_unit:.6f} - {pe_per_unit:.6f}", "value": round(er_per_unit, 6), "unit": "tCO2e/unit/yr"},
+        {"step": 2, "name": "Deployment mode", "formula": deployment_mode, "value": deployment_mode, "unit": ""},
+        {"step": 3, "name": "Total units to deploy", "formula": f"num_households = {num_hh}", "value": num_hh, "unit": "units"},
+        {"step": 4, "name": "Technology lifetime", "formula": f"{tech_lifetime_years} years", "value": tech_lifetime_years, "unit": "years"},
+        {"step": 5, "name": "Drop-off model", "formula": f"{dropoff_mode}: {annual_dropoff_rate*100:.1f}%/yr" if dropoff_mode == "annual_rate" else f"{dropoff_mode}: custom curve", "value": annual_dropoff_rate if dropoff_mode == "annual_rate" else "custom", "unit": ""},
+        {"step": 6, "name": "Usage rate", "formula": f"{usage_rate_mode}: {usage_rate_fixed:.0%}" if usage_rate_mode == "fixed" else f"{usage_rate_mode}: custom curve", "value": usage_rate_fixed if usage_rate_mode == "fixed" else "custom", "unit": ""},
+        {"step": 7, "name": "Deployment timing", "formula": f"{deployment_timing} of period (factor: {timing_factor})", "value": timing_factor, "unit": ""},
+    ]
+
+    return {
+        "calculation_steps": calculation_steps,
+        "years": years,
+        "deployment_timeline": deployment_timeline,
+        "cohort_count": len(cohorts),
+        "cohorts_summary": [{"month": c["month"], "count": c["count"]} for c in cohorts[:50]],
+        "summary": {
+            "total_er": round(total_er, 2),
+            "total_baseline": round(total_be, 2),
+            "total_project": round(total_pe, 2),
+            "total_leakage": round(total_le, 2),
+            "average_annual_er": round(total_er / crediting_years, 2) if crediting_years > 0 else 0,
+            "crediting_years": crediting_years,
+            "methodology": methodology,
+            "deployment_mode": deployment_mode,
+            "tech_lifetime_years": tech_lifetime_years,
+            "peak_active_units": max((y["active_units"] for y in years), default=0),
+            "peak_surviving_units": max((y["surviving_units"] for y in years), default=0),
+        },
+        "parameters_used": {
+            "fNRB": {"value": fNRB, "unit": "fraction", "description": "Fraction of non-renewable biomass"},
+            "NCV_baseline": {"value": NCV_b, "unit": "TJ/Gg", "description": "Net calorific value (baseline fuel)"},
+            "EF_CO2_baseline": {"value": EF_CO2_b, "unit": "tCO2/TJ", "description": "CO2 emission factor (baseline)"},
+            "EF_nonCO2_baseline": {"value": EF_nonCO2_b, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (baseline)"},
+            "NCV_project": {"value": NCV_p, "unit": "TJ/Gg", "description": "Net calorific value (project fuel)"},
+            "EF_CO2_project": {"value": EF_CO2_p, "unit": "tCO2/TJ", "description": "CO2 emission factor (project)"},
+            "EF_nonCO2_project": {"value": EF_nonCO2_p, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (project)"},
+            "CF": {"value": CF, "unit": "kg wood/kg charcoal", "description": "Charcoal-to-wood conversion factor"},
+            "baseline_fuel": {"value": baseline_fuel, "unit": "", "description": "Baseline fuel type"},
+            "num_households": {"value": num_hh, "unit": "count", "description": "Total units to deploy"},
+            "leakage_pct": {"value": leakage_pct, "unit": "fraction", "description": "Leakage deduction percentage"},
+            "deployment_mode": {"value": deployment_mode, "unit": "", "description": "Deployment ramp-up mode"},
+            "tech_lifetime_years": {"value": tech_lifetime_years, "unit": "years", "description": "Technology operational lifetime"},
+            "annual_dropoff_rate": {"value": annual_dropoff_rate, "unit": "fraction", "description": "Annual technology drop-off rate"},
+            "usage_rate": {"value": usage_rate_fixed, "unit": "fraction", "description": "Technology usage rate"},
+            "deployment_timing": {"value": deployment_timing, "unit": "", "description": "Timing within deployment period"},
+        },
+    }
+
+
 def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="ACM0002"):
     eg_pj = _pval(params, "EG_PJ_y", 50000)
     ef_grid = _pval(params, "EF_grid", 0.8)
@@ -316,7 +595,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     }
 
 
-def run_scenario(project_id, scenario_id=None, parameter_overrides=None):
+def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deployment_config=None):
     params = get_parameters_as_dict(project_id)
 
     with get_cursor() as cur:
@@ -339,7 +618,10 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None):
                 params[key] = {"value": val}
 
     if methodology in ("VM0050", "TPDDTEC"):
-        result = calculate_cookstove_er(params, crediting_years, start_year, methodology)
+        if deployment_config and deployment_config.get("deployment_mode") != "instant_legacy":
+            result = calculate_cookstove_er_cohort(params, crediting_years, start_year, methodology, deployment_config)
+        else:
+            result = calculate_cookstove_er(params, crediting_years, start_year, methodology)
     elif methodology in ("ACM0002", "AMS-I.D.", "AMSID"):
         result = calculate_grid_er(params, crediting_years, start_year, methodology)
     else:
@@ -350,8 +632,8 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None):
 
 def save_scenario(project_id, name, description="", parameter_overrides=None,
                   carbon_price=None, price_escalation=0, developer_share=100,
-                  buffer_pool=0, admin_fee=0, is_baseline=False):
-    result = run_scenario(project_id, parameter_overrides=parameter_overrides)
+                  buffer_pool=0, admin_fee=0, is_baseline=False, deployment_config=None):
+    result = run_scenario(project_id, parameter_overrides=parameter_overrides, deployment_config=deployment_config)
     if "error" in result:
         return result
 
@@ -372,7 +654,7 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
             RETURNING id
         """, (
             project_id, name, description, is_baseline,
-            json.dumps(parameter_overrides or {}),
+            json.dumps({**(parameter_overrides or {}), "__deployment_config": deployment_config} if deployment_config else (parameter_overrides or {})),
             project["methodology"],
             project.get("crediting_period_years") or 7,
             carbon_price, price_escalation, developer_share,
@@ -663,6 +945,52 @@ def export_er_to_excel(result, project_name="Project"):
         ws_years.column_dimensions[col_letter].width = 14
     for col_letter in ['G','H','I','J','K','L','M','N','O']:
         ws_years.column_dimensions[col_letter].width = 22
+
+    deployment_timeline = result.get("deployment_timeline")
+    if deployment_timeline:
+        ws_deploy = wb.create_sheet("Deployment & Cohort")
+        ws_deploy.append(["Deployment & Technology Dynamics"])
+        ws_deploy["A1"].font = Font(bold=True, size=14)
+        ws_deploy.append([])
+
+        deploy_headers = [
+            "Year", "Calendar Year", "Deployed", "Cumulative Deployed",
+            "Active Units", "Surviving Units", "Effectively Used",
+            "Net ER (tCO2e)", "Cumulative ER (tCO2e)",
+        ]
+        ws_deploy.append(deploy_headers)
+        for col in range(1, len(deploy_headers) + 1):
+            cell = ws_deploy.cell(row=3, column=col)
+            cell.font = param_header_font
+            cell.fill = teal_fill
+            cell.border = thin_border
+            cell.alignment = Alignment(wrap_text=True)
+
+        drow = 4
+        for dt in deployment_timeline:
+            ws_deploy.append([
+                dt.get("year_number", ""),
+                dt.get("year", ""),
+                dt.get("deployed", 0),
+                dt.get("cumulative_deployed", 0),
+                dt.get("active", 0),
+                dt.get("surviving", 0),
+                dt.get("effectively_used", 0),
+                dt.get("net_er", 0),
+                dt.get("cumulative_er", 0),
+            ])
+            for col in range(1, len(deploy_headers) + 1):
+                cell = ws_deploy.cell(row=drow, column=col)
+                cell.border = thin_border
+                if isinstance(cell.value, float):
+                    cell.number_format = number_format_2dp
+            if drow % 2 == 0:
+                for col in range(1, len(deploy_headers) + 1):
+                    ws_deploy.cell(row=drow, column=col).fill = light_fill
+            drow += 1
+
+        for col_letter in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
+            ws_deploy.column_dimensions[col_letter].width = 18
 
     if "total_gross_revenue" in summary:
         ws_fin = wb.create_sheet("Carbon Finance")

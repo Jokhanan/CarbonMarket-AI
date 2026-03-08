@@ -39,7 +39,7 @@ The UI is a single Streamlit application (`streamlit_app.py`) with modular UI co
 
 **UI Modules:**
 - `carbongpt/ui/parameter_ui.py` — Parameter Intelligence Dashboard
-- `carbongpt/ui/er_simulator_ui.py` — ER Scenario Simulator with finance
+- `carbongpt/ui/er_simulator_ui.py` — ER Scenario Simulator with cohort-based deployment dynamics, Simple/Advanced modes, and finance
 - `carbongpt/ui/lifecycle_ui.py` — Lifecycle management, monitoring, issuance tracking
 - `carbongpt/ui/portfolio_ui.py` — Portfolio analytics dashboard
 - `carbongpt/ui/audit_ui.py` — Audit simulation interface
@@ -66,7 +66,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 
 **Core Engine Modules:**
 - `carbongpt/core/parameter_engine.py` — Centralized parameter management with validation, source tracking, dependency tracking, and auto-initialization from methodology defaults
-- `carbongpt/core/er_simulator.py` — Deterministic emission reduction calculations for cookstove (VM0050/TPDDTEC) and grid (ACM0002/AMS-I.D.) methodologies, year-by-year projections, scenario management, sensitivity analysis, carbon finance modeling
+- `carbongpt/core/er_simulator.py` — Deterministic emission reduction calculations for cookstove (VM0050/TPDDTEC) and grid (ACM0002/AMS-I.D.) methodologies, year-by-year projections, scenario management, sensitivity analysis, carbon finance modeling. Includes cohort-based deployment engine (`calculate_cookstove_er_cohort`) supporting: deployment ramp-up (instant/fixed monthly/custom schedule), deployment timing (start/mid/end of period), technology lifetime, drop-off/survival models (annual rate or custom curve), usage rate models (fixed or custom curve). `run_scenario()` accepts `deployment_config` dict to toggle cohort mode.
 - `carbongpt/core/lifecycle_manager.py` — Project lifecycle stages (Feasibility through Issuance), task management, monitoring task initialization, issuance tracking, portfolio analytics
 - `carbongpt/core/evidence_engine.py` — Evidence linking (parameters/sections to source documents), evidence completeness scoring, citation generation
 - `carbongpt/core/audit_simulator.py` — Simulated VVB audit with parameter validation, evidence gap analysis, section consistency checks, compliance verification, risk scoring
