@@ -1,0 +1,77 @@
+The implementation plan is good, but I want to reduce scope and cost.
+
+Please implement a strict MVP version of the Evidence Pipeline with the smallest possible surface area.
+
+Constraints:
+- No automatic LLM extraction on every upload
+- No new tabs or pages
+- No narrative_claim support yet
+- Focus only on parameter evidence for a small set of critical parameters
+- Keep implementation as small and cheap as possible
+
+MVP requirements:
+
+1. Extraction trigger
+Do NOT run evidence extraction automatically after upload.
+Instead, add a manual button in the Documents tab:
+"Extract parameter evidence"
+
+2. Extraction scope
+Only extract evidence for critical project parameters:
+- fNRB
+- num_devices / num_households
+- household_size
+- baseline_fuel_consumption
+- project_fuel_consumption
+- usage_rate
+- SFC_baseline
+- SFC_project
+
+3. Evidence type
+For this MVP, support only:
+- evidence_type = parameter_value
+
+Do not implement narrative_claim, methodology_reference, regulatory_reference, or audit_support yet.
+
+4. Evidence decisions
+Support exactly 3 actions:
+- Accept & Apply
+- Accept as Reference
+- Reject
+
+Definitions:
+- Accept & Apply = sets evidence_decision='accepted', updates the active parameter value, updates parameter status appropriately
+- Accept as Reference = sets evidence_decision='accepted_as_reference', does not change the active value
+- Reject = sets evidence_decision='rejected'
+
+5. Source type
+Do NOT always map accepted evidence to source_type='measured'.
+Introduce a safer source classification for this MVP:
+- source_type='document_extracted'
+
+Only use 'measured' if there is already a clear rule proving the document is a measurement source.
+
+6. Schema changes
+Keep schema changes minimal.
+Only add the columns strictly required for this MVP.
+
+7. UI changes
+Implement only:
+- Documents tab: pending evidence review section
+- Parameters tab: evidence indicator/count next to relevant parameters
+
+8. State engine
+Only add minimal evidence awareness:
+- count of pending evidence items
+- count of accepted evidence-backed parameters
+
+Do not expand evidence scoring too much yet.
+
+9. Deliverable
+Before coding, rewrite the implementation plan for this reduced MVP scope.
+Show:
+- exact schema changes
+- exact files to modify
+- exact user flow
+- how this MVP reduces cost and complexity
+Do not implement yet until this reduced plan is shown.
