@@ -226,6 +226,133 @@ def auto_link_parameter_evidence(project_id, param_key, source_doc_id, source_de
         )
 
 
+CHUNK_SIZE = 12000
+CHUNK_OVERLAP = 1500
+
+
+def _build_extraction_prompt(param_lines, methodology):
+    return f"""You are analyzing a document excerpt for a carbon project using methodology {methodology}.
+
+Search ONLY for specific numeric values related to these parameters:
+{chr(10).join(param_lines)}
+
+For each value you find IN THE TEXT BELOW, return a JSON array:
+[
+  {{
+    "param_key": "fNRB",
+    "extracted_value": "0.35",
+    "extracted_unit": "fraction",
+    "quote": "The fraction of non-renewable biomass was determined to be 0.35",
+    "page_or_section": "Page 12, Section 4.2",
+    "confidence": 0.9
+  }}
+]
+
+CRITICAL ANTI-HALLUCINATION RULES:
+- ONLY extract values that appear as explicit numbers in the text provided below.
+- The "quote" field MUST be a verbatim substring copied from the text — do NOT paraphrase or fabricate quotes.
+- If a parameter is not mentioned with an explicit numeric value in the text, do NOT include it.
+- Do NOT guess, infer, or generate values. If the text does not contain a clear numeric value for a parameter, skip it.
+- Return empty array [] if no relevant values are found in this text.
+
+IMPORTANT — baseline vs project:
+- Do NOT confuse baseline and project parameters.
+- Only extract SFC_baseline if text clearly refers to the BASELINE scenario (e.g. "SFC_b,i", "baseline specific fuel consumption", "traditional stove consumption").
+- Only extract SFC_project if text clearly refers to the PROJECT technology (e.g. "SFC_p,i,y", "project specific fuel consumption", "improved stove consumption").
+- Only extract baseline_fuel_consumption if text clearly refers to BASELINE fuel use, not project fuel use.
+- Only extract project_fuel_consumption if text clearly refers to PROJECT fuel use, not baseline fuel use.
+- If it is ambiguous whether a value refers to baseline or project, do NOT extract it.
+
+IMPORTANT — context precision:
+- For num_devices: only extract values that represent the TOTAL number of project devices/stoves/cookstoves deployed or distributed. Do NOT extract sample sizes, survey counts, job counts, or unit numbering.
+- For num_households: only extract values that represent the TOTAL number of households served/targeted by the project. Do NOT extract survey sample sizes (e.g. "sample of 400 households") or administrative region counts.
+- For household_size: only extract values explicitly described as average household size or persons per household. Do NOT extract counts of households or tonnes of fuel per household.
+- For SFC_baseline and SFC_project: verify the unit carefully. If the document states a value in tons/HH/day or kg/household/day, that is NOT the same as kg/person/year — reduce confidence to <0.7.
+
+Rules:
+- Only extract concrete numeric values, not descriptions or ranges
+- The "quote" MUST be an exact substring from the document text (copy-paste, do not rephrase)
+- Report the extracted_unit exactly as stated in the document
+- Set confidence: 0.9+ if value is clearly stated with correct context, 0.7-0.9 if inferred, <0.7 if uncertain or unit mismatch
+- Return ONLY valid JSON array, no other text"""
+
+
+def _split_into_chunks(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    if len(text) <= chunk_size:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start = end - overlap
+    return chunks
+
+
+def _safe_confidence(val, default=0.5):
+    try:
+        c = float(val)
+        return max(0.0, min(1.0, c))
+    except (ValueError, TypeError):
+        return default
+
+
+def _validate_quote(quote, full_text):
+    if not quote or len(quote) < 10:
+        return False
+    normalized_quote = " ".join(quote.lower().split())
+    normalized_text = " ".join(full_text.lower().split())
+    if normalized_quote in normalized_text:
+        return True
+    words = normalized_quote.split()
+    if len(words) >= 8:
+        core = " ".join(words[:8])
+        if core in normalized_text:
+            return True
+        core = " ".join(words[-8:])
+        if core in normalized_text:
+            return True
+    return False
+
+
+NOISE_PATTERNS = {
+    "num_devices": [r"\bsample\b", r"\bjob", r"\bunit\s+number", r"\bnumber of units\b"],
+    "num_households": [r"\bsample[sd]?\b", r"\bsurvey\b", r"\brespondent", r"\bsampling\b"],
+    "household_size": [r"\bton\b", r"\btonne\b", r"\bcharcoal\b", r"\bfuel\b", r"\bkg\b"],
+}
+
+
+def _flag_noisy_extraction(item):
+    import re as _re
+    pk = item.get("param_key", "")
+    patterns = NOISE_PATTERNS.get(pk)
+    if not patterns:
+        return item
+    quote = (item.get("quote") or "").lower()
+    for pat in patterns:
+        if _re.search(pat, quote):
+            item["confidence"] = min(_safe_confidence(item.get("confidence", 0.5)), 0.5)
+            note = item.get("page_or_section", "") or ""
+            if "noise" not in note.lower():
+                item["page_or_section"] = f"{note} | WARNING: Quote context suggests this may not be the project-level value".strip(" |")
+            break
+    return item
+
+
+def _deduplicate_extractions(all_extractions):
+    seen = {}
+    for item in all_extractions:
+        item = _flag_noisy_extraction(item)
+        pk = item.get("param_key", "")
+        val = str(item.get("extracted_value", "")).strip()
+        key = (pk, val)
+        existing = seen.get(key)
+        if existing is None or _safe_confidence(item.get("confidence", 0)) > _safe_confidence(existing.get("confidence", 0)):
+            seen[key] = item
+    return list(seen.values())
+
+
 def extract_parameter_evidence(project_id, doc_id):
     with get_cursor() as cur:
         cur.execute("SELECT * FROM project_documents WHERE id = %s AND project_id = %s", (doc_id, project_id))
@@ -249,7 +376,6 @@ def extract_parameter_evidence(project_id, doc_id):
 
     param_lines = []
     for p in params:
-        current = p["value"] if p["value"] is not None else "not set"
         unit = p.get("unit") or ""
         aliases = PARAM_ALIASES.get(p["param_key"], [])
         alias_text = f' (also called: {", ".join(aliases)})' if aliases else ""
@@ -261,79 +387,55 @@ def extract_parameter_evidence(project_id, doc_id):
         range_text = f" [valid range: {', '.join(range_parts)}]" if range_parts else ""
         param_lines.append(
             f"- {p['param_key']} ({p['param_name']}){alias_text}: "
-            f"current value = {current} {unit}{range_text}"
+            f"expected unit = {unit}{range_text}"
         )
 
     with get_cursor() as cur:
-        cur.execute("SELECT standard, methodology_code FROM user_projects WHERE id = %s", (project_id,))
+        cur.execute("SELECT standard, methodology FROM user_projects WHERE id = %s", (project_id,))
         proj = cur.fetchone()
     methodology = ""
     if proj:
-        methodology = f"{proj.get('standard', '')} {proj.get('methodology_code', '')}".strip()
+        methodology = f"{proj.get('standard', '')} {proj.get('methodology', '')}".strip()
 
-    doc_text = parsed_text[:15000]
+    chunks = _split_into_chunks(parsed_text)
+    system_prompt = _build_extraction_prompt(param_lines, methodology)
 
-    system_prompt = f"""You are analyzing a document for a carbon project using methodology {methodology}.
+    all_extractions = []
+    for chunk_idx, chunk_text in enumerate(chunks):
+        user_prompt = f"Document: {doc['file_name']} (section {chunk_idx + 1}/{len(chunks)})\n\n{chunk_text}"
 
-Search ONLY for specific numeric values related to these parameters:
-{chr(10).join(param_lines)}
+        try:
+            raw = _call_openai(system_prompt, user_prompt)
+        except Exception as e:
+            logger.error("Evidence extraction LLM call failed on chunk %d: %s", chunk_idx, e)
+            continue
 
-For each value you find, return JSON array:
-[
-  {{
-    "param_key": "fNRB",
-    "extracted_value": "0.35",
-    "extracted_unit": "fraction",
-    "quote": "The fraction of non-renewable biomass was determined to be 0.35",
-    "page_or_section": "Page 12, Section 4.2",
-    "confidence": 0.9
-  }}
-]
+        try:
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3]
+                cleaned = cleaned.strip()
+            chunk_extractions = json.loads(cleaned)
+            if not isinstance(chunk_extractions, list):
+                chunk_extractions = []
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Failed to parse extraction response for chunk %d: %s", chunk_idx, raw[:200])
+            continue
 
-IMPORTANT:
-- Do NOT confuse baseline and project parameters.
-- Only extract a value for SFC_baseline if the document clearly refers to the BASELINE scenario (e.g. "SFC_b,i", "baseline specific fuel consumption", "traditional stove consumption").
-- Only extract a value for SFC_project if the document clearly refers to the PROJECT technology (e.g. "SFC_p,i,y", "project specific fuel consumption", "improved stove consumption").
-- Only extract a value for baseline_fuel_consumption if the document clearly refers to BASELINE fuel use, not project fuel use.
-- Only extract a value for project_fuel_consumption if the document clearly refers to PROJECT fuel use, not baseline fuel use.
-- If it is ambiguous whether a value refers to baseline or project, do NOT extract it.
+        all_extractions.extend(chunk_extractions)
 
-Rules:
-- Only extract concrete numeric values, not descriptions or ranges
-- Include the exact quote from the document
-- Report the extracted_unit exactly as stated in the document
-- Set confidence: 0.9+ if value is clearly stated, 0.7-0.9 if inferred, <0.7 if uncertain
-- If the extracted value falls outside the valid range shown above, reduce confidence to <0.7
-- Return empty array [] if no relevant values found
-- Return ONLY valid JSON array, no other text"""
+    if not all_extractions:
+        return {"extracted": 0, "doc_id": doc_id, "doc_name": doc.get("file_name", ""), "chunks_processed": len(chunks)}
 
-    user_prompt = f"Document: {doc['file_name']}\n\n{doc_text}"
-
-    try:
-        raw = _call_openai(system_prompt, user_prompt)
-    except Exception as e:
-        logger.error("Evidence extraction LLM call failed: %s", e)
-        return {"error": f"AI extraction failed: {str(e)}", "extracted": 0}
-
-    try:
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
-        extractions = json.loads(cleaned)
-        if not isinstance(extractions, list):
-            extractions = []
-    except (json.JSONDecodeError, ValueError):
-        logger.warning("Failed to parse extraction response: %s", raw[:200])
-        return {"error": "AI returned unparseable response", "extracted": 0}
+    all_extractions = _deduplicate_extractions(all_extractions)
 
     param_map = {p["param_key"]: p for p in params}
     created = 0
 
     with get_cursor() as cur:
-        for item in extractions:
+        for item in all_extractions:
             pk = item.get("param_key", "")
             if pk not in param_map:
                 continue
@@ -342,10 +444,14 @@ Rules:
             ext_unit = str(item.get("extracted_unit", "")).strip()
             quote = str(item.get("quote", "")).strip()
             page_section = str(item.get("page_or_section", "")).strip()
-            confidence = float(item.get("confidence", 0.5))
+            confidence = _safe_confidence(item.get("confidence", 0.5))
 
             if not ext_value:
                 continue
+
+            if not _validate_quote(quote, parsed_text):
+                confidence = min(confidence, 0.4)
+                page_section = f"{page_section} | WARNING: Quote not verified in source text" if page_section else "WARNING: Quote not verified in source text"
 
             canonical_unit = param_map[pk].get("unit") or ""
             unit_ok, unit_warning = _check_unit_compatibility(canonical_unit, ext_unit)
@@ -396,7 +502,7 @@ Rules:
             if cur.fetchone():
                 created += 1
 
-    return {"extracted": created, "doc_id": doc_id, "doc_name": doc.get("file_name", "")}
+    return {"extracted": created, "doc_id": doc_id, "doc_name": doc.get("file_name", ""), "chunks_processed": len(chunks)}
 
 
 def get_pending_evidence(project_id, doc_id=None):

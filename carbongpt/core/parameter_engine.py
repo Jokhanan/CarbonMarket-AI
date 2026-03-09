@@ -132,7 +132,9 @@ def initialize_project_parameters(project_id):
         if not project:
             return {"error": "Project not found"}
 
+        import re as _re
         methodology = (project["methodology"] or "").upper().replace("GS-", "")
+        methodology = _re.sub(r"[\s-]*V(?:ERSION\s*)?\d+(\.\d+)?$", "", methodology, flags=_re.IGNORECASE).strip()
         country = project.get("country", "")
         settings = project.get("project_settings") or {}
         intake = project.get("project_intake") or {}
