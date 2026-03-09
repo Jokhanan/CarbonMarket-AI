@@ -5,7 +5,10 @@ import os
 import requests as http_client
 
 from carbongpt.guides import load_guide, DOC_TYPE_LABELS, GUIDE_REGISTRY
-from carbongpt.core.knowledge_retrieval import retrieve_section_context, format_context_for_prompt
+from carbongpt.core.knowledge_retrieval import (
+    retrieve_section_context, format_context_for_prompt,
+    map_section_to_domain, retrieve_section_exemplar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -510,6 +513,28 @@ STANDARD_DOC_TYPE_MAP = {
 }
 
 
+PROJECT_TYPE_KEYWORDS = {
+    "cookstove": ["cookstove", "stove", "ics", "improved cook", "clean cooking"],
+    "solar": ["solar", "photovoltaic", "pv"],
+    "wind": ["wind", "wind farm", "wind power"],
+    "hydro": ["hydro", "hydroelectric", "hydropower"],
+    "landfill_biogas_waste": ["landfill", "lfg", "biogas", "waste", "wastewater", "rdf", "msw"],
+}
+
+
+def _infer_project_type(project_info):
+    text = " ".join([
+        project_info.get("name", ""),
+        project_info.get("description", ""),
+        project_info.get("methodology", ""),
+    ]).lower()
+    for ptype, keywords in PROJECT_TYPE_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                return ptype
+    return "other"
+
+
 def _get_methodology_context(methodology_code):
     if not methodology_code:
         return ""
@@ -773,6 +798,21 @@ def generate_section_draft(
 
     if examples:
         user_prompt += f"### Example of good content:\n{examples}\n\n"
+
+    try:
+        domain = map_section_to_domain(section_id, subsection.get("title", ""))
+        if domain:
+            _project_type = _infer_project_type(project_info)
+            exemplar_text = retrieve_section_exemplar(
+                section_domain=domain,
+                standard=standard,
+                methodology_code=project_info.get("methodology"),
+                project_type=_project_type,
+            )
+            if exemplar_text:
+                user_prompt += exemplar_text + "\n"
+    except Exception as e:
+        logger.debug("Exemplar retrieval skipped: %s", e)
 
     user_prompt += "### Project Information:\n"
     user_prompt += f"- Project name: {project_info.get('name', '[Not specified]')}\n"

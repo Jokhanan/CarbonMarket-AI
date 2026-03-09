@@ -627,6 +627,27 @@ CREATE INDEX IF NOT EXISTS idx_asr_project ON audit_simulation_results(project_i
 -- Phase 2a: Scenario purpose lifecycle + selected scenario reference
 ALTER TABLE er_scenarios ADD COLUMN IF NOT EXISTS scenario_purpose VARCHAR(30) DEFAULT 'exploratory';
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS selected_scenario_id INTEGER;
+
+CREATE TABLE IF NOT EXISTS section_exemplars (
+    id SERIAL PRIMARY KEY,
+    document_section_id INTEGER NOT NULL REFERENCES document_sections(id),
+    document_id INTEGER NOT NULL REFERENCES documents(id),
+    doc_type VARCHAR(20) NOT NULL,
+    standard VARCHAR(30),
+    methodology_code VARCHAR(30),
+    project_type VARCHAR(30),
+    section_domain VARCHAR(30) NOT NULL CHECK (section_domain IN (
+        'baseline', 'additionality', 'monitoring', 'sampling'
+    )),
+    section_title TEXT,
+    is_usable BOOLEAN NOT NULL DEFAULT true,
+    word_count INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_exemplars_domain ON section_exemplars(section_domain);
+CREATE INDEX IF NOT EXISTS idx_exemplars_lookup ON section_exemplars(section_domain, standard, project_type)
+    WHERE is_usable = true;
 """
 
 

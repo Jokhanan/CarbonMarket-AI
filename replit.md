@@ -86,6 +86,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `project_write_sessions` — AI-generated and user-edited drafts
 - `methodologies`, `methodology_parsed`, `methodology_knowledge`, `methodology_structure` — Methodology intelligence
 - `findings_knowledge` — VVB findings patterns (extraction: `ai_assisted` via `findings_extractor.py`, dedup: exact key + word-overlap similarity pass)
+- `section_exemplars` — Classified section metadata index for exemplar retrieval (190 sections from 30 pilot PDDs, 4 domains: baseline/additionality/monitoring/sampling, `is_usable` usability filter)
 - `research_results`, `research_source_priority` — Research orchestrator data
 
 ### Carbon Operating System Tables (New)
@@ -111,6 +112,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `carbongpt/core/evidence_engine.py` — Evidence and citation engine
 - `carbongpt/core/audit_simulator.py` — Audit simulation engine
 - `carbongpt/core/findings_extractor.py` — Chunk-based findings extraction from VVB reports with two-pass dedup (exact key + word-overlap similarity)
+- `carbongpt/core/section_classifier.py` — LLM-assisted section classification for exemplar index (batch classify document_sections into section_domain/project_type/is_usable)
 - `carbongpt/core/research_orchestrator.py` — Multi-layer research
 - `carbongpt/app/project_routes.py` — API routes
 - `carbongpt/repository/schema.py` — Database schema
