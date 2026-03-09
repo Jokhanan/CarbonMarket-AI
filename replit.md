@@ -86,7 +86,7 @@ The core AI components leverage OpenAI's GPT models for language model inference
 - `project_write_sessions` — AI-generated and user-edited drafts
 - `methodologies`, `methodology_parsed`, `methodology_knowledge`, `methodology_structure` — Methodology intelligence
 - `findings_knowledge` — VVB findings patterns (extraction: `ai_assisted` via `findings_extractor.py`, dedup: exact key + word-overlap similarity pass)
-- `section_exemplars` — Classified section metadata index for exemplar retrieval (190 sections from 30 pilot PDDs, 4 domains: baseline/additionality/monitoring/sampling, `is_usable` usability filter)
+- `section_exemplars` — Classified section metadata index for exemplar retrieval (190 sections from 30 pilot PDDs, 4 domains: baseline/additionality/monitoring/sampling, `is_usable` usability filter, `section_purpose` for precise matching e.g. baseline_scenario vs baseline_emissions)
 - `research_results`, `research_source_priority` — Research orchestrator data
 
 ### Carbon Operating System Tables (New)

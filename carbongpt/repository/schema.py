@@ -640,6 +640,7 @@ CREATE TABLE IF NOT EXISTS section_exemplars (
         'baseline', 'additionality', 'monitoring', 'sampling'
     )),
     section_title TEXT,
+    section_purpose VARCHAR(40),
     is_usable BOOLEAN NOT NULL DEFAULT true,
     word_count INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()

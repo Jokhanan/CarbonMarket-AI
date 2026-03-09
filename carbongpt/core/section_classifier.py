@@ -5,6 +5,7 @@ import re
 import requests
 
 from carbongpt.repository.db import get_cursor
+from carbongpt.core.knowledge_retrieval import map_section_to_purpose
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,10 @@ def classify_pilot_sections(doc_ids=None):
             if not isinstance(is_usable, bool):
                 is_usable = bool(is_usable)
 
+            purpose = map_section_to_purpose(
+                s.get("section_number", ""), s["title"]
+            )
+
             rows_to_insert.append((
                 s["section_id"],
                 s["document_id"],
@@ -233,6 +238,7 @@ def classify_pilot_sections(doc_ids=None):
                 ptype,
                 domain,
                 s["title"],
+                purpose,
                 is_usable,
                 s["word_count"],
             ))
@@ -244,8 +250,8 @@ def classify_pilot_sections(doc_ids=None):
                         INSERT INTO section_exemplars
                             (document_section_id, document_id, doc_type, standard,
                              methodology_code, project_type, section_domain,
-                             section_title, is_usable, word_count)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             section_title, section_purpose, is_usable, word_count)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, row)
             classified_count += len(rows_to_insert)
 

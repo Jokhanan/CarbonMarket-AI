@@ -148,69 +148,112 @@ def _build_search_query(
     )
 
 
-SECTION_DOMAIN_MAP = {
-    "B.4": "baseline",
-    "B.5": "additionality",
-    "B.6": "baseline",
-    "D": "monitoring",
-    "D.1": "monitoring",
-    "D.2": "monitoring",
-    "D.3": "monitoring",
-    "D.4": "monitoring",
-    "D.5": "monitoring",
-    "D.6": "monitoring",
-    "D.7": "sampling",
-    "3": "baseline",
-    "3.1": "baseline",
-    "3.2": "baseline",
-    "3.3": "additionality",
-    "3.4": "baseline",
-    "3.5": "additionality",
-    "3.6": "baseline",
-    "4": "baseline",
-    "4.1": "baseline",
-    "4.2": "baseline",
-    "4.3": "baseline",
-    "4.4": "baseline",
-    "5": "monitoring",
-    "5.1": "monitoring",
-    "5.2": "monitoring",
-    "5.3": "monitoring",
-    "7": "monitoring",
-    "7.1": "monitoring",
-    "7.2": "monitoring",
-    "7.3": "monitoring",
-    "7.4": "sampling",
+SECTION_LOOKUP = {
+    "B.4": ("baseline", "baseline_scenario"),
+    "B.5": ("additionality", "additionality_demonstration"),
+    "B.6": ("baseline", "baseline_emissions"),
+    "B.7": ("monitoring", "monitoring_plan"),
+    "D": ("monitoring", "monitoring_plan"),
+    "D.1": ("monitoring", "monitoring_plan"),
+    "D.2": ("monitoring", "monitoring_parameters"),
+    "D.3": ("monitoring", "monitoring_parameters"),
+    "D.4": ("monitoring", "monitoring_qa"),
+    "D.5": ("monitoring", "monitoring_qa"),
+    "D.6": ("monitoring", "monitoring_qa"),
+    "D.7": ("sampling", "sampling_design"),
+    "3": ("baseline", None),
+    "3.1": ("baseline", None),
+    "3.2": ("baseline", None),
+    "3.3": ("additionality", "additionality_demonstration"),
+    "3.4": ("baseline", "baseline_scenario"),
+    "3.5": ("additionality", "additionality_demonstration"),
+    "3.6": ("baseline", None),
+    "4": ("baseline", "baseline_emissions"),
+    "4.1": ("baseline", "baseline_emissions"),
+    "4.2": ("baseline", "baseline_emissions"),
+    "4.3": ("baseline", "baseline_emissions"),
+    "4.4": ("baseline", "baseline_emissions"),
+    "5": ("monitoring", None),
+    "5.1": ("monitoring", "monitoring_parameters"),
+    "5.2": ("monitoring", "monitoring_parameters"),
+    "5.3": ("monitoring", "monitoring_plan"),
+    "7": ("monitoring", "monitoring_plan"),
+    "7.1": ("monitoring", "monitoring_plan"),
+    "7.2": ("monitoring", "monitoring_plan"),
+    "7.3": ("monitoring", "monitoring_qa"),
+    "7.4": ("sampling", "sampling_design"),
 }
 
-SECTION_DOMAIN_TITLE_KEYWORDS = {
-    "baseline": ["baseline", "base line", "baseline scenario", "business as usual"],
-    "additionality": ["additionality", "barrier", "investment analysis", "common practice"],
-    "monitoring": ["monitoring", "monitoring plan", "data quality", "qa/qc"],
-    "sampling": ["sampling", "sample size", "sample design", "stratification"],
+TITLE_TO_PURPOSE = {
+    "baseline scenario": ("baseline", "baseline_scenario"),
+    "baseline emission": ("baseline", "baseline_emissions"),
+    "baseline survey": ("baseline", "baseline_survey"),
+    "additionality": ("additionality", "additionality_demonstration"),
+    "barrier": ("additionality", "additionality_demonstration"),
+    "investment analysis": ("additionality", "additionality_demonstration"),
+    "common practice": ("additionality", "additionality_demonstration"),
+    "monitoring plan": ("monitoring", "monitoring_plan"),
+    "monitoring parameter": ("monitoring", "monitoring_parameters"),
+    "data and parameter": ("monitoring", "monitoring_parameters"),
+    "data quality": ("monitoring", "monitoring_qa"),
+    "qa/qc": ("monitoring", "monitoring_qa"),
+    "quality assurance": ("monitoring", "monitoring_qa"),
+    "sampling": ("sampling", "sampling_design"),
+    "sample size": ("sampling", "sampling_design"),
+    "sample design": ("sampling", "sampling_design"),
+    "precision": ("sampling", "sampling_precision"),
+    "monitoring": ("monitoring", None),
+    "baseline": ("baseline", None),
 }
 
 MAX_EXEMPLAR_CHARS = 2000
 
+_EXEMPLAR_COLUMNS = """
+    se.section_title, se.methodology_code, se.project_type,
+    ds.content, d.title as doc_title, ds.section_number
+"""
+
+_EXEMPLAR_JOINS = """
+    FROM section_exemplars se
+    JOIN document_sections ds ON ds.id = se.document_section_id
+    JOIN documents d ON d.id = se.document_id
+"""
+
 
 def map_section_to_domain(section_id, section_title=""):
-    if section_id in SECTION_DOMAIN_MAP:
-        return SECTION_DOMAIN_MAP[section_id]
+    if section_id in SECTION_LOOKUP:
+        return SECTION_LOOKUP[section_id][0]
 
     base = section_id.split(".")[0] if section_id else ""
-    if base in SECTION_DOMAIN_MAP:
-        return SECTION_DOMAIN_MAP[base]
+    if base in SECTION_LOOKUP:
+        return SECTION_LOOKUP[base][0]
 
     title_lower = (section_title or "").lower()
-    for domain, keywords in SECTION_DOMAIN_TITLE_KEYWORDS.items():
-        for kw in keywords:
-            if kw in title_lower:
-                return domain
+    for keyword, (domain, _purpose) in TITLE_TO_PURPOSE.items():
+        if keyword in title_lower:
+            return domain
 
     return None
 
 
-def retrieve_section_exemplar(section_domain, standard=None, methodology_code=None, project_type=None):
+def map_section_to_purpose(section_id, section_title=""):
+    if section_id in SECTION_LOOKUP:
+        return SECTION_LOOKUP[section_id][1]
+
+    base = section_id.split(".")[0] if section_id else ""
+    if base in SECTION_LOOKUP:
+        return SECTION_LOOKUP[base][1]
+
+    title_lower = (section_title or "").lower()
+    for keyword, (_domain, purpose) in TITLE_TO_PURPOSE.items():
+        if keyword in title_lower and purpose:
+            return purpose
+
+    return None
+
+
+def retrieve_section_exemplar(section_domain, standard=None, methodology_code=None,
+                              project_type=None, section_purpose=None):
     if not section_domain:
         return ""
 
@@ -220,71 +263,10 @@ def retrieve_section_exemplar(section_domain, standard=None, methodology_code=No
         from carbongpt.repository.db import get_cursor
 
         with get_cursor() as cur:
-            if methodology_code and std_label:
-                cur.execute("""
-                    SELECT se.section_title, se.methodology_code, se.project_type,
-                           ds.content, d.title as doc_title, ds.section_number
-                    FROM section_exemplars se
-                    JOIN document_sections ds ON ds.id = se.document_section_id
-                    JOIN documents d ON d.id = se.document_id
-                    WHERE se.section_domain = %s
-                      AND se.is_usable = true
-                      AND se.standard = %s
-                      AND se.methodology_code = %s
-                    ORDER BY se.word_count DESC
-                    LIMIT 1
-                """, (section_domain, std_label, methodology_code))
-                row = cur.fetchone()
-                if row:
-                    return _format_exemplar(row)
-
-            if project_type and std_label:
-                cur.execute("""
-                    SELECT se.section_title, se.methodology_code, se.project_type,
-                           ds.content, d.title as doc_title, ds.section_number
-                    FROM section_exemplars se
-                    JOIN document_sections ds ON ds.id = se.document_section_id
-                    JOIN documents d ON d.id = se.document_id
-                    WHERE se.section_domain = %s
-                      AND se.is_usable = true
-                      AND se.standard = %s
-                      AND se.project_type = %s
-                    ORDER BY se.word_count DESC
-                    LIMIT 1
-                """, (section_domain, std_label, project_type))
-                row = cur.fetchone()
-                if row:
-                    return _format_exemplar(row)
-
-            if std_label:
-                cur.execute("""
-                    SELECT se.section_title, se.methodology_code, se.project_type,
-                           ds.content, d.title as doc_title, ds.section_number
-                    FROM section_exemplars se
-                    JOIN document_sections ds ON ds.id = se.document_section_id
-                    JOIN documents d ON d.id = se.document_id
-                    WHERE se.section_domain = %s
-                      AND se.is_usable = true
-                      AND se.standard = %s
-                    ORDER BY se.word_count DESC
-                    LIMIT 1
-                """, (section_domain, std_label))
-                row = cur.fetchone()
-                if row:
-                    return _format_exemplar(row)
-
-            cur.execute("""
-                SELECT se.section_title, se.methodology_code, se.project_type,
-                       ds.content, d.title as doc_title, ds.section_number
-                FROM section_exemplars se
-                JOIN document_sections ds ON ds.id = se.document_section_id
-                JOIN documents d ON d.id = se.document_id
-                WHERE se.section_domain = %s
-                  AND se.is_usable = true
-                ORDER BY se.word_count DESC
-                LIMIT 1
-            """, (section_domain,))
-            row = cur.fetchone()
+            row = _find_best_exemplar(
+                cur, section_domain, std_label, methodology_code,
+                project_type, section_purpose,
+            )
             if row:
                 return _format_exemplar(row)
 
@@ -292,6 +274,77 @@ def retrieve_section_exemplar(section_domain, standard=None, methodology_code=No
         logger.warning("Section exemplar retrieval failed: %s", e)
 
     return ""
+
+
+def _find_best_exemplar(cur, domain, std_label, meth_code, project_type, purpose):
+    filters_cascade = _build_filter_cascade(domain, std_label, meth_code, project_type, purpose)
+
+    for where_clause, params in filters_cascade:
+        cur.execute(f"""
+            SELECT {_EXEMPLAR_COLUMNS}
+            {_EXEMPLAR_JOINS}
+            WHERE se.is_usable = true AND {where_clause}
+            ORDER BY se.word_count DESC
+            LIMIT 1
+        """, params)
+        row = cur.fetchone()
+        if row:
+            return row
+
+    return None
+
+
+def _build_filter_cascade(domain, std_label, meth_code, project_type, purpose):
+    cascade = []
+
+    if purpose and meth_code and std_label:
+        cascade.append((
+            "se.section_purpose = %s AND se.standard = %s AND se.methodology_code = %s",
+            (purpose, std_label, meth_code),
+        ))
+
+    if purpose and project_type and std_label:
+        cascade.append((
+            "se.section_purpose = %s AND se.standard = %s AND se.project_type = %s",
+            (purpose, std_label, project_type),
+        ))
+
+    if purpose and std_label:
+        cascade.append((
+            "se.section_purpose = %s AND se.standard = %s",
+            (purpose, std_label),
+        ))
+
+    if purpose:
+        cascade.append((
+            "se.section_purpose = %s",
+            (purpose,),
+        ))
+
+    if meth_code and std_label:
+        cascade.append((
+            "se.section_domain = %s AND se.standard = %s AND se.methodology_code = %s",
+            (domain, std_label, meth_code),
+        ))
+
+    if project_type and std_label:
+        cascade.append((
+            "se.section_domain = %s AND se.standard = %s AND se.project_type = %s",
+            (domain, std_label, project_type),
+        ))
+
+    if std_label:
+        cascade.append((
+            "se.section_domain = %s AND se.standard = %s",
+            (domain, std_label),
+        ))
+
+    cascade.append((
+        "se.section_domain = %s",
+        (domain,),
+    ))
+
+    return cascade
 
 
 def _format_exemplar(row):

@@ -7,7 +7,7 @@ import requests as http_client
 from carbongpt.guides import load_guide, DOC_TYPE_LABELS, GUIDE_REGISTRY
 from carbongpt.core.knowledge_retrieval import (
     retrieve_section_context, format_context_for_prompt,
-    map_section_to_domain, retrieve_section_exemplar,
+    map_section_to_domain, map_section_to_purpose, retrieve_section_exemplar,
 )
 
 logger = logging.getLogger(__name__)
@@ -803,11 +803,13 @@ def generate_section_draft(
         domain = map_section_to_domain(section_id, subsection.get("title", ""))
         if domain:
             _project_type = _infer_project_type(project_info)
+            _purpose = map_section_to_purpose(section_id, subsection.get("title", ""))
             exemplar_text = retrieve_section_exemplar(
                 section_domain=domain,
                 standard=standard,
                 methodology_code=project_info.get("methodology"),
                 project_type=_project_type,
+                section_purpose=_purpose,
             )
             if exemplar_text:
                 user_prompt += exemplar_text + "\n"
