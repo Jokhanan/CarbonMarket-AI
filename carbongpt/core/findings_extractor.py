@@ -2,40 +2,52 @@ import json
 import logging
 import os
 import re
+import requests
 
-import pdfplumber
+from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
 
-FINDINGS_EXTRACTION_PROMPT = """You are an expert carbon credit auditor analyzing a validation/verification report or PRR document.
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
-Extract ALL individual findings (CARs, CLs, FARs, observations, PRR comments) from the document text below.
+FINDINGS_EXTRACTION_PROMPT = """You are an expert carbon credit auditor analyzing a Verification or Validation Report from a VVB (Validation/Verification Body).
 
-For each finding, provide:
-- finding_type: "CAR" | "CL" | "FAR" | "observation" | "prr_comment"
-- finding_id: the original ID from the document (e.g., "CAR #1", "CL 05", "Comment 3")
-- severity: "critical" (CAR), "high" (CL requiring PDD changes), "medium" (CL clarification only), "low" (FAR/observation)
-- pdd_section: which PDD/MR section this relates to (e.g., "1.12", "2.1", "4.3", "Monitoring Plan", "Baseline"). Use the section number if mentioned, otherwise use the topic area.
-- topic: short categorization (e.g., "fNRB calculation", "stakeholder engagement", "monitoring parameters", "additionality", "baseline scenario", "double counting", "crediting period", "emission reductions", "sampling methodology", "project boundary", "leakage", "equipment specifications", "data quality")
-- description: the VVB's or Verra's question/concern (the actual finding text)
-- resolution: how the developer/PP responded and what they changed
-- resolution_approach: one of "pdd_update" (PDD was revised), "clarification" (explanation provided, no PDD change), "evidence_provided" (supporting docs submitted), "calculation_corrected" (numbers were fixed), "methodology_reference" (cited methodology clause)
-- was_closed: true/false
+Extract ALL audit findings from the text below. Findings include:
+- CAR (Corrective Action Request): A material non-conformity that must be corrected
+- CL (Clarification): A request for additional information or explanation
+- FAR (Forward Action Request): An action required for future monitoring/verification periods
+- OBS (Observation): A non-binding recommendation or minor observation
 
-Return a JSON array of findings objects. If no findings are found, return an empty array [].
+For each finding, return a JSON object with these fields:
+{
+  "finding_type": "CAR" | "CL" | "FAR" | "OBS",
+  "finding_id": "the finding's ID/number as stated in the report (e.g., 'CAR 01', 'CL-03')",
+  "severity": "major" | "minor" | "observation",
+  "pdd_section": "the PDD/MR section this finding relates to (e.g., 'B.6.3', 'Section 3.1', 'Monitoring')",
+  "topic": "short topic label (e.g., 'Baseline emission factor', 'Sampling methodology', 'Additionality')",
+  "description": "the finding description as stated by the VVB",
+  "resolution": "the project developer's response or resolution, if provided in the text",
+  "methodology_code": "the methodology code if identifiable (e.g., 'ACM0002', 'VM0050', 'AMS-I.D.')"
+}
 
-Be thorough - extract EVERY finding, even minor clarifications. Include the actual text of the finding and resolution, not just summaries.
+RULES:
+- Extract ONLY actual audit findings — formal CARs, CLs, FARs, and observations issued by the VVB.
+- Do NOT fabricate findings. If the text contains no findings, return an empty array [].
+- The "description" must closely follow the VVB's stated text, not be invented.
+- If the finding ID is not stated, use "unknown".
+- If pdd_section is not identifiable, use "general".
+- If methodology_code is not identifiable from the text, use null.
+- Set severity: "major" for CARs about material issues, "minor" for procedural CARs and CLs, "observation" for FARs and OBS.
+- Return ONLY a valid JSON array, no other text."""
 
-Document text:
-"""
-
-METHODOLOGY_DETECTION_PROMPT = """Based on this document text from a carbon project validation/verification report, identify:
+METADATA_PROMPT = """Based on this document text from a carbon project validation/verification report, identify:
 1. methodology_code: The methodology used (e.g., "VM0050", "ACM0002", "AMS-I.D.", "AMS-II.G")
-2. standard: "Verra" or "GoldStandard"  
+2. standard: "Verra" or "GoldStandard"
 3. vvb_name: Name of the VVB/auditor organization
 4. project_id: The VCS or GS project ID number
 5. project_name: The project name
-6. doc_type: "validation_report", "verification_report", "joint_valver", or "prr_response"
+6. doc_type: "validation_report" or "verification_report"
 
 Return as JSON object. Use null for any field you cannot determine.
 
@@ -43,272 +55,192 @@ Document text (first 3000 chars):
 """
 
 
-def extract_text_from_pdf(file_path, max_pages=None):
-    try:
-        pdf = pdfplumber.open(file_path)
-        pages = pdf.pages if max_pages is None else pdf.pages[:max_pages]
-        text = ""
-        for page in pages:
-            page_text = page.extract_text() or ""
-            text += page_text + "\n"
-        return text
-    except Exception as e:
-        logger.error("Failed to extract text from %s: %s", file_path, e)
-        return ""
-
-
-def _call_openai_json(system_prompt, user_prompt, max_tokens=4000):
-    import openai
-    api_key = os.getenv("OPENAI_API_KEY")
+def _call_llm(system_prompt, user_prompt, temperature=0):
+    api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not set")
-    client = openai.OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        max_tokens=max_tokens,
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
-    content = response.choices[0].message.content
-    return json.loads(content)
+        return None
 
-
-def detect_document_metadata(text):
-    header_text = text[:3000]
     try:
-        result = _call_openai_json(
-            "You extract metadata from carbon project documents. Return valid JSON.",
-            METHODOLOGY_DETECTION_PROMPT + f'"""\n{header_text}\n"""',
-            max_tokens=500,
+        resp = requests.post(
+            OPENAI_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": temperature,
+            },
+            timeout=60,
         )
-        return result
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        logger.error("Metadata detection failed: %s", e)
-        return {}
+        logger.error("LLM call failed: %s", e)
+        return None
 
 
-def extract_findings_from_text(text, metadata=None):
-    chunks = []
-    chunk_size = 15000
-    for i in range(0, len(text), chunk_size):
-        chunks.append(text[i:i + chunk_size])
+def _parse_json_response(raw):
+    if not raw:
+        return []
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            if "findings" in parsed:
+                return parsed["findings"]
+            return [parsed]
+    except (json.JSONDecodeError, ValueError):
+        return []
+    return []
+
+
+def _deduplicate_findings(findings):
+    seen = {}
+    for f in findings:
+        ftype = f.get("finding_type", "")
+        fid = f.get("finding_id", "")
+        desc = (f.get("description") or "")[:100].lower().strip()
+        topic = (f.get("topic") or "").lower().strip()
+
+        if fid and fid != "unknown":
+            key = (ftype, fid)
+        else:
+            key = (ftype, topic, desc[:60])
+
+        if key not in seen:
+            seen[key] = f
+        else:
+            existing = seen[key]
+            if len(f.get("description", "")) > len(existing.get("description", "")):
+                seen[key] = f
+            elif f.get("resolution") and not existing.get("resolution"):
+                existing["resolution"] = f["resolution"]
+
+    return list(seen.values())
+
+
+def extract_findings_from_chunks(doc_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT id, category, title FROM documents WHERE id = %s", (doc_id,))
+        doc = cur.fetchone()
+        if not doc:
+            return {"error": "Document not found", "doc_id": doc_id}
+
+        cur.execute(
+            "SELECT content FROM document_chunks WHERE document_id = %s ORDER BY chunk_index",
+            (doc_id,),
+        )
+        chunks = [r["content"] for r in cur.fetchall()]
+
+    if not chunks:
+        return {"error": "No chunks found", "doc_id": doc_id}
+
+    header_text = "\n".join(chunks[:3])[:3000]
+    meta_raw = _call_llm(
+        "You extract metadata from carbon project documents. Return valid JSON only.",
+        METADATA_PROMPT + header_text,
+    )
+    metadata = {}
+    if meta_raw:
+        try:
+            metadata = json.loads(meta_raw.strip().lstrip("```json").rstrip("```").strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+    llm_calls = 1
+
+    GROUP_SIZE = 25000
+    chunk_groups = []
+    group = []
+    group_len = 0
+    for chunk in chunks:
+        clen = len(chunk)
+        if group_len + clen > GROUP_SIZE and group:
+            chunk_groups.append(group)
+            group = [chunk]
+            group_len = clen
+        else:
+            group.append(chunk)
+            group_len += clen
+    if group:
+        chunk_groups.append(group)
 
     all_findings = []
-    for i, chunk in enumerate(chunks):
-        context_prefix = ""
-        if metadata:
-            context_prefix = (
-                f"Project: {metadata.get('project_name', 'Unknown')}\n"
-                f"Methodology: {metadata.get('methodology_code', 'Unknown')}\n"
-                f"Standard: {metadata.get('standard', 'Unknown')}\n\n"
-            )
+    for gi, grp in enumerate(chunk_groups):
+        combined_text = "\n\n---\n\n".join(grp)
+        user_prompt = (
+            f"Document: {doc['title']}\n"
+            f"Section group {gi + 1}/{len(chunk_groups)}\n\n"
+            f"{combined_text}"
+        )
+        raw = _call_llm(FINDINGS_EXTRACTION_PROMPT, user_prompt)
+        llm_calls += 1
+        parsed = _parse_json_response(raw)
+        all_findings.extend(parsed)
 
-        try:
-            result = _call_openai_json(
-                "You are an expert carbon credit auditor. Extract findings and return valid JSON with key 'findings' containing an array.",
-                FINDINGS_EXTRACTION_PROMPT + f'{context_prefix}"""\n{chunk}\n"""',
-                max_tokens=4000,
-            )
-            findings = result.get("findings", [])
-            if isinstance(findings, list):
-                all_findings.extend(findings)
-                logger.info("Chunk %d/%d: extracted %d findings", i + 1, len(chunks), len(findings))
-        except Exception as e:
-            logger.error("Findings extraction failed for chunk %d: %s", i + 1, e)
+    deduped = _deduplicate_findings(all_findings)
 
-    return all_findings
+    stored = 0
+    with get_cursor() as cur:
+        for f in deduped:
+            finding_type = f.get("finding_type", "CL")
+            if finding_type == "OBS":
+                finding_type = "observation"
+            if finding_type not in ("CAR", "CL", "FAR", "observation", "comment", "prr_comment"):
+                finding_type = "observation"
 
+            severity_map = {"major": "critical", "minor": "medium", "observation": "low"}
+            severity_raw = f.get("severity", "medium")
+            severity = severity_map.get(severity_raw, severity_raw)
+            if severity not in ("critical", "high", "medium", "low", "info"):
+                severity = "medium"
 
-def process_document_for_findings(document_id, file_path, methodology_code_override=None):
-    from carbongpt.repository.store import save_finding, get_findings_by_document
-
-    existing = get_findings_by_document(document_id)
-    if existing:
-        logger.info("Document %s already has %d findings extracted, skipping", document_id, len(existing))
-        return {"document_id": document_id, "status": "already_extracted", "count": len(existing)}
-
-    text = extract_text_from_pdf(file_path)
-    if not text or len(text) < 200:
-        logger.warning("Document %s has insufficient text (%d chars)", document_id, len(text))
-        return {"document_id": document_id, "status": "insufficient_text", "count": 0}
-
-    metadata = detect_document_metadata(text)
-    logger.info("Detected metadata for doc %s: %s", document_id, metadata)
-
-    methodology_code = methodology_code_override or metadata.get("methodology_code")
-    standard = metadata.get("standard", "Verra")
-    vvb_name = metadata.get("vvb_name")
-    project_id = metadata.get("project_id")
-    project_name = metadata.get("project_name")
-    doc_type = metadata.get("doc_type", "verification_report")
-
-    findings = extract_findings_from_text(text, metadata)
-    logger.info("Extracted %d findings from document %s", len(findings), document_id)
-
-    saved_count = 0
-    for f in findings:
-        finding_type = f.get("finding_type", "CL")
-        if finding_type not in ("CAR", "CL", "FAR", "observation", "comment", "prr_comment"):
-            finding_type = "observation"
-
-        severity = f.get("severity", "medium")
-        if severity not in ("critical", "high", "medium", "low", "info"):
-            severity = "medium"
-
-        resolution_approach = f.get("resolution_approach")
-        if resolution_approach and resolution_approach not in (
-            "pdd_update", "clarification", "evidence_provided",
-            "calculation_corrected", "methodology_reference"
-        ):
-            resolution_approach = "clarification"
-
-        try:
-            save_finding(
-                source_document_id=document_id,
-                methodology_code=methodology_code,
-                finding_type=finding_type,
-                description=f.get("description", ""),
-                resolution=f.get("resolution"),
-                pdd_section=f.get("pdd_section"),
-                topic=f.get("topic"),
-                severity=severity,
-                resolution_approach=resolution_approach,
-                standard=standard,
-                doc_type=doc_type,
-                vvb_name=vvb_name,
-                source_project_id=str(project_id) if project_id else None,
-                source_project_name=project_name,
-                structured_data={
-                    "finding_id": f.get("finding_id"),
-                    "was_closed": f.get("was_closed", True),
-                },
-                extraction_method="ai_assisted",
-                confidence=0.8,
-            )
-            saved_count += 1
-        except Exception as e:
-            logger.error("Failed to save finding: %s", e)
+            try:
+                cur.execute("""
+                    INSERT INTO findings_knowledge
+                    (source_document_id, finding_type, severity, pdd_section, topic,
+                     description, resolution, methodology_code, extraction_method, confidence,
+                     doc_type, vvb_name, source_project_id, source_project_name, structured_data)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    doc_id,
+                    finding_type,
+                    severity,
+                    f.get("pdd_section", "general"),
+                    f.get("topic", ""),
+                    f.get("description", ""),
+                    f.get("resolution"),
+                    f.get("methodology_code") or metadata.get("methodology_code"),
+                    "ai_assisted",
+                    0.8,
+                    metadata.get("doc_type", doc["category"]),
+                    metadata.get("vvb_name"),
+                    str(metadata.get("project_id", "")) or None,
+                    metadata.get("project_name"),
+                    json.dumps({"finding_id": f.get("finding_id", "unknown")}),
+                ))
+                stored += 1
+            except Exception as e:
+                logger.error("Failed to store finding: %s", e)
 
     return {
-        "document_id": document_id,
-        "status": "extracted",
-        "methodology_code": methodology_code,
-        "findings_extracted": len(findings),
-        "findings_saved": saved_count,
-        "metadata": metadata,
+        "doc_id": doc_id,
+        "doc_title": doc["title"],
+        "doc_category": doc["category"],
+        "chunk_count": len(chunks),
+        "chunk_groups": len(chunk_groups),
+        "llm_calls": llm_calls,
+        "metadata_detected": metadata,
+        "raw_findings": len(all_findings),
+        "deduped_findings": len(deduped),
+        "stored": stored,
+        "findings": deduped,
     }
-
-
-def extract_findings_from_all_fvr_valver(max_documents=50):
-    from carbongpt.repository.store import list_documents
-
-    all_docs = list_documents() or []
-    target_docs = [
-        d for d in all_docs
-        if d.get("category") in ("example_fvr", "example_valver")
-        and d.get("file_path")
-        and d["file_path"].lower().endswith(".pdf")
-    ]
-
-    results = {
-        "total_documents": len(target_docs),
-        "processed": 0,
-        "skipped": 0,
-        "total_findings": 0,
-        "errors": 0,
-        "documents": [],
-    }
-
-    import time
-    for doc in target_docs[:max_documents]:
-        doc_id = doc["id"]
-        file_path = doc["file_path"]
-
-        if not os.path.exists(file_path):
-            results["skipped"] += 1
-            continue
-
-        try:
-            result = process_document_for_findings(doc_id, file_path)
-            results["documents"].append(result)
-            if result["status"] == "extracted":
-                results["processed"] += 1
-                results["total_findings"] += result.get("findings_saved", 0)
-            elif result["status"] == "already_extracted":
-                results["skipped"] += 1
-            else:
-                results["skipped"] += 1
-        except Exception as e:
-            logger.error("Failed to process document %s: %s", doc_id, e)
-            results["errors"] += 1
-
-        time.sleep(1)
-
-    return results
-
-
-def get_findings_context_for_section(methodology_code, section_title):
-    from carbongpt.repository.store import get_findings_for_section
-
-    keywords = _derive_section_keywords(section_title)
-    if not keywords:
-        return ""
-
-    findings = get_findings_for_section(methodology_code, keywords, limit=8)
-    if not findings:
-        return ""
-
-    lines = []
-    lines.append(f"### Common VVB findings for this section (from {len(findings)} past audits):")
-    lines.append("The following issues have been raised by VVBs on similar projects. Address these proactively:\n")
-
-    for f in findings:
-        ftype = f.get("finding_type", "CL")
-        topic = f.get("topic", "")
-        desc = f.get("description", "")[:300]
-        resolution = f.get("resolution", "")[:200]
-        severity = f.get("severity", "medium")
-
-        lines.append(f"- [{ftype}] ({severity}) {topic}: {desc}")
-        if resolution:
-            lines.append(f"  Resolution: {resolution}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def get_findings_review_context(methodology_code):
-    from carbongpt.repository.store import get_findings_by_methodology
-
-    findings = get_findings_by_methodology(methodology_code, limit=30)
-    if not findings:
-        return ""
-
-    by_topic = {}
-    for f in findings:
-        topic = f.get("topic", "general")
-        if topic not in by_topic:
-            by_topic[topic] = []
-        by_topic[topic].append(f)
-
-    lines = []
-    lines.append("### Known VVB findings patterns for this methodology:")
-    lines.append("Based on analysis of past validation/verification reports, VVBs commonly raise these issues:\n")
-
-    for topic, topic_findings in sorted(by_topic.items(), key=lambda x: -len(x[1])):
-        car_count = sum(1 for f in topic_findings if f["finding_type"] == "CAR")
-        cl_count = sum(1 for f in topic_findings if f["finding_type"] == "CL")
-        lines.append(f"**{topic}** ({len(topic_findings)} findings: {car_count} CARs, {cl_count} CLs)")
-        for f in topic_findings[:2]:
-            desc = f.get("description", "")[:200]
-            lines.append(f"  - {f['finding_type']}: {desc}")
-        lines.append("")
-
-    return "\n".join(lines)[:4000]
 
 
 SECTION_TOPIC_MAP = {
@@ -348,3 +280,73 @@ def _derive_section_keywords(section_title):
         keywords = {w for w in words if len(w) > 3}
 
     return list(keywords)[:5]
+
+
+def get_findings_context_for_section(methodology_code, section_title):
+    keywords = _derive_section_keywords(section_title)
+    if not keywords:
+        return ""
+
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT finding_type, severity, pdd_section, topic, description, resolution
+            FROM findings_knowledge
+            WHERE methodology_code = %s
+            AND (topic ILIKE ANY(%s) OR pdd_section ILIKE ANY(%s))
+            ORDER BY finding_type, severity
+            LIMIT 8
+        """, (methodology_code,
+              [f"%{k}%" for k in keywords],
+              [f"%{k}%" for k in keywords]))
+        findings = cur.fetchall()
+
+    if not findings:
+        return ""
+
+    lines = [f"### Common VVB findings for this section (from {len(findings)} past audits):"]
+    lines.append("The following issues have been raised by VVBs on similar projects. Address these proactively:\n")
+    for f in findings:
+        ftype = f.get("finding_type", "CL")
+        topic = f.get("topic", "")
+        desc = (f.get("description") or "")[:300]
+        severity = f.get("severity", "minor")
+        lines.append(f"- [{ftype}] ({severity}) {topic}: {desc}")
+        resolution = f.get("resolution")
+        if resolution:
+            lines.append(f"  Resolution: {resolution[:200]}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def get_findings_review_context(methodology_code):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT finding_type, severity, pdd_section, topic, description
+            FROM findings_knowledge
+            WHERE methodology_code = %s
+            ORDER BY finding_type, topic
+            LIMIT 30
+        """, (methodology_code,))
+        findings = cur.fetchall()
+
+    if not findings:
+        return ""
+
+    by_topic = {}
+    for f in findings:
+        topic = f.get("topic", "general")
+        if topic not in by_topic:
+            by_topic[topic] = []
+        by_topic[topic].append(f)
+
+    lines = ["### Known VVB findings patterns for this methodology:"]
+    lines.append("Based on analysis of past validation/verification reports, VVBs commonly raise these issues:\n")
+    for topic, topic_findings in sorted(by_topic.items(), key=lambda x: -len(x[1])):
+        car_count = sum(1 for f in topic_findings if f["finding_type"] == "CAR")
+        cl_count = sum(1 for f in topic_findings if f["finding_type"] == "CL")
+        lines.append(f"**{topic}** ({len(topic_findings)} findings: {car_count} CARs, {cl_count} CLs)")
+        for f in topic_findings[:2]:
+            desc = (f.get("description") or "")[:200]
+            lines.append(f"  - {f['finding_type']}: {desc}")
+        lines.append("")
+    return "\n".join(lines)[:4000]
