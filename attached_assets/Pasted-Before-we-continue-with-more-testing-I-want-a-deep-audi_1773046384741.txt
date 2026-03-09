@@ -1,0 +1,140 @@
+Before we continue with more testing, I want a deep audit of three critical intelligence layers of CarbonGPT.
+
+Do NOT implement code yet.
+First analyze the current system and give me a precise diagnosis and correction plan.
+
+I want you to evaluate the following three areas:
+
+--------------------------------------------------
+1. REPOSITORY INTELLIGENCE AUDIT
+--------------------------------------------------
+
+The repository is supposed to be the intelligence layer of the platform.
+
+It contains mixed files such as:
+- methodologies
+- tools
+- old PDDs
+- monitoring reports
+- audit reports
+- review comments / findings
+- templates
+- supporting documents
+
+I need you to audit the repository thoroughly and answer:
+
+1. Are all files correctly classified today?
+2. Which files appear misclassified? For example:
+   - methodologies incorrectly classified as PDDs
+   - reports incorrectly classified as templates
+   - audit findings documents not clearly separated
+3. Does the current classification system allow the AI to retrieve the right files for the right task?
+4. What errors in repository classification would reduce the quality of:
+   - drafting
+   - evidence extraction
+   - audit simulation
+   - methodology guidance
+5. What should the correct repository taxonomy be?
+
+Please propose:
+- the ideal file classification structure
+- how to detect misclassified files
+- how to improve retrieval quality based on corrected classification
+
+--------------------------------------------------
+2. METHODOLOGY INTELLIGENCE AUDIT
+--------------------------------------------------
+
+We are currently focusing on 4 methodologies:
+- VM0050
+- TPDDTEC
+- AMS-I.D
+- ACM002
+
+I want you to verify whether the AI truly understands these methodologies in a robust way, not just through a few hard-coded parameters.
+
+Please check the current intelligence layer and evaluate:
+
+1. Does the system capture:
+   - all key parameters
+   - all default values
+   - all alternative options
+   - all referenced tools
+   - all conditional logic
+   - all major methodological branches / pathways
+
+2. For each of the 4 methodologies, identify:
+   - missing parameters
+   - wrongly modeled parameters
+   - parameters that are overemphasized even though they are not central
+   - missing default options
+   - missing fuel combination logic
+   - missing baseline/project fuel pathway logic
+   - missing multi-fuel logic if applicable
+
+3. Pay special attention to methodological flexibility.
+For example:
+- single baseline fuel vs multiple baseline fuels
+- single project fuel vs multiple project fuels
+- baseline and project fuels being identical vs different
+- parameters derived from default values vs user inputs vs referenced tools
+- methodologies that allow several calculation pathways
+
+4. I want to know whether the current implementation is too simplistic for expert users.
+
+Please produce:
+- a gap analysis for each of the 4 methodologies
+- a list of wrongly modeled assumptions
+- a list of missing methodological branches/options
+- a recommendation for how the methodology intelligence layer should be structured
+
+--------------------------------------------------
+3. METHODOLOGY VERSIONING / FUTURE-PROOFING AUDIT
+--------------------------------------------------
+
+I want CarbonGPT to be able to handle methodology evolution over time.
+
+Examples:
+- TPDDTEC v4 today
+- TPDDTEC v5 soon
+- future Article 6.4 methodologies
+- new CDM / UNFCCC / GS / Verra methodology versions
+
+Please analyze the current architecture and answer:
+
+1. Can the system currently support multiple versions of the same methodology?
+2. Can it determine which methodology version should apply based on project start date or project registration timing?
+3. If I upload a new version of a methodology into the repository, will the AI understand that it supersedes or differs from the older one?
+4. Does the current system support:
+   - active methodology version
+   - version validity period
+   - superseded versions
+   - project-to-methodology-version mapping
+5. What is missing to make the system robust for methodology versioning?
+
+Please propose:
+- the ideal methodology versioning model
+- how repository metadata should support versioning
+- how a project should be linked to the correct methodology version
+- how the AI should reason when multiple versions exist
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+
+Please structure your answer in 4 sections:
+
+A. Repository classification audit
+B. Methodology intelligence audit
+C. Methodology versioning audit
+D. Recommended implementation roadmap
+
+In the roadmap, separate:
+- urgent fixes
+- medium-priority improvements
+- longer-term architecture improvements
+
+Important:
+Do not just give generic comments.
+Ground the analysis in the actual current codebase, repository structure, and current methodology implementation.
+The goal is to identify where CarbonGPT is still too weak or too simplistic for expert carbon project developers.
