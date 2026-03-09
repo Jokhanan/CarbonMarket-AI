@@ -4657,7 +4657,109 @@ def _render_documents_tab(project):
     elif not documents:
         pass
 
+    _render_pending_evidence_review(project_id)
+
     _render_intelligence_review(project_id)
+
+
+def _render_pending_evidence_review(project_id):
+    pending_data = _fetch(f"/projects/{project_id}/evidence/pending")
+    if not pending_data:
+        return
+    pending = pending_data.get("pending", [])
+    if not pending:
+        return
+
+    st.markdown("---")
+    st.markdown(f"#### Pending Evidence Review ({len(pending)} item{'s' if len(pending) != 1 else ''})")
+    st.caption("Parameter values extracted from documents. Review and decide on each item.")
+
+    for item in pending:
+        link_id = item["id"]
+        pk = item.get("param_key", "")
+        param_name = item.get("param_name") or item.get("target_description") or pk
+        current_val = item.get("current_param_value", "")
+        param_status = item.get("param_status", "")
+        extracted_val = item.get("extracted_value", "")
+        extracted_unit = item.get("extracted_unit", "")
+        quote = item.get("quote", "")
+        doc_name = item.get("doc_file_name") or item.get("source_title", "")
+        section = item.get("source_detail", "")
+        confidence = item.get("confidence", 0)
+
+        with st.container(border=True):
+            pc1, pc2 = st.columns([3, 2])
+            with pc1:
+                st.markdown(f"**{param_name}** (`{pk}`)")
+                current_display = current_val if current_val else "not set"
+                st.caption(f"Current: {current_display} | Extracted: {extracted_val} {extracted_unit}")
+                if quote:
+                    st.caption(f"Source: \"{quote}\"")
+                if doc_name:
+                    loc = f" -- {section}" if section else ""
+                    st.caption(f"From: {doc_name}{loc} (confidence: {confidence:.0%})")
+            with pc2:
+                bc1, bc2, bc3 = st.columns(3)
+                with bc1:
+                    if st.button("Accept & Apply", key=f"ev_accept_{link_id}", type="primary"):
+                        result = _fetch(
+                            f"/projects/{project_id}/evidence/{link_id}/decide",
+                            method="POST",
+                            json={"decision": "accepted"},
+                        )
+                        if result and result.get("requires_confirmation"):
+                            st.session_state[f"ev_confirm_{link_id}"] = result
+                        elif result and result.get("success"):
+                            st.success(f"Applied: {pk} = {extracted_val}")
+                            time.sleep(0.5)
+                            st.rerun()
+                        elif result and result.get("error"):
+                            st.error(result["error"])
+
+                with bc2:
+                    if st.button("As Reference", key=f"ev_ref_{link_id}"):
+                        result = _fetch(
+                            f"/projects/{project_id}/evidence/{link_id}/decide",
+                            method="POST",
+                            json={"decision": "accepted_as_reference"},
+                        )
+                        if result and result.get("success"):
+                            st.info("Recorded as reference")
+                            time.sleep(0.5)
+                            st.rerun()
+
+                with bc3:
+                    if st.button("Reject", key=f"ev_reject_{link_id}"):
+                        result = _fetch(
+                            f"/projects/{project_id}/evidence/{link_id}/decide",
+                            method="POST",
+                            json={"decision": "rejected"},
+                        )
+                        if result and result.get("success"):
+                            st.info("Rejected")
+                            time.sleep(0.5)
+                            st.rerun()
+
+            confirm_state = st.session_state.get(f"ev_confirm_{link_id}")
+            if confirm_state:
+                st.warning(confirm_state.get("message", "This will overwrite a confirmed parameter value."))
+                cc1, cc2 = st.columns(2)
+                with cc1:
+                    if st.button("Confirm overwrite", key=f"ev_force_{link_id}", type="primary"):
+                        result = _fetch(
+                            f"/projects/{project_id}/evidence/{link_id}/decide",
+                            method="POST",
+                            json={"decision": "accepted", "force": True},
+                        )
+                        if result and result.get("success"):
+                            del st.session_state[f"ev_confirm_{link_id}"]
+                            st.success(f"Applied: {pk} = {extracted_val}")
+                            time.sleep(0.5)
+                            st.rerun()
+                with cc2:
+                    if st.button("Cancel", key=f"ev_cancel_{link_id}"):
+                        del st.session_state[f"ev_confirm_{link_id}"]
+                        st.rerun()
 
 
 def _render_intelligence_review(project_id):
@@ -4851,6 +4953,23 @@ def _render_document_card(project_id, doc):
                             st.rerun()
                         elif result:
                             st.warning("Extraction completed but returned no data.")
+
+        if has_parsed:
+            if st.button("Extract parameter evidence", key=f"extract_evidence_{doc['id']}", help="Extract parameter values from this document for review"):
+                with st.spinner("Extracting parameter evidence..."):
+                    result = _fetch(
+                        f"/projects/{project_id}/documents/{doc['id']}/extract-evidence",
+                        method="POST",
+                        timeout=120,
+                    )
+                    if result and result.get("extracted", 0) > 0:
+                        st.success(f"Found {result['extracted']} parameter value{'s' if result['extracted'] != 1 else ''} for review.")
+                        time.sleep(0.5)
+                        st.rerun()
+                    elif result and result.get("extracted", 0) == 0:
+                        st.info("No new parameter values found in this document.")
+                    else:
+                        st.warning("Extraction failed. Check that parameters are initialized.")
 
 
 def _render_document_prompts(project_type):

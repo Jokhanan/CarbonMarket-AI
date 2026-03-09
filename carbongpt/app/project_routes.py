@@ -2119,6 +2119,49 @@ def get_citations_endpoint(project_id: int):
     return {"citations": citations}
 
 
+@router.post("/{project_id}/documents/{doc_id}/extract-evidence")
+def extract_evidence_endpoint(project_id: int, doc_id: int):
+    from carbongpt.core.evidence_engine import extract_parameter_evidence
+    try:
+        result = extract_parameter_evidence(project_id, doc_id)
+    except Exception as e:
+        logger.error("Evidence extraction failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/{project_id}/evidence/pending")
+def get_pending_evidence_endpoint(project_id: int, doc_id: int = None):
+    from carbongpt.core.evidence_engine import get_pending_evidence
+    try:
+        items = get_pending_evidence(project_id, doc_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"pending": items, "count": len(items)}
+
+
+@router.post("/{project_id}/evidence/{link_id}/decide")
+def decide_evidence_endpoint(project_id: int, link_id: int, body: dict):
+    from carbongpt.core.evidence_engine import decide_evidence, decide_evidence_force
+    decision = body.get("decision")
+    force = body.get("force", False)
+    if not decision:
+        raise HTTPException(status_code=400, detail="decision is required")
+    try:
+        if force:
+            result = decide_evidence_force(project_id, link_id, decision)
+        else:
+            result = decide_evidence(project_id, link_id, decision)
+    except Exception as e:
+        logger.error("Evidence decision failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 @router.post("/{project_id}/audit-simulation")
 def run_audit_simulation_endpoint(project_id: int):
     from carbongpt.core.audit_simulator import run_audit_simulation

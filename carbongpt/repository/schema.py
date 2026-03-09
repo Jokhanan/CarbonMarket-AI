@@ -413,7 +413,7 @@ CREATE TABLE IF NOT EXISTS project_parameters (
     unit VARCHAR(100),
     data_type VARCHAR(20) DEFAULT 'number' CHECK (data_type IN ('number', 'text', 'date', 'boolean', 'percentage')),
     source_type VARCHAR(30) DEFAULT 'default' CHECK (source_type IN (
-        'default', 'measured', 'calculated', 'user_override', 'national_inventory', 'ipcc', 'methodology'
+        'default', 'measured', 'calculated', 'user_override', 'national_inventory', 'ipcc', 'methodology', 'document_extracted'
     )),
     source_reference TEXT,
     evidence_doc_id INTEGER REFERENCES project_documents(id) ON DELETE SET NULL,
@@ -499,11 +499,19 @@ CREATE TABLE IF NOT EXISTS evidence_links (
     quote TEXT,
     confidence REAL DEFAULT 1.0,
     verified BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    extracted_value TEXT,
+    extracted_unit VARCHAR(50),
+    param_key VARCHAR(100),
+    evidence_type VARCHAR(30) DEFAULT 'parameter_value',
+    evidence_decision VARCHAR(30) DEFAULT 'pending'
 );
 
 CREATE INDEX IF NOT EXISTS idx_el_project ON evidence_links(project_id);
 CREATE INDEX IF NOT EXISTS idx_el_target ON evidence_links(target_type, target_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_el_dedup_pending
+    ON evidence_links (project_id, source_doc_id, param_key, extracted_value, COALESCE(source_detail, ''))
+    WHERE evidence_decision = 'pending' AND evidence_type = 'parameter_value';
 
 CREATE TABLE IF NOT EXISTS er_scenarios (
     id SERIAL PRIMARY KEY,

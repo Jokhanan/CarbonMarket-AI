@@ -9,7 +9,7 @@ from carbongpt.core.parameter_engine import (
     FUEL_CANONICAL_OPTIONS,
     get_fuel_display_label,
 )
-from carbongpt.core.evidence_engine import get_evidence_links
+from carbongpt.core.evidence_engine import get_evidence_links, get_evidence_counts_by_param
 
 
 def render_parameter_dashboard(project):
@@ -175,7 +175,10 @@ def _render_parameter_row(project_id, param, evidence_by_param):
         v_indicator = ' <span style="color:orange;font-size:0.85em;">[warning]</span>'
 
     has_evidence = param_key in evidence_by_param
-    evidence_indicator = " [E]" if has_evidence else ""
+    ev_count = len(evidence_by_param.get(param_key, []))
+    evidence_indicator = ""
+    if ev_count > 0:
+        evidence_indicator = f' <span style="color:#0d9488;font-size:0.85em;">[{ev_count} evidence]</span>'
 
     col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
 
@@ -215,7 +218,7 @@ def _render_parameter_row(project_id, param, evidence_by_param):
             )
 
     with col3:
-        source_options = ["default", "measured", "calculated", "user_override", "national_inventory", "ipcc", "methodology"]
+        source_options = ["default", "measured", "calculated", "user_override", "national_inventory", "ipcc", "methodology", "document_extracted"]
         current_source = param.get("source_type", "default")
         source_idx = source_options.index(current_source) if current_source in source_options else 0
         new_source = st.selectbox(

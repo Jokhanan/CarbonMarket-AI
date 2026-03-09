@@ -248,10 +248,25 @@ def _evaluate_evidence(project_id):
         """, (project_id,))
         verified = cur.fetchone()["cnt"]
 
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE evidence_decision = 'pending') as pending,
+                COUNT(*) FILTER (WHERE evidence_decision = 'accepted') as accepted,
+                COUNT(*) FILTER (WHERE evidence_decision = 'accepted_as_reference') as reference,
+                COUNT(DISTINCT param_key) FILTER (WHERE evidence_decision = 'accepted') as accepted_params
+            FROM evidence_links
+            WHERE project_id = %s AND evidence_type = 'parameter_value'
+        """, (project_id,))
+        decision_row = cur.fetchone()
+
     return {
         "total_links": total,
         "verified": verified,
         "has_evidence": total > 0,
+        "pending": decision_row["pending"] if decision_row else 0,
+        "accepted": decision_row["accepted"] if decision_row else 0,
+        "reference": decision_row["reference"] if decision_row else 0,
+        "accepted_params": decision_row["accepted_params"] if decision_row else 0,
     }
 
 
@@ -436,7 +451,24 @@ def _classify_items(state):
                 "action_tab": "Write / Draft",
             })
 
-    if not evidence["has_evidence"] and drafts["has_drafts"]:
+    if evidence.get("pending", 0) > 0:
+        pending_count = evidence["pending"]
+        items.append({
+            "severity": SEVERITY_WARNING,
+            "category": "evidence",
+            "message": f"{pending_count} evidence item{'s' if pending_count != 1 else ''} pending review",
+            "detail": "Review extracted parameter evidence in the Documents tab.",
+            "action_tab": "Documents",
+        })
+
+    if evidence.get("accepted_params", 0) > 0:
+        items.append({
+            "severity": SEVERITY_INSIGHT,
+            "category": "evidence",
+            "message": f"{evidence['accepted_params']} parameter{'s' if evidence['accepted_params'] != 1 else ''} backed by document evidence",
+            "detail": f"{evidence.get('accepted', 0)} accepted, {evidence.get('reference', 0)} as reference.",
+        })
+    elif not evidence["has_evidence"] and drafts["has_drafts"]:
         items.append({
             "severity": SEVERITY_WARNING,
             "category": "evidence",

@@ -1,7 +1,25 @@
+import json
 import logging
+import os
+import requests
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
+
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+
+CRITICAL_PARAMS = [
+    "fNRB",
+    "num_devices",
+    "num_households",
+    "household_size",
+    "baseline_fuel_consumption",
+    "project_fuel_consumption",
+    "usage_rate",
+    "SFC_baseline",
+    "SFC_project",
+]
 
 
 def add_evidence_link(project_id, target_type, target_id, source_type,
@@ -168,3 +186,321 @@ def auto_link_parameter_evidence(project_id, param_key, source_doc_id, source_de
             source_title=doc["file_name"] if doc else None,
             source_detail=source_detail,
         )
+
+
+def extract_parameter_evidence(project_id, doc_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM project_documents WHERE id = %s AND project_id = %s", (doc_id, project_id))
+        doc = cur.fetchone()
+        if not doc:
+            return {"error": "Document not found", "extracted": 0}
+
+        parsed_text = doc.get("parsed_text") or ""
+        if not parsed_text.strip():
+            return {"error": "Document has no parsed text", "extracted": 0}
+
+        cur.execute("""
+            SELECT param_key, param_name, value, unit
+            FROM project_parameters
+            WHERE project_id = %s AND param_key = ANY(%s) AND applicable_year IS NULL
+        """, (project_id, CRITICAL_PARAMS))
+        params = cur.fetchall()
+
+    if not params:
+        return {"error": "No critical parameters found for this project", "extracted": 0}
+
+    param_lines = []
+    for p in params:
+        current = p["value"] if p["value"] is not None else "not set"
+        unit = p.get("unit") or ""
+        param_lines.append(f"- {p['param_key']} ({p['param_name']}): current value = {current} {unit}")
+
+    with get_cursor() as cur:
+        cur.execute("SELECT standard, methodology_code FROM user_projects WHERE id = %s", (project_id,))
+        proj = cur.fetchone()
+    methodology = ""
+    if proj:
+        methodology = f"{proj.get('standard', '')} {proj.get('methodology_code', '')}".strip()
+
+    doc_text = parsed_text[:15000]
+
+    system_prompt = f"""You are analyzing a document for a carbon project using methodology {methodology}.
+
+Search ONLY for specific numeric values related to these parameters:
+{chr(10).join(param_lines)}
+
+For each value you find, return JSON array:
+[
+  {{
+    "param_key": "fNRB",
+    "extracted_value": "0.35",
+    "extracted_unit": "fraction",
+    "quote": "The fraction of non-renewable biomass was determined to be 0.35",
+    "page_or_section": "Page 12, Section 4.2",
+    "confidence": 0.9
+  }}
+]
+
+Rules:
+- Only extract concrete numeric values, not descriptions or ranges
+- Include the exact quote from the document
+- Set confidence: 0.9+ if value is clearly stated, 0.7-0.9 if inferred, <0.7 if uncertain
+- Return empty array [] if no relevant values found
+- Return ONLY valid JSON array, no other text"""
+
+    user_prompt = f"Document: {doc['file_name']}\n\n{doc_text}"
+
+    try:
+        raw = _call_openai(system_prompt, user_prompt)
+    except Exception as e:
+        logger.error("Evidence extraction LLM call failed: %s", e)
+        return {"error": f"AI extraction failed: {str(e)}", "extracted": 0}
+
+    try:
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+        extractions = json.loads(cleaned)
+        if not isinstance(extractions, list):
+            extractions = []
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Failed to parse extraction response: %s", raw[:200])
+        return {"error": "AI returned unparseable response", "extracted": 0}
+
+    param_map = {p["param_key"]: p for p in params}
+    created = 0
+
+    with get_cursor() as cur:
+        for item in extractions:
+            pk = item.get("param_key", "")
+            if pk not in param_map:
+                continue
+
+            ext_value = str(item.get("extracted_value", "")).strip()
+            ext_unit = str(item.get("extracted_unit", "")).strip()
+            quote = str(item.get("quote", "")).strip()
+            page_section = str(item.get("page_or_section", "")).strip()
+            confidence = float(item.get("confidence", 0.5))
+
+            if not ext_value:
+                continue
+
+            cur.execute("""
+                INSERT INTO evidence_links
+                (project_id, target_type, target_id, target_description,
+                 source_type, source_doc_id, source_title, source_detail,
+                 quote, confidence, extracted_value, extracted_unit,
+                 param_key, evidence_type, evidence_decision)
+                VALUES (%s, 'parameter', %s, %s,
+                        'project_document', %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, 'parameter_value', 'pending')
+                ON CONFLICT DO NOTHING
+                RETURNING id
+            """, (
+                project_id, pk, param_map[pk]["param_name"],
+                doc_id, doc.get("file_name", ""), page_section,
+                quote, confidence, ext_value, ext_unit,
+                pk,
+            ))
+            if cur.fetchone():
+                created += 1
+
+    return {"extracted": created, "doc_id": doc_id, "doc_name": doc.get("file_name", "")}
+
+
+def get_pending_evidence(project_id, doc_id=None):
+    with get_cursor() as cur:
+        query = """
+            SELECT el.*, pd.file_name as doc_file_name,
+                   pp.value as current_param_value, pp.unit as param_unit,
+                   pp.param_name, pp.param_status, pp.source_type as param_source_type
+            FROM evidence_links el
+            LEFT JOIN project_documents pd ON pd.id = el.source_doc_id
+            LEFT JOIN project_parameters pp ON pp.project_id = el.project_id
+                AND pp.param_key = el.param_key AND pp.applicable_year IS NULL
+            WHERE el.project_id = %s AND el.evidence_decision = 'pending'
+              AND el.evidence_type = 'parameter_value'
+        """
+        params = [project_id]
+        if doc_id:
+            query += " AND el.source_doc_id = %s"
+            params.append(doc_id)
+        query += " ORDER BY el.param_key, el.created_at"
+        cur.execute(query, params)
+        return cur.fetchall()
+
+
+def get_evidence_counts_by_param(project_id):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT param_key,
+                   COUNT(*) FILTER (WHERE evidence_decision = 'pending') as pending,
+                   COUNT(*) FILTER (WHERE evidence_decision = 'accepted') as accepted,
+                   COUNT(*) FILTER (WHERE evidence_decision = 'accepted_as_reference') as reference,
+                   COUNT(*) FILTER (WHERE evidence_decision = 'rejected') as rejected,
+                   COUNT(*) as total
+            FROM evidence_links
+            WHERE project_id = %s AND evidence_type = 'parameter_value' AND param_key IS NOT NULL
+            GROUP BY param_key
+        """, (project_id,))
+        rows = cur.fetchall()
+        return {r["param_key"]: dict(r) for r in rows}
+
+
+def decide_evidence(project_id, link_id, decision):
+    valid_decisions = ("accepted", "accepted_as_reference", "rejected")
+    if decision not in valid_decisions:
+        return {"error": f"Invalid decision. Must be one of: {valid_decisions}"}
+
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT * FROM evidence_links
+            WHERE id = %s AND project_id = %s
+            FOR UPDATE
+        """, (link_id, project_id))
+        link = cur.fetchone()
+
+        if not link:
+            return {"error": "Evidence link not found"}
+
+        if link.get("evidence_decision") != "pending":
+            return {"error": f"Evidence already decided: {link['evidence_decision']}"}
+
+        pk = link.get("param_key")
+
+        if decision == "accepted" and pk:
+            cur.execute("""
+                SELECT param_status, value, source_type FROM project_parameters
+                WHERE project_id = %s AND param_key = %s AND applicable_year IS NULL
+            """, (project_id, pk))
+            param_row = cur.fetchone()
+
+            if param_row and param_row.get("param_status") == "confirmed":
+                current_val = param_row.get("value", "")
+                extracted_val = link.get("extracted_value", "")
+                if str(current_val).strip() != str(extracted_val).strip():
+                    return {
+                        "requires_confirmation": True,
+                        "link_id": link_id,
+                        "param_key": pk,
+                        "current_value": current_val,
+                        "extracted_value": extracted_val,
+                        "message": f"Parameter '{pk}' is already confirmed with value '{current_val}'. Accepting will overwrite with '{extracted_val}'.",
+                    }
+
+            _apply_accepted_evidence(cur, project_id, pk, link_id, link)
+
+        cur.execute("""
+            UPDATE evidence_links SET evidence_decision = %s
+            WHERE id = %s AND project_id = %s AND evidence_decision = 'pending'
+            RETURNING *
+        """, (decision, link_id, project_id))
+        updated = cur.fetchone()
+
+        if not updated:
+            return {"error": "Evidence was already decided by another action"}
+
+    return {"success": True, "evidence": updated, "decision": decision}
+
+
+def decide_evidence_force(project_id, link_id, decision):
+    valid_decisions = ("accepted", "accepted_as_reference", "rejected")
+    if decision not in valid_decisions:
+        return {"error": f"Invalid decision. Must be one of: {valid_decisions}"}
+
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT * FROM evidence_links
+            WHERE id = %s AND project_id = %s
+            FOR UPDATE
+        """, (link_id, project_id))
+        link = cur.fetchone()
+
+        if not link:
+            return {"error": "Evidence link not found"}
+
+        if link.get("evidence_decision") not in ("pending",):
+            return {"error": f"Evidence already decided: {link['evidence_decision']}"}
+
+        pk = link.get("param_key")
+
+        if decision == "accepted" and pk:
+            _apply_accepted_evidence(cur, project_id, pk, link_id, link)
+
+        cur.execute("""
+            UPDATE evidence_links SET evidence_decision = %s
+            WHERE id = %s AND project_id = %s AND evidence_decision = 'pending'
+            RETURNING *
+        """, (decision, link_id, project_id))
+        updated = cur.fetchone()
+
+        if not updated:
+            return {"error": "Evidence was already decided by another action"}
+
+    return {"success": True, "evidence": updated, "decision": decision}
+
+
+def _apply_accepted_evidence(cur, project_id, param_key, link_id, link):
+    cur.execute("""
+        UPDATE evidence_links SET evidence_decision = 'superseded'
+        WHERE project_id = %s AND param_key = %s AND evidence_decision = 'accepted'
+          AND id != %s
+    """, (project_id, param_key, link_id))
+
+    cur.execute("""
+        UPDATE project_parameters
+        SET value = %s, source_type = 'document_extracted',
+            source_reference = %s, param_status = 'confirmed', updated_at = NOW()
+        WHERE project_id = %s AND param_key = %s AND applicable_year IS NULL
+    """, (
+        link.get("extracted_value"),
+        f"Document: {link.get('source_title', '')} - {link.get('source_detail', '')}",
+        project_id, param_key,
+    ))
+
+
+def get_evidence_decision_summary(project_id):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE evidence_decision = 'pending') as pending,
+                COUNT(*) FILTER (WHERE evidence_decision = 'accepted') as accepted,
+                COUNT(*) FILTER (WHERE evidence_decision = 'accepted_as_reference') as reference,
+                COUNT(*) FILTER (WHERE evidence_decision = 'rejected') as rejected,
+                COUNT(*) FILTER (WHERE evidence_decision = 'superseded') as superseded,
+                COUNT(*) as total
+            FROM evidence_links
+            WHERE project_id = %s AND evidence_type = 'parameter_value'
+        """, (project_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"pending": 0, "accepted": 0, "reference": 0, "rejected": 0, "superseded": 0, "total": 0}
+        return dict(row)
+
+
+def _call_openai(system_prompt, user_prompt):
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set.")
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 4000,
+        "temperature": 0.1,
+    }
+    resp = requests.post(
+        OPENAI_API_URL,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=120,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
