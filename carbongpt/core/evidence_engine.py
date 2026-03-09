@@ -1,37 +1,15 @@
 import json
 import logging
 import os
+import re
 import requests
 from carbongpt.repository.db import get_cursor
+from carbongpt.core.parameter_engine import get_extraction_metadata
 
 logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-
-CRITICAL_PARAMS = [
-    "fNRB",
-    "num_devices",
-    "num_households",
-    "household_size",
-    "baseline_fuel_consumption",
-    "project_fuel_consumption",
-    "usage_rate",
-    "SFC_baseline",
-    "SFC_project",
-]
-
-PARAM_ALIASES = {
-    "fNRB": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y", "fNRB,i,y"],
-    "num_devices": ["number of stoves", "number of devices distributed", "total devices deployed", "N_i,y", "N_j,k,y", "number of project technologies"],
-    "num_households": ["number of households", "total households", "number of families", "participating households", "n_i,y"],
-    "household_size": ["average household size", "persons per household", "family size", "members per household", "HH size"],
-    "baseline_fuel_consumption": ["baseline fuel consumption per household", "fuel consumption in baseline scenario", "BC_b,i,y", "wood consumption baseline", "fuel use without project"],
-    "project_fuel_consumption": ["project fuel consumption per household", "fuel consumption with project technology", "BC_p,i,y", "wood consumption project", "fuel use with improved stove"],
-    "usage_rate": ["adoption rate", "utilization rate", "active use rate", "proportion of devices in use", "usage survey rate", "n_i,y / N_i,y"],
-    "SFC_baseline": ["SFC_b,i", "baseline specific fuel consumption", "specific fuel consumption of the baseline scenario", "SFC baseline", "SFC_b", "traditional stove fuel consumption per person"],
-    "SFC_project": ["SFC_p,i,y", "project specific fuel consumption", "specific fuel consumption of the project technology", "SFC project", "SFC_p", "improved stove fuel consumption per person"],
-}
 
 PERCENT_UNITS = {"percent", "%", "pct", "percentage"}
 
@@ -41,6 +19,12 @@ UNIT_COMPATIBILITY = {
     "tonnes/household/year": ["tonnes/household/year", "t/hh/yr", "tonnes/hh/year", "t/household/year", "tonnes per household per year", "t/hh/a", "tonnes/hh/a", "t/household/a"],
     "kg/person/year": ["kg/person/year", "kg/capita/year", "kg/person/yr", "kg per person per year", "kg/cap/yr", "kg/capita/a", "kg/person/a", "kg per capita per year"],
     "persons/household": ["persons/household", "persons per household", "people/household", "members/household", "people per hh", "persons/hh"],
+    "MWh/yr": ["MWh/yr", "MWh/year", "MWh per year", "MWh/a", "megawatt-hours per year"],
+    "tCO2/MWh": ["tCO2/MWh", "tonnes CO2 per MWh", "tCO2e/MWh"],
+    "tCO2/TJ": ["tCO2/TJ", "tonnes CO2 per TJ"],
+    "tCO2e/TJ": ["tCO2e/TJ", "tonnes CO2e per TJ"],
+    "TJ/Gg": ["TJ/Gg", "terajoules per gigagram"],
+    "kg wood/kg charcoal": ["kg wood/kg charcoal", "kg/kg", "ratio"],
 }
 
 def _check_unit_compatibility(canonical_unit, extracted_unit):
@@ -230,7 +214,43 @@ CHUNK_SIZE = 12000
 CHUNK_OVERLAP = 1500
 
 
-def _build_extraction_prompt(param_lines, methodology):
+def _build_baseline_project_guidance(extraction_meta):
+    baseline_keys = []
+    project_keys = []
+    for pk, meta in extraction_meta.items():
+        cat = meta.get("category", "")
+        if cat == "baseline":
+            baseline_keys.append(pk)
+        elif cat == "project":
+            project_keys.append(pk)
+    if not baseline_keys and not project_keys:
+        return ""
+    lines = ["\nIMPORTANT — baseline vs project:"]
+    lines.append("- Do NOT confuse baseline and project parameters.")
+    if baseline_keys:
+        lines.append(f"- Parameters classified as BASELINE: {', '.join(baseline_keys)}. Only extract these if the text clearly refers to the baseline/pre-project scenario.")
+    if project_keys:
+        lines.append(f"- Parameters classified as PROJECT: {', '.join(project_keys)}. Only extract these if the text clearly refers to the project/intervention scenario.")
+    if baseline_keys and project_keys:
+        lines.append("- If it is ambiguous whether a value refers to baseline or project, do NOT extract it.")
+    return "\n".join(lines)
+
+
+def _build_hint_guidance(extraction_meta):
+    hints = []
+    for pk, meta in extraction_meta.items():
+        hint = meta.get("extraction_hint", "")
+        if hint:
+            hints.append(f"- For {pk}: {hint}")
+    if not hints:
+        return ""
+    return "\nIMPORTANT — context precision:\n" + "\n".join(hints)
+
+
+def _build_extraction_prompt(param_lines, methodology, extraction_meta):
+    baseline_project_block = _build_baseline_project_guidance(extraction_meta)
+    hint_block = _build_hint_guidance(extraction_meta)
+
     return f"""You are analyzing a document excerpt for a carbon project using methodology {methodology}.
 
 Search ONLY for specific numeric values related to these parameters:
@@ -239,11 +259,11 @@ Search ONLY for specific numeric values related to these parameters:
 For each value you find IN THE TEXT BELOW, return a JSON array:
 [
   {{
-    "param_key": "fNRB",
-    "extracted_value": "0.35",
-    "extracted_unit": "fraction",
-    "quote": "The fraction of non-renewable biomass was determined to be 0.35",
-    "page_or_section": "Page 12, Section 4.2",
+    "param_key": "<parameter_key>",
+    "extracted_value": "<numeric_value>",
+    "extracted_unit": "<unit_as_stated_in_document>",
+    "quote": "<exact verbatim substring from the document>",
+    "page_or_section": "<location reference if available>",
     "confidence": 0.9
   }}
 ]
@@ -254,20 +274,8 @@ CRITICAL ANTI-HALLUCINATION RULES:
 - If a parameter is not mentioned with an explicit numeric value in the text, do NOT include it.
 - Do NOT guess, infer, or generate values. If the text does not contain a clear numeric value for a parameter, skip it.
 - Return empty array [] if no relevant values are found in this text.
-
-IMPORTANT — baseline vs project:
-- Do NOT confuse baseline and project parameters.
-- Only extract SFC_baseline if text clearly refers to the BASELINE scenario (e.g. "SFC_b,i", "baseline specific fuel consumption", "traditional stove consumption").
-- Only extract SFC_project if text clearly refers to the PROJECT technology (e.g. "SFC_p,i,y", "project specific fuel consumption", "improved stove consumption").
-- Only extract baseline_fuel_consumption if text clearly refers to BASELINE fuel use, not project fuel use.
-- Only extract project_fuel_consumption if text clearly refers to PROJECT fuel use, not baseline fuel use.
-- If it is ambiguous whether a value refers to baseline or project, do NOT extract it.
-
-IMPORTANT — context precision:
-- For num_devices: only extract values that represent the TOTAL number of project devices/stoves/cookstoves deployed or distributed. Do NOT extract sample sizes, survey counts, job counts, or unit numbering.
-- For num_households: only extract values that represent the TOTAL number of households served/targeted by the project. Do NOT extract survey sample sizes (e.g. "sample of 400 households") or administrative region counts.
-- For household_size: only extract values explicitly described as average household size or persons per household. Do NOT extract counts of households or tonnes of fuel per household.
-- For SFC_baseline and SFC_project: verify the unit carefully. If the document states a value in tons/HH/day or kg/household/day, that is NOT the same as kg/person/year — reduce confidence to <0.7.
+{baseline_project_block}
+{hint_block}
 
 Rules:
 - Only extract concrete numeric values, not descriptions or ranges
@@ -316,22 +324,17 @@ def _validate_quote(quote, full_text):
     return False
 
 
-NOISE_PATTERNS = {
-    "num_devices": [r"\bsample\b", r"\bjob", r"\bunit\s+number", r"\bnumber of units\b"],
-    "num_households": [r"\bsample[sd]?\b", r"\bsurvey\b", r"\brespondent", r"\bsampling\b"],
-    "household_size": [r"\bton\b", r"\btonne\b", r"\bcharcoal\b", r"\bfuel\b", r"\bkg\b"],
-}
-
-
-def _flag_noisy_extraction(item):
-    import re as _re
+def _flag_noisy_extraction(item, extraction_meta):
     pk = item.get("param_key", "")
-    patterns = NOISE_PATTERNS.get(pk)
+    meta = extraction_meta.get(pk)
+    if not meta:
+        return item
+    patterns = meta.get("noise_terms", [])
     if not patterns:
         return item
     quote = (item.get("quote") or "").lower()
     for pat in patterns:
-        if _re.search(pat, quote):
+        if re.search(pat, quote):
             item["confidence"] = min(_safe_confidence(item.get("confidence", 0.5)), 0.5)
             note = item.get("page_or_section", "") or ""
             if "noise" not in note.lower():
@@ -340,10 +343,10 @@ def _flag_noisy_extraction(item):
     return item
 
 
-def _deduplicate_extractions(all_extractions):
+def _deduplicate_extractions(all_extractions, extraction_meta):
     seen = {}
     for item in all_extractions:
-        item = _flag_noisy_extraction(item)
+        item = _flag_noisy_extraction(item, extraction_meta)
         pk = item.get("param_key", "")
         val = str(item.get("extracted_value", "")).strip()
         key = (pk, val)
@@ -364,20 +367,43 @@ def extract_parameter_evidence(project_id, doc_id):
         if not parsed_text.strip():
             return {"error": "Document has no parsed text", "extracted": 0}
 
-        cur.execute("""
-            SELECT param_key, param_name, value, unit, min_value, max_value
-            FROM project_parameters
-            WHERE project_id = %s AND param_key = ANY(%s) AND applicable_year IS NULL
-        """, (project_id, CRITICAL_PARAMS))
-        params = cur.fetchall()
+        cur.execute("SELECT standard, methodology FROM user_projects WHERE id = %s", (project_id,))
+        proj = cur.fetchone()
+
+    methodology_raw = ""
+    if proj:
+        methodology_raw = proj.get("methodology") or ""
+
+    extraction_meta = get_extraction_metadata(methodology_raw)
+    extractable_keys = list(extraction_meta.keys())
+
+    if not extractable_keys:
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT param_key, param_name, value, unit, min_value, max_value
+                FROM project_parameters
+                WHERE project_id = %s AND applicable_year IS NULL
+                  AND data_type = 'number'
+            """, (project_id,))
+            params = cur.fetchall()
+    else:
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT param_key, param_name, value, unit, min_value, max_value
+                FROM project_parameters
+                WHERE project_id = %s AND param_key = ANY(%s) AND applicable_year IS NULL
+            """, (project_id, extractable_keys))
+            params = cur.fetchall()
 
     if not params:
-        return {"error": "No critical parameters found for this project", "extracted": 0}
+        return {"error": "No extractable parameters found for this project", "extracted": 0}
 
     param_lines = []
     for p in params:
         unit = p.get("unit") or ""
-        aliases = PARAM_ALIASES.get(p["param_key"], [])
+        pk = p["param_key"]
+        meta = extraction_meta.get(pk, {})
+        aliases = meta.get("aliases", [])
         alias_text = f' (also called: {", ".join(aliases)})' if aliases else ""
         range_parts = []
         if p.get("min_value") is not None:
@@ -386,19 +412,16 @@ def extract_parameter_evidence(project_id, doc_id):
             range_parts.append(f"max={p['max_value']}")
         range_text = f" [valid range: {', '.join(range_parts)}]" if range_parts else ""
         param_lines.append(
-            f"- {p['param_key']} ({p['param_name']}){alias_text}: "
+            f"- {pk} ({p['param_name']}){alias_text}: "
             f"expected unit = {unit}{range_text}"
         )
 
-    with get_cursor() as cur:
-        cur.execute("SELECT standard, methodology FROM user_projects WHERE id = %s", (project_id,))
-        proj = cur.fetchone()
-    methodology = ""
+    methodology_display = ""
     if proj:
-        methodology = f"{proj.get('standard', '')} {proj.get('methodology', '')}".strip()
+        methodology_display = f"{proj.get('standard', '')} {methodology_raw}".strip()
 
     chunks = _split_into_chunks(parsed_text)
-    system_prompt = _build_extraction_prompt(param_lines, methodology)
+    system_prompt = _build_extraction_prompt(param_lines, methodology_display, extraction_meta)
 
     all_extractions = []
     for chunk_idx, chunk_text in enumerate(chunks):
@@ -429,7 +452,7 @@ def extract_parameter_evidence(project_id, doc_id):
     if not all_extractions:
         return {"extracted": 0, "doc_id": doc_id, "doc_name": doc.get("file_name", ""), "chunks_processed": len(chunks)}
 
-    all_extractions = _deduplicate_extractions(all_extractions)
+    all_extractions = _deduplicate_extractions(all_extractions, extraction_meta)
 
     param_map = {p["param_key"]: p for p in params}
     created = 0
