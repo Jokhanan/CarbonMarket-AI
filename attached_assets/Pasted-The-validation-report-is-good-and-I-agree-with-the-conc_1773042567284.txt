@@ -1,0 +1,66 @@
+The validation report is good and I agree with the conclusions.
+
+Before expanding the evidence pipeline further, I want to improve the extraction quality for the existing 8 critical parameters.
+
+The goal is NOT to add new features, but to make the current extraction more reliable and robust for expert users.
+
+Please implement only the two highest impact improvements identified in the validation report:
+
+1. Prompt enrichment
+
+Improve the extraction prompt for the current 8 parameters by adding:
+
+• methodology-specific aliases
+• baseline vs project guidance
+• valid ranges when available
+
+Examples:
+
+- SFC_baseline should include aliases such as:
+  "SFC_b,i", "baseline specific fuel consumption", "specific fuel consumption of the baseline scenario"
+
+- SFC_project should include aliases such as:
+  "SFC_p,i", "project specific fuel consumption", "specific fuel consumption of the project technology"
+
+- fNRB should include:
+  "fraction of non-renewable biomass", "non-renewable biomass fraction"
+
+- usage_rate should include:
+  "adoption rate", "utilization rate", "active use rate"
+
+Also explicitly instruct the model:
+
+IMPORTANT:
+Do NOT confuse baseline and project parameters.
+Only extract a value for SFC_baseline if the document clearly refers to the baseline scenario.
+Only extract a value for SFC_project if the document clearly refers to the project technology.
+
+When parameter definitions contain min/max values, include the valid range in the prompt.
+
+2. Unit validation with confidence adjustment
+
+After the LLM returns an extracted_value and extracted_unit:
+
+Compare the extracted unit with the canonical parameter unit.
+
+If the units appear incompatible (for example kg/person/year vs tonnes/household/year):
+
+• do not automatically reject the extraction
+• reduce the confidence level
+• add a clear unit mismatch warning in the evidence record so the user sees it during review
+
+This should help prevent the most common false positives.
+
+Scope constraints:
+
+• Do not expand beyond the current 8 parameters
+• Do not add new UI components
+• Do not add new database tables
+• Only modify the extraction prompt and the post-processing validation logic
+
+After implementation, please report:
+
+• which files were modified
+• the updated extraction prompt
+• how the unit validation works
+• one example showing how baseline/project confusion is now handled.

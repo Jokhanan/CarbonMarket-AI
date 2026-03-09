@@ -21,6 +21,44 @@ CRITICAL_PARAMS = [
     "SFC_project",
 ]
 
+PARAM_ALIASES = {
+    "fNRB": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y", "fNRB,i,y"],
+    "num_devices": ["number of stoves", "number of devices distributed", "total devices deployed", "N_i,y", "N_j,k,y", "number of project technologies"],
+    "num_households": ["number of households", "total households", "number of families", "participating households", "n_i,y"],
+    "household_size": ["average household size", "persons per household", "family size", "members per household", "HH size"],
+    "baseline_fuel_consumption": ["baseline fuel consumption per household", "fuel consumption in baseline scenario", "BC_b,i,y", "wood consumption baseline", "fuel use without project"],
+    "project_fuel_consumption": ["project fuel consumption per household", "fuel consumption with project technology", "BC_p,i,y", "wood consumption project", "fuel use with improved stove"],
+    "usage_rate": ["adoption rate", "utilization rate", "active use rate", "proportion of devices in use", "usage survey rate", "n_i,y / N_i,y"],
+    "SFC_baseline": ["SFC_b,i", "baseline specific fuel consumption", "specific fuel consumption of the baseline scenario", "SFC baseline", "SFC_b", "traditional stove fuel consumption per person"],
+    "SFC_project": ["SFC_p,i,y", "project specific fuel consumption", "specific fuel consumption of the project technology", "SFC project", "SFC_p", "improved stove fuel consumption per person"],
+}
+
+PERCENT_UNITS = {"percent", "%", "pct", "percentage"}
+
+UNIT_COMPATIBILITY = {
+    "fraction": ["fraction", "dimensionless", "ratio", "%", "percent", "proportion", "pct", "percentage"],
+    "count": ["count", "units", "number", "devices", "stoves", "households", "cookstoves"],
+    "tonnes/household/year": ["tonnes/household/year", "t/hh/yr", "tonnes/hh/year", "t/household/year", "tonnes per household per year", "t/hh/a", "tonnes/hh/a", "t/household/a"],
+    "kg/person/year": ["kg/person/year", "kg/capita/year", "kg/person/yr", "kg per person per year", "kg/cap/yr", "kg/capita/a", "kg/person/a", "kg per capita per year"],
+    "persons/household": ["persons/household", "persons per household", "people/household", "members/household", "people per hh", "persons/hh"],
+}
+
+def _check_unit_compatibility(canonical_unit, extracted_unit):
+    if not canonical_unit or not extracted_unit:
+        return True, None
+    canonical_lower = canonical_unit.lower().strip()
+    extracted_lower = extracted_unit.lower().strip()
+    if canonical_lower == extracted_lower:
+        return True, None
+    compatible_group = UNIT_COMPATIBILITY.get(canonical_lower)
+    if compatible_group and extracted_lower in [u.lower() for u in compatible_group]:
+        return True, None
+    for group_key, group_units in UNIT_COMPATIBILITY.items():
+        lower_units = [u.lower() for u in group_units]
+        if canonical_lower in lower_units and extracted_lower in lower_units:
+            return True, None
+    return False, f"Unit mismatch: extracted '{extracted_unit}' vs expected '{canonical_unit}'"
+
 
 def add_evidence_link(project_id, target_type, target_id, source_type,
                       target_description=None, source_doc_id=None, source_chunk_id=None,
@@ -200,7 +238,7 @@ def extract_parameter_evidence(project_id, doc_id):
             return {"error": "Document has no parsed text", "extracted": 0}
 
         cur.execute("""
-            SELECT param_key, param_name, value, unit
+            SELECT param_key, param_name, value, unit, min_value, max_value
             FROM project_parameters
             WHERE project_id = %s AND param_key = ANY(%s) AND applicable_year IS NULL
         """, (project_id, CRITICAL_PARAMS))
@@ -213,7 +251,18 @@ def extract_parameter_evidence(project_id, doc_id):
     for p in params:
         current = p["value"] if p["value"] is not None else "not set"
         unit = p.get("unit") or ""
-        param_lines.append(f"- {p['param_key']} ({p['param_name']}): current value = {current} {unit}")
+        aliases = PARAM_ALIASES.get(p["param_key"], [])
+        alias_text = f' (also called: {", ".join(aliases)})' if aliases else ""
+        range_parts = []
+        if p.get("min_value") is not None:
+            range_parts.append(f"min={p['min_value']}")
+        if p.get("max_value") is not None:
+            range_parts.append(f"max={p['max_value']}")
+        range_text = f" [valid range: {', '.join(range_parts)}]" if range_parts else ""
+        param_lines.append(
+            f"- {p['param_key']} ({p['param_name']}){alias_text}: "
+            f"current value = {current} {unit}{range_text}"
+        )
 
     with get_cursor() as cur:
         cur.execute("SELECT standard, methodology_code FROM user_projects WHERE id = %s", (project_id,))
@@ -241,10 +290,20 @@ For each value you find, return JSON array:
   }}
 ]
 
+IMPORTANT:
+- Do NOT confuse baseline and project parameters.
+- Only extract a value for SFC_baseline if the document clearly refers to the BASELINE scenario (e.g. "SFC_b,i", "baseline specific fuel consumption", "traditional stove consumption").
+- Only extract a value for SFC_project if the document clearly refers to the PROJECT technology (e.g. "SFC_p,i,y", "project specific fuel consumption", "improved stove consumption").
+- Only extract a value for baseline_fuel_consumption if the document clearly refers to BASELINE fuel use, not project fuel use.
+- Only extract a value for project_fuel_consumption if the document clearly refers to PROJECT fuel use, not baseline fuel use.
+- If it is ambiguous whether a value refers to baseline or project, do NOT extract it.
+
 Rules:
 - Only extract concrete numeric values, not descriptions or ranges
 - Include the exact quote from the document
+- Report the extracted_unit exactly as stated in the document
 - Set confidence: 0.9+ if value is clearly stated, 0.7-0.9 if inferred, <0.7 if uncertain
+- If the extracted value falls outside the valid range shown above, reduce confidence to <0.7
 - Return empty array [] if no relevant values found
 - Return ONLY valid JSON array, no other text"""
 
@@ -287,6 +346,34 @@ Rules:
 
             if not ext_value:
                 continue
+
+            canonical_unit = param_map[pk].get("unit") or ""
+            unit_ok, unit_warning = _check_unit_compatibility(canonical_unit, ext_unit)
+
+            if not unit_ok:
+                confidence = min(confidence, 0.5)
+                if page_section:
+                    page_section = f"{page_section} | WARNING: {unit_warning}"
+                else:
+                    page_section = f"WARNING: {unit_warning}"
+
+            min_val = param_map[pk].get("min_value")
+            max_val = param_map[pk].get("max_value")
+            try:
+                numeric_val = float(ext_value)
+                check_val = numeric_val
+                if ext_unit.lower().strip() in PERCENT_UNITS and canonical_unit.lower().strip() == "fraction":
+                    check_val = numeric_val / 100.0
+                if min_val is not None and check_val < float(min_val):
+                    confidence = min(confidence, 0.5)
+                    range_note = f"Value {ext_value} below minimum {min_val}"
+                    page_section = f"{page_section} | WARNING: {range_note}" if page_section else f"WARNING: {range_note}"
+                if max_val is not None and check_val > float(max_val):
+                    confidence = min(confidence, 0.5)
+                    range_note = f"Value {ext_value} above maximum {max_val}"
+                    page_section = f"{page_section} | WARNING: {range_note}" if page_section else f"WARNING: {range_note}"
+            except (ValueError, TypeError):
+                pass
 
             cur.execute("""
                 INSERT INTO evidence_links
