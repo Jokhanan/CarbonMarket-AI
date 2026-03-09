@@ -183,7 +183,9 @@ def detect_document_metadata(text_preview: str, api_key: str, filename: str = ""
         "   - 'template' = A BLANK template with placeholder text like [insert here], <<project name>>, not filled in\n"
         "   - 'methodology' = A methodology document (calculation rules, equations, applicability criteria — not a project)\n"
         "   - 'guidance' = A guide or manual explaining how to fill documents or apply rules\n"
-        "   - 'tool' = A calculation tool or spreadsheet reference\n"
+        "   - 'tool' = A CDM tool, VCS tool, or referenced calculation tool (e.g., TOOL33, TOOL07, "
+        "additionality tool, emission factor tool, default values tool). These are reusable procedures "
+        "referenced BY methodologies, not methodologies themselves.\n"
         "   - 'standard_text' = The standard text itself (program rules, requirements framework)\n"
         "   - 'example_fvr' = A Final Verification Report\n"
         "   - 'example_valver' = A Validation or Verification Report\n"
@@ -467,6 +469,16 @@ def classify_by_filename(filename: str) -> str | None:
     for pat in vcs_pdd_patterns:
         if re.search(pat, fn_base):
             return "example_pdd"
+
+    tool_patterns = [
+        r'\bTOOL\s*\d+\b', r'\bCDM\s+TOOL\b', r'\bCDM\s+DEFAULT\b',
+        r'\bCDM\s+COMBINED\s+TOOL\b', r'\bCDM\s+DEMONSTRATION\b',
+        r'\bCDM\s+BASELINE.*EMISSIONS\b', r'\bCDM\s+PROJECT\s+AND\s+LEAKAGE\b',
+        r'\bCDM\s+EMISSIONS\s+FROM\b', r'\bMETHODOLOGY\s+BOOKLET\b',
+    ]
+    for pat in tool_patterns:
+        if re.search(pat, fn_base):
+            return "tool"
 
     meth_patterns = [r'^VM\d{4}', r'^AMS[\s\-]', r'^ACM\d{4}', r'^AM\d{4}', r'\bMETHODOLOGY\b']
     for pat in meth_patterns:

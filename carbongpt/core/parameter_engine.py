@@ -109,6 +109,10 @@ PARAMETER_DEFINITIONS = {
          "aliases": ["average household size", "persons per household", "family size", "members per household", "HH size"],
          "extraction_hint": "Only extract values explicitly described as average household size or persons per household.",
          "noise_terms": [r"\bton\b", r"\btonne\b", r"\bcharcoal\b", r"\bfuel\b", r"\bkg\b"]},
+        {"param_key": "usage_rate_decay", "param_name": "Annual usage rate decay", "category": "monitoring", "unit": "fraction/year", "data_type": "number", "default": 0.02, "min_value": 0.0, "max_value": 0.10, "is_ex_ante": True, "depends_on": [],
+         "description": "Annual reduction in usage rate per year"},
+        {"param_key": "usage_rate_floor", "param_name": "Minimum usage rate", "category": "monitoring", "unit": "fraction", "data_type": "number", "default": 0.50, "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "depends_on": [],
+         "description": "Minimum usage rate floor (usage cannot decay below this)"},
         {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "TPDDTEC": [
@@ -165,6 +169,10 @@ PARAMETER_DEFINITIONS = {
          "aliases": ["average household size", "persons per household", "family size", "members per household", "HH size"],
          "extraction_hint": "Only extract values explicitly described as average household size or persons per household.",
          "noise_terms": [r"\bton\b", r"\btonne\b", r"\bcharcoal\b", r"\bfuel\b", r"\bkg\b"]},
+        {"param_key": "usage_rate_decay", "param_name": "Annual usage rate decay", "category": "monitoring", "unit": "fraction/year", "data_type": "number", "default": 0.02, "min_value": 0.0, "max_value": 0.10, "is_ex_ante": True, "depends_on": [],
+         "description": "Annual reduction in usage rate per year"},
+        {"param_key": "usage_rate_floor", "param_name": "Minimum usage rate", "category": "monitoring", "unit": "fraction", "data_type": "number", "default": 0.50, "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "depends_on": [],
+         "description": "Minimum usage rate floor (usage cannot decay below this)"},
         {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "ACM0002": [

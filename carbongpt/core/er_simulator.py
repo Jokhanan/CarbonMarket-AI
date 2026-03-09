@@ -18,6 +18,8 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     CF = _pval(params, "CF", 1.0)
     leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
     usage_rate_base = _pval(params, "usage_rate", 0.90)
+    usage_rate_decay = _pval(params, "usage_rate_decay", 0.02)
+    usage_rate_floor = _pval(params, "usage_rate_floor", 0.50)
     num_hh = _pval(params, "num_households", 1000)
     hh_size = _pval(params, "household_size", 5.0)
 
@@ -121,7 +123,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         year_num = y + 1
         cal_year = start_year + y
 
-        usage_rate = max(usage_rate_base - (y * 0.02), 0.50)
+        usage_rate = max(usage_rate_base - (y * usage_rate_decay), usage_rate_floor)
         active_hh = num_hh * usage_rate
         be_y = be_per_hh * active_hh
         pe_y = pe_per_hh * active_hh
@@ -139,7 +141,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "calendar_year": cal_year,
             "usage_rate": round(usage_rate, 4),
             "active_households": round(active_hh, 2),
-            "active_hh_formula": f"max({usage_rate_base} - ({y} * 0.02), 0.50) * {num_hh}",
+            "active_hh_formula": f"max({usage_rate_base} - ({y} * {usage_rate_decay}), {usage_rate_floor}) * {num_hh}",
             "be_per_hh": round(be_per_hh, 6),
             "pe_per_hh": round(pe_per_hh, 6),
             "baseline_emissions": round(be_y, 2),
@@ -181,7 +183,9 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "pj_consumption": {"value": round(pj_consumption, 4), "unit": "t/hh/yr", "description": "Project consumption (raw)"},
             "pj_consumption_wood_equiv": {"value": round(pj_consumption_wood_equiv, 4), "unit": "t/hh/yr", "description": "Project consumption (wood-equiv)"},
             "leakage_pct": {"value": leakage_pct, "unit": "fraction", "description": "Leakage deduction percentage"},
-            "usage_rate": {"value": usage_rate_base, "unit": "fraction", "description": "Initial usage rate (decays 2%/yr)"},
+            "usage_rate": {"value": usage_rate_base, "unit": "fraction", "description": f"Initial usage rate (decays {usage_rate_decay}/yr, floor {usage_rate_floor})"},
+            "usage_rate_decay": {"value": usage_rate_decay, "unit": "fraction/yr", "description": "Annual usage rate decay rate"},
+            "usage_rate_floor": {"value": usage_rate_floor, "unit": "fraction", "description": "Minimum usage rate floor"},
             "num_households": {"value": num_hh, "unit": "count", "description": "Number of households"},
             "household_size": {"value": hh_size, "unit": "persons", "description": "Average household size"},
         },
