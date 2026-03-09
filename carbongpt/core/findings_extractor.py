@@ -100,6 +100,52 @@ def _parse_json_response(raw):
     return []
 
 
+def _normalize_text(text):
+    text = (text or "").lower().strip()
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def _word_set(text):
+    return set(_normalize_text(text).split())
+
+
+def _word_overlap(a, b):
+    sa = _word_set(a)
+    sb = _word_set(b)
+    if not sa or not sb:
+        return 0.0
+    intersection = sa & sb
+    smaller = min(len(sa), len(sb))
+    return len(intersection) / smaller if smaller > 0 else 0.0
+
+
+def _sections_nearby(sec_a, sec_b):
+    a = _normalize_text(sec_a)
+    b = _normalize_text(sec_b)
+    if a == b:
+        return True
+    if a == "general" or b == "general":
+        return False
+    num_a = re.findall(r'[\d]+(?:\.[\d]+)*', a)
+    num_b = re.findall(r'[\d]+(?:\.[\d]+)*', b)
+    if num_a and num_b:
+        return num_a[0].split('.')[0] == num_b[0].split('.')[0]
+    return _word_overlap(a, b) > 0.6
+
+
+def _merge_finding(existing, new_f):
+    if len(new_f.get("description", "")) > len(existing.get("description", "")):
+        existing["description"] = new_f["description"]
+    if new_f.get("resolution") and not existing.get("resolution"):
+        existing["resolution"] = new_f["resolution"]
+    if new_f.get("finding_id", "unknown") != "unknown" and existing.get("finding_id", "unknown") == "unknown":
+        existing["finding_id"] = new_f["finding_id"]
+    if new_f.get("pdd_section", "general") != "general" and existing.get("pdd_section", "general") == "general":
+        existing["pdd_section"] = new_f["pdd_section"]
+
+
 def _deduplicate_findings(findings):
     seen = {}
     for f in findings:
@@ -116,13 +162,55 @@ def _deduplicate_findings(findings):
         if key not in seen:
             seen[key] = f
         else:
-            existing = seen[key]
-            if len(f.get("description", "")) > len(existing.get("description", "")):
-                seen[key] = f
-            elif f.get("resolution") and not existing.get("resolution"):
-                existing["resolution"] = f["resolution"]
+            _merge_finding(seen[key], f)
 
-    return list(seen.values())
+    kept = list(seen.values())
+
+    merged = True
+    while merged:
+        merged = False
+        result = []
+        used = set()
+        for i, a in enumerate(kept):
+            if i in used:
+                continue
+            for j in range(i + 1, len(kept)):
+                if j in used:
+                    continue
+                b = kept[j]
+                if a.get("finding_type") != b.get("finding_type"):
+                    continue
+                a_fid = a.get("finding_id", "unknown")
+                b_fid = b.get("finding_id", "unknown")
+                if (a_fid != "unknown" and b_fid != "unknown"
+                        and a_fid != b_fid):
+                    continue
+                desc_sim = _word_overlap(
+                    a.get("description", ""), b.get("description", "")
+                )
+                topic_sim = _word_overlap(
+                    a.get("topic", ""), b.get("topic", "")
+                )
+                sec_a = a.get("pdd_section", "general")
+                sec_b = b.get("pdd_section", "general")
+                same_section = _sections_nearby(sec_a, sec_b)
+
+                is_dup = False
+                if desc_sim >= 0.85 and same_section:
+                    is_dup = True
+                elif desc_sim >= 0.80 and topic_sim >= 0.60 and same_section:
+                    is_dup = True
+                elif desc_sim >= 0.92 and topic_sim >= 0.75 and same_section:
+                    is_dup = True
+
+                if is_dup:
+                    _merge_finding(a, b)
+                    used.add(j)
+                    merged = True
+            result.append(a)
+        kept = result
+
+    return kept
 
 
 def extract_findings_from_chunks(doc_id):
