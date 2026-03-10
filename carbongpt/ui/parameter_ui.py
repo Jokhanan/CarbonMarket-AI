@@ -8,8 +8,43 @@ from carbongpt.core.parameter_engine import (
     confirm_parameter,
     FUEL_CANONICAL_OPTIONS,
     get_fuel_display_label,
+    normalize_fuel_type,
 )
 from carbongpt.core.evidence_engine import get_evidence_links, get_evidence_counts_by_param
+
+DERIVED_PARAMS = {"num_beneficiaries", "num_households"}
+
+CHARCOAL_ONLY_PARAMS = {"CF"}
+
+
+def _get_project_fuels(project_id, all_params):
+    baseline_fuel = "wood"
+    project_fuel = "wood"
+    try:
+        from carbongpt.repository.db import get_cursor
+        with get_cursor() as cur:
+            cur.execute("SELECT methodology_settings FROM projects WHERE id = %s", (project_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                settings = row[0] if isinstance(row[0], dict) else {}
+                if settings.get("baseline_fuel"):
+                    baseline_fuel = normalize_fuel_type(str(settings["baseline_fuel"]))
+                if settings.get("project_fuel"):
+                    project_fuel = normalize_fuel_type(str(settings["project_fuel"]))
+    except Exception:
+        pass
+    for p in all_params:
+        if p["param_key"] == "baseline_fuel" and p["value"]:
+            baseline_fuel = normalize_fuel_type(str(p["value"]))
+        if p["param_key"] == "project_fuel" and p["value"]:
+            project_fuel = normalize_fuel_type(str(p["value"]))
+    return baseline_fuel, project_fuel
+
+
+def _should_show_param(param_key, baseline_fuel, project_fuel):
+    if param_key in CHARCOAL_ONLY_PARAMS:
+        return baseline_fuel == "charcoal" or project_fuel == "charcoal"
+    return True
 
 
 def render_parameter_dashboard(project):
@@ -100,6 +135,8 @@ def render_parameter_dashboard(project):
     }
 
     all_params = get_project_parameters(project_id)
+    baseline_fuel, project_fuel = _get_project_fuels(project_id, all_params)
+
     evidence = get_evidence_links(project_id, target_type="parameter")
     evidence_by_param = {}
     for e in evidence:
@@ -116,7 +153,9 @@ def render_parameter_dashboard(project):
 
     for cat in categories:
         cat_params = [p for p in all_params if p["category"] == cat]
-        displayable = [p for p in cat_params if p["param_key"] not in globally_rendered]
+        displayable = [p for p in cat_params
+                       if p["param_key"] not in globally_rendered
+                       and _should_show_param(p["param_key"], baseline_fuel, project_fuel)]
         if not displayable:
             continue
 
@@ -125,6 +164,12 @@ def render_parameter_dashboard(project):
                 key = p["param_key"]
                 if key in globally_rendered:
                     continue
+                if not _should_show_param(key, baseline_fuel, project_fuel):
+                    globally_rendered.add(key)
+                    continue
+
+                is_derived = key in DERIVED_PARAMS and p.get("source_type") == "calculated"
+
                 base_key = key.replace("_baseline", "").replace("_project", "")
                 pair = pair_map.get(base_key, {})
                 bl = pair.get(f"{base_key}_baseline")
@@ -146,6 +191,9 @@ def render_parameter_dashboard(project):
                     else:
                         _render_parameter_row(project_id, p, evidence_by_param)
                         globally_rendered.add(key)
+                elif is_derived:
+                    _render_derived_parameter(project_id, p, evidence_by_param)
+                    globally_rendered.add(key)
                 else:
                     _render_parameter_row(project_id, p, evidence_by_param)
                     globally_rendered.add(key)
@@ -161,6 +209,65 @@ def _get_param_status_display(param):
     }
     label, color = status_map.get(p_status, ("[?]", "gray"))
     return label, color, p_status
+
+
+def _render_derived_parameter(project_id, param, evidence_by_param):
+    param_key = param["param_key"]
+    status_label, status_color, p_status = _get_param_status_display(param)
+
+    has_evidence = param_key in evidence_by_param
+    ev_count = len(evidence_by_param.get(param_key, []))
+    evidence_indicator = ""
+    if ev_count > 0:
+        evidence_indicator = f' <span style="color:#0d9488;font-size:0.85em;">[{ev_count} evidence]</span>'
+
+    col1, col2, col3 = st.columns([3, 2, 1])
+
+    with col1:
+        st.markdown(
+            f"<span style='color:{status_color};font-weight:bold;'>{status_label}</span> "
+            f"**{param['param_name']}**{evidence_indicator}",
+            unsafe_allow_html=True,
+        )
+        source_ref = param.get("source_reference", "")
+        st.caption(f"Source: {source_ref}")
+
+    with col2:
+        current_val = param["value"] if param["value"] is not None else ""
+        unit = param.get("unit", "")
+        if current_val:
+            try:
+                display_val = f"{float(current_val):,.0f}"
+            except (ValueError, TypeError):
+                display_val = str(current_val)
+            st.markdown(f"**{display_val}** {unit}")
+        else:
+            st.caption("Not yet computed (set primary inputs first)")
+
+    with col3:
+        override_key = f"override_derived_{param_key}_{project_id}"
+        if st.button("Override", key=f"btn_override_{param_key}_{param['id']}", help="Manually set this value instead of using the computed one"):
+            st.session_state[override_key] = True
+
+    if st.session_state.get(f"override_derived_{param_key}_{project_id}"):
+        oc1, oc2 = st.columns([3, 1])
+        with oc1:
+            override_val = st.text_input(
+                f"Override value ({param.get('unit', '')})",
+                value=str(current_val) if current_val else "",
+                key=f"override_val_{param_key}_{param['id']}",
+            )
+        with oc2:
+            if st.button("Save Override", key=f"save_override_{param_key}_{param['id']}"):
+                update_parameter(
+                    project_id, param_key,
+                    value=override_val if override_val else None,
+                    source_type="user_override",
+                    source_reference="Manual override of derived value",
+                )
+                st.session_state.pop(f"override_derived_{param_key}_{project_id}", None)
+                st.success(f"Updated {param['param_name']}")
+                st.rerun()
 
 
 def _render_parameter_row(project_id, param, evidence_by_param):

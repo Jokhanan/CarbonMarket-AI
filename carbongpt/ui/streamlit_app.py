@@ -6018,6 +6018,10 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
 
     qualitative_params = [p for p in parameters if p.get("category") == "qualitative"]
 
+    auto_derived_dims = set()
+    selected_baseline = existing_settings.get("baseline_fuel", "")
+    selected_project = existing_settings.get("project_fuel", "")
+
     if context_dims:
         with st.container(border=True):
             st.markdown("#### Methodology Choices")
@@ -6029,6 +6033,25 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                 options = dim.get("options", [])
                 if not options:
                     continue
+
+                if dim_key == "method_selection":
+                    auto_derived_dims.add(dim_key)
+                    continue
+
+                if dim_key == "scale_classification":
+                    intake_scale = st.session_state.get(f"setup_po_scale_{project_id}", "") or intake.get("project_overview", {}).get("scale", "")
+                    if intake_scale:
+                        scale_lower = intake_scale.lower()
+                        matched = None
+                        for opt in options:
+                            if opt.lower() == scale_lower or scale_lower in opt.lower() or opt.lower() in scale_lower:
+                                matched = opt
+                                break
+                        if matched:
+                            new_settings[dim_key] = matched
+                            auto_derived_dims.add(dim_key)
+                            continue
+
                 current_val = existing_settings.get(dim_key, "")
                 idx = 0
                 if current_val in options:
@@ -6042,35 +6065,32 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                 )
                 new_settings[dim_key] = selected
 
-    if calc_methods:
-        with st.container(border=True):
-            st.markdown("#### Calculation Method")
-            st.caption("Select which quantification approach applies to your project.")
-            method_options = []
-            for cm in calc_methods:
-                mid = cm.get("method_id", "")
-                mname = cm.get("method_name", mid)
-                method_options.append((mid, mname))
-            if method_options:
-                current_method = existing_settings.get("calculation_method", "")
-                method_ids = [m[0] for m in method_options]
-                method_labels = {m[0]: m[1] for m in method_options}
-                idx = 0
-                if current_method in method_ids:
-                    idx = method_ids.index(current_method)
-                selected_method = st.selectbox(
-                    "Quantification method",
-                    method_ids,
-                    index=idx,
-                    format_func=lambda x: method_labels.get(x, x),
-                    key=f"meth_calcmethod_{project_id}",
-                )
-                new_settings["calculation_method"] = selected_method
-                selected_cm = next((cm for cm in calc_methods if cm.get("method_id") == selected_method), None)
-                if selected_cm:
-                    applicability = selected_cm.get("applicability", "")
-                    if applicability:
-                        st.caption(f"Applicability: {applicability[:300]}")
+                if dim_key == "baseline_fuel":
+                    selected_baseline = selected
+                elif dim_key == "project_fuel":
+                    selected_project = selected
+
+    if selected_baseline and selected_project:
+        from carbongpt.core.parameter_engine import normalize_fuel_type
+        bl_norm = normalize_fuel_type(selected_baseline)
+        pj_norm = normalize_fuel_type(selected_project)
+        if bl_norm == pj_norm:
+            derived_method = "Method 1"
+            derived_method_id = "method_1"
+            method_reason = f"Same fuel ({selected_baseline}) -- Method 1 applies"
+        else:
+            derived_method = "Method 2"
+            derived_method_id = "method_2"
+            method_reason = f"Different fuels ({selected_baseline} / {selected_project}) -- Method 2 applies"
+        new_settings["method_selection"] = derived_method
+        new_settings["calculation_method"] = derived_method_id
+        st.caption(f"Calculation method: **{derived_method}** ({method_reason})")
+        if auto_derived_dims:
+            derived_info = []
+            if "scale_classification" in auto_derived_dims:
+                derived_info.append(f"Scale: {new_settings.get('scale_classification', '')}")
+            if derived_info:
+                st.caption("Auto-derived: " + " | ".join(derived_info))
 
     if qualitative_params:
         with st.container(border=True):
@@ -6304,10 +6324,6 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                                         key=f"setup_loc_coords_{project_id}",
                                         placeholder="e.g., 7.9465, -1.0232")
             _intel_source_label(intake, "location", "coordinates")
-            loc_beneficiaries = st.text_input("Number of beneficiaries", value=loc.get("beneficiaries", ""),
-                                               key=f"setup_loc_bene_{project_id}",
-                                               placeholder="e.g., 250,000 people")
-            _intel_source_label(intake, "location", "beneficiaries")
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 
@@ -6362,7 +6378,7 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
         },
         "location": {
             "regions": loc_regions, "coordinates": loc_coords,
-            "target_population": loc_target, "beneficiaries": loc_beneficiaries,
+            "target_population": loc_target,
         },
         "baseline_additionality": {
             "baseline_scenario": ba_baseline, "additionality_justification": ba_additionality,

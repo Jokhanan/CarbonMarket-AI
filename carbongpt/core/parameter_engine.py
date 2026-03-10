@@ -299,6 +299,8 @@ def initialize_project_parameters(project_id):
             except (ValueError, TypeError):
                 pass
 
+        resolved_values = {}
+        resolved_meta = {}
         inserted = 0
         for defn in definitions:
             value = None
@@ -329,6 +331,16 @@ def initialize_project_parameters(project_id):
                     value, source_type, source_reference = _resolve_with_definition_fallback(
                         defn, value, source_type, source_reference,
                     )
+
+            resolved_values[defn["param_key"]] = value
+            resolved_meta[defn["param_key"]] = (source_type, source_reference, param_status)
+
+        _compute_derived_params(resolved_values, resolved_meta)
+
+        for defn in definitions:
+            pk = defn["param_key"]
+            value = resolved_values.get(pk)
+            source_type, source_reference, param_status = resolved_meta.get(pk, ("default", None, "default"))
 
             if value is None or (isinstance(value, str) and not value.strip()):
                 param_status = "missing"
@@ -451,14 +463,9 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
             source_type = "default"
             source_reference = "Must be provided by project developer"
     elif param_key == "num_households":
-        if intake_num_units is not None:
-            value = intake_num_units
-            source_type = "default"
-            source_reference = "Derived from num_devices (1 device per household assumed)"
-        else:
-            value = None
-            source_type = "default"
-            source_reference = "Must be provided by project developer"
+        value = None
+        source_type = "calculated"
+        source_reference = "Derived: num_devices / devices_per_household"
     elif param_key == "devices_per_household":
         value = 1
         source_type = "default"
@@ -506,6 +513,44 @@ def _resolve_with_definition_fallback(defn, value, source_type, source_reference
     return value, source_type, source_reference
 
 
+def _compute_derived_params(resolved_values, resolved_meta):
+    def _safe_float(v):
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
+
+    num_devices = _safe_float(resolved_values.get("num_devices"))
+    devices_per_hh = _safe_float(resolved_values.get("devices_per_household")) or 1.0
+    household_size = _safe_float(resolved_values.get("household_size")) or 5.0
+
+    src_type, src_ref, p_status = resolved_meta.get("num_households", ("default", None, "default"))
+    cur_hh = _safe_float(resolved_values.get("num_households"))
+    if cur_hh is None and num_devices is not None:
+        computed_hh = num_devices / devices_per_hh
+        resolved_values["num_households"] = computed_hh
+        resolved_meta["num_households"] = (
+            "calculated",
+            f"Derived: {int(num_devices)} devices / {devices_per_hh:.0f} per household = {int(computed_hh)}",
+            "estimated",
+        )
+
+    src_type_b, src_ref_b, p_status_b = resolved_meta.get("num_beneficiaries", ("default", None, "default"))
+    cur_ben = _safe_float(resolved_values.get("num_beneficiaries"))
+    if cur_ben is None and p_status_b != "confirmed":
+        hh_val = _safe_float(resolved_values.get("num_households"))
+        if hh_val is not None and household_size is not None:
+            computed_ben = hh_val * household_size
+            resolved_values["num_beneficiaries"] = computed_ben
+            resolved_meta["num_beneficiaries"] = (
+                "calculated",
+                f"Derived: {int(hh_val)} households x {household_size:.0f} persons/hh = {int(computed_ben)}",
+                "estimated",
+            )
+
+
 def get_project_parameters(project_id, category=None):
     with get_cursor() as cur:
         if category:
@@ -521,6 +566,57 @@ def get_project_parameters(project_id, category=None):
                 ORDER BY category, param_key
             """, (project_id,))
         return cur.fetchall()
+
+
+def _recompute_derived_after_update(cur, project_id, keys_to_recompute):
+    cur.execute("""
+        SELECT param_key, value, source_type, param_status FROM project_parameters
+        WHERE project_id = %s AND applicable_year IS NULL
+    """, (project_id,))
+    all_rows = cur.fetchall()
+    vals = {}
+    for r in all_rows:
+        vals[r["param_key"]] = r["value"]
+
+    def _sf(v):
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
+
+    num_devices = _sf(vals.get("num_devices"))
+    devices_per_hh = _sf(vals.get("devices_per_household")) or 1.0
+    household_size = _sf(vals.get("household_size")) or 5.0
+
+    for key in keys_to_recompute:
+        existing = next((r for r in all_rows if r["param_key"] == key), None)
+        if existing and existing["source_type"] == "user_override":
+            continue
+
+        computed = None
+        ref = None
+        if key == "num_households" and num_devices is not None:
+            computed = num_devices / devices_per_hh
+            ref = f"Derived: {int(num_devices)} devices / {devices_per_hh:.0f} per household = {int(computed)}"
+        elif key == "num_beneficiaries":
+            hh = _sf(vals.get("num_households"))
+            if "num_households" in keys_to_recompute and num_devices is not None:
+                hh = num_devices / devices_per_hh
+            if hh is not None:
+                computed = hh * household_size
+                ref = f"Derived: {int(hh)} households x {household_size:.0f} persons/hh = {int(computed)}"
+
+        if computed is not None:
+            cur.execute("""
+                UPDATE project_parameters
+                SET value = %s, source_type = 'calculated', source_reference = %s,
+                    param_status = 'estimated', updated_at = NOW()
+                WHERE project_id = %s AND param_key = %s AND applicable_year IS NULL
+                  AND source_type != 'user_override'
+            """, (str(computed), ref, project_id, key))
+            vals[key] = str(computed)
 
 
 def update_parameter(project_id, param_key, value, source_type=None, source_reference=None, notes=None):
@@ -562,6 +658,16 @@ def update_parameter(project_id, param_key, value, source_type=None, source_refe
                     UPDATE project_parameters SET param_status = 'missing'
                     WHERE id = %s
                 """, (updated["id"],))
+
+        derivation_triggers = {
+            "num_devices": ["num_households", "num_beneficiaries"],
+            "devices_per_household": ["num_households", "num_beneficiaries"],
+            "household_size": ["num_beneficiaries"],
+            "num_households": ["num_beneficiaries"],
+        }
+        if param_key in derivation_triggers:
+            _recompute_derived_after_update(cur, project_id, derivation_triggers[param_key])
+
         return updated
 
 
