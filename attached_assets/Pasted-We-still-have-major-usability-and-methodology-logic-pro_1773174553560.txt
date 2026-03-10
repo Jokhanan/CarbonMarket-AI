@@ -1,0 +1,195 @@
+We still have major usability and methodology-logic problems in the Parameters tab.
+
+Do NOT patch isolated fields one by one.
+I want you to redesign the Parameters flow so it follows the real methodological logic, especially for cookstove methodologies like TPDDTEC / VM0050.
+
+This is not about adding new features.
+It is about making the Parameters tab methodology-driven, simpler, and logically correct.
+
+Please analyze and fix the following issues:
+
+--------------------------------------------------
+1. PARAMETERS MUST FOLLOW THE METHODOLOGY DECISION ORDER
+--------------------------------------------------
+
+Right now the Parameters tab starts by showing many baseline/project parameters directly.
+That is wrong.
+
+The flow should first determine the methodological pathway before exposing detailed parameters.
+
+The correct order should be something like:
+
+Step 1:
+Select baseline fuel(s)
+
+Step 2:
+Select project fuel(s)
+
+Step 3:
+Determine whether baseline fuel and project fuel are:
+- the same
+- different
+- mixed / multiple fuels
+
+Step 4:
+Determine whether the user wants:
+- default consumption values
+- measured/custom values
+
+Step 5:
+Only then show the relevant parameters, labels, defaults, and units for the chosen pathway.
+
+The UI should not ask everything at once.
+
+--------------------------------------------------
+2. PATHWAY LOGIC MUST BE DETERMINED AUTOMATICALLY
+--------------------------------------------------
+
+The system should infer the methodological pathway automatically from the selected fuel logic.
+
+Examples:
+- same fuel + default values = one pathway
+- same fuel + measured values = another pathway
+- different fuels = another pathway
+- mixed fuels = another pathway if supported
+
+The user should not have to manually pick a calculation method if the pathway can be derived automatically from the selected conditions.
+
+Please redesign the parameter flow so that pathway selection is inferred from:
+- baseline fuel
+- project fuel
+- same/different fuel logic
+- default vs measured choice
+
+--------------------------------------------------
+3. PARAMETER LABELS AND NOTATION MUST CHANGE DYNAMICALLY
+--------------------------------------------------
+
+When the pathway changes, the visible parameter labels and notation must also change.
+
+Today this is not working correctly.
+For example:
+- the method changes
+- but the labels still show the wrong notation (SFS vs SFC vs SE)
+
+This is not acceptable.
+
+Please make sure the selected pathway dynamically controls:
+- which parameters appear
+- how they are labeled
+- which notation is shown
+- which equations and defaults apply
+
+--------------------------------------------------
+4. UNITS MUST BE EXPLICIT AND METHODOLOGY-CORRECT
+--------------------------------------------------
+
+A critical issue is unit ambiguity.
+
+For fuel consumption, the UI must clearly distinguish:
+- per person
+- per household
+- per year
+- wood equivalent vs actual fuel
+- kg vs tonnes
+
+The system must not leave the user guessing what the unit means.
+
+Please review the current parameter labels and redesign them so the unit logic is explicit and consistent with the methodology.
+
+--------------------------------------------------
+5. DEFAULT VALUES MUST BE SELECTION-BASED, NOT FREE TEXT
+--------------------------------------------------
+
+Methodology defaults should not be shown as raw prefilled text values that the user has to erase manually.
+
+Examples:
+- if fuel = wood, the relevant emission factor should auto-select directly
+- if fuel = charcoal, the UI should present the valid allowed default options as a controlled list
+- the same applies for any other default values from the methodology
+
+The experience should be:
+- system proposes valid defaults based on fuel/pathway
+- user selects from valid options if there are multiple valid defaults
+- user only overrides where appropriate
+
+Please redesign the defaults in this way.
+
+--------------------------------------------------
+6. SHOW ONLY PARAMETERS THAT ARE ACTUALLY NEEDED
+--------------------------------------------------
+
+Do not ask for parameters in cases where the methodology does not require them.
+
+Examples:
+- wood-to-charcoal conversion factor should only appear when actually needed
+- some parameters are advanced and should only appear when relevant
+- number of beneficiaries should not be a primary manual question if it can be derived
+
+Please check the methodology carefully and determine which parameters are:
+- always required
+- conditionally required
+- derived automatically
+- advanced / optional
+
+Then redesign the Parameters tab accordingly.
+
+--------------------------------------------------
+7. DERIVED ACTIVITY DATA MUST NOT BE ASKED REPEATEDLY
+--------------------------------------------------
+
+The current tab asks overlapping activity fields that should not all be separate manual inputs:
+- number of devices deployed
+- devices per household
+- average household size
+- number of beneficiaries
+- number of households served
+
+This is confusing and redundant.
+
+The system should have a clear source-of-truth model, for example:
+- number of devices deployed
+- devices per household
+- average household size
+
+Then derive automatically:
+- number of households served
+- number of beneficiaries
+
+Only allow manual override if truly needed.
+
+Please redesign this logic so the user is not repeatedly asked the same thing in different forms.
+
+--------------------------------------------------
+8. THIS MUST NOT BE HARDCODED RANDOMLY IN THE UI
+--------------------------------------------------
+
+Do not solve this by adding more scattered if-statements directly in the page.
+
+The Parameters tab must be driven by:
+- methodology definitions
+- pathway rules
+- parameter definitions
+- default option mappings
+- dependency logic
+
+The goal is:
+a generic methodology-aware parameter system
+not a patched form.
+
+--------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------
+
+Before coding, provide a focused implementation plan that explains:
+
+1. What the new Parameters flow should look like step by step
+2. Which questions should come first and which should be hidden until needed
+3. Which values are manual vs derived vs conditional
+4. How pathway logic will be inferred automatically
+5. How parameter labels and units will change dynamically
+6. Which files need to change
+7. How you will avoid hardcoding and instead use the methodology/parameter definition layer
+
+Do not propose unrelated features.
+This is a methodology-driven redesign of the Parameters tab only.
