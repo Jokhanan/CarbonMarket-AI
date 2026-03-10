@@ -6015,11 +6015,7 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
     context_dims = meth_parsed.get("context_dimensions", [])
     calc_methods = meth_parsed.get("calculation_methods", [])
     parameters = meth_parsed.get("parameters", [])
-    meth_name = meth_parsed.get("methodology_name", "")
 
-    project_input_params = [p for p in parameters if p.get("category") == "project_input"]
-    monitored_params = [p for p in parameters if p.get("category") == "monitored"]
-    default_params = [p for p in parameters if p.get("category") == "methodology_default"]
     qualitative_params = [p for p in parameters if p.get("category") == "qualitative"]
 
     if context_dims:
@@ -6076,33 +6072,6 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                     if applicability:
                         st.caption(f"Applicability: {applicability[:300]}")
 
-    if project_input_params:
-        with st.container(border=True):
-            st.markdown("#### Project-Specific Parameters")
-            st.caption("Values specific to your project activity, required by the methodology.")
-            for param in project_input_params:
-                p_name = param.get("name", "")
-                p_symbol = param.get("symbol", "")
-                p_unit = param.get("unit", "")
-                p_source = param.get("source", "")
-                p_id = param.get("parameter_id", p_symbol or p_name)
-                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
-
-                label = p_name
-                if p_unit:
-                    label += f" [{p_unit}]"
-                if p_symbol and p_symbol != p_name:
-                    label = f"{p_symbol} - {label}"
-
-                current_val = meth_inputs.get(safe_key, "")
-                val = st.text_input(
-                    label,
-                    value=current_val,
-                    key=f"meth_pi_{project_id}_{safe_key}",
-                    placeholder=f"Source: {p_source[:80]}" if p_source else "",
-                )
-                meth_inputs[safe_key] = val
-
     if qualitative_params:
         with st.container(border=True):
             st.markdown("#### Qualitative Requirements")
@@ -6122,102 +6091,14 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                 )
                 meth_inputs[safe_key] = val
 
-    if monitored_params:
-        with st.container(border=True):
-            st.markdown("#### Monitoring Parameters")
-            st.caption("These parameters must be monitored during the crediting period. Provide your planned approach or initial values.")
-            for param in monitored_params:
-                p_name = param.get("name", "")
-                p_symbol = param.get("symbol", "")
-                p_unit = param.get("unit", "")
-                p_source = param.get("source", "")
-                p_id = param.get("parameter_id", p_symbol or p_name)
-                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
-
-                label = p_name
-                if p_unit:
-                    label += f" [{p_unit}]"
-                if p_symbol and p_symbol != p_name:
-                    label = f"{p_symbol} - {label}"
-
-                current_val = meth_inputs.get(f"mon_{safe_key}", "")
-                val = st.text_input(
-                    label,
-                    value=current_val,
-                    key=f"meth_mon_{project_id}_{safe_key}",
-                    placeholder=f"Monitoring source: {p_source[:80]}" if p_source else "Describe your monitoring approach or enter initial/estimated value",
-                )
-                meth_inputs[f"mon_{safe_key}"] = val
-
     with st.container(border=True):
-        st.markdown("#### Calculation Parameters")
-        st.caption("Emission factors, fuel properties, and activity data are managed centrally in the Parameters tab.")
+        st.markdown("#### Parameters & Defaults")
+        st.caption("Emission factors, fuel properties, monitoring parameters, and activity data are managed centrally in the Parameters tab. Initialize parameters there after saving your methodology choices.")
 
         def _go_to_params():
             st.session_state[f"ws_tab_{project_id}"] = 2
 
         st.button("Go to Parameters tab", key=f"goto_params_from_setup_{project_id}", on_click=_go_to_params)
-
-    tool33_lookup = _build_tool33_lookup(meth_parsed, new_settings, country)
-
-    if default_params:
-        with st.container(border=True):
-            st.markdown("#### Methodology Default Values")
-            st.caption("These values are defined by the methodology. Review and override only if your project has specific justification.")
-            for param in default_params:
-                p_name = param.get("name", "")
-                p_symbol = param.get("symbol", "")
-                p_unit = param.get("unit", "")
-                p_id = param.get("parameter_id", p_symbol or p_name)
-                safe_key = (p_id or p_name).replace(" ", "_").replace(",", "").replace(".", "_")[:40]
-
-                default_val = param.get("default_value") or ""
-                if isinstance(default_val, (dict, list)):
-                    import json as _json
-                    default_val = _json.dumps(default_val)
-                default_val = str(default_val)
-
-                defaults_by_ctx = param.get("defaults_by_context", [])
-                resolved_default = default_val
-                if defaults_by_ctx and context_dims:
-                    for dbc in defaults_by_ctx:
-                        ctx_key = dbc.get("dimension_key", "")
-                        ctx_val = new_settings.get(ctx_key, "")
-                        if ctx_val:
-                            values_map = dbc.get("values", {})
-                            if isinstance(values_map, dict) and ctx_val in values_map:
-                                resolved_default = str(values_map[ctx_val])
-                                break
-
-                tool33_val = ""
-                tool33_src = ""
-                if not resolved_default and tool33_lookup:
-                    t33 = _match_tool33_param(p_symbol or p_name, tool33_lookup)
-                    if t33:
-                        tool33_val = str(t33.get("value", ""))
-                        tool33_src = t33.get("source", "CDM TOOL33 / IPCC")
-                        resolved_default = tool33_val
-
-                label = p_name
-                if p_unit:
-                    label += f" [{p_unit}]"
-                if p_symbol and p_symbol != p_name:
-                    label = f"{p_symbol} - {label}"
-
-                current_override = meth_inputs.get(f"def_{safe_key}", "")
-                if resolved_default:
-                    placeholder = f"Default: {resolved_default[:100]}"
-                    if tool33_src:
-                        placeholder += f" ({tool33_src})"
-                else:
-                    placeholder = "No default specified"
-                val = st.text_input(
-                    label,
-                    value=current_override,
-                    key=f"meth_def_{project_id}_{safe_key}",
-                    placeholder=placeholder,
-                )
-                meth_inputs[f"def_{safe_key}"] = val
 
     return new_settings, meth_inputs
 
@@ -6234,9 +6115,9 @@ def _intel_source_label(intake, category, field_key):
         )
 
 
-def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard"):
+def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard", methodology=None):
     if project_type in ("standalone_pdd", ""):
-        return _render_intake_pdd(project_id, intake, standard)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology)
     elif project_type == "poa_programme":
         return _render_intake_poa(project_id, intake, standard)
     elif project_type == "vpa_component":
@@ -6246,7 +6127,7 @@ def _render_intake_by_type(project_id, project_type, intake, standard="GoldStand
     elif project_type == "valver_report":
         return _render_intake_valver(project_id, intake, standard)
     else:
-        return _render_intake_pdd(project_id, intake, standard)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology)
 
 
 def _render_proponent_card(project_id, intake, standard, prefix=""):
@@ -6301,7 +6182,9 @@ SCALE_OPTIONS = ["", "Micro-scale", "Small-scale", "Large-scale"]
 ACTIVITY_TYPE_OPTIONS = ["", "Greenfield", "Switch from existing", "Capacity addition", "Energy efficiency", "Other"]
 
 
-def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
+def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None):
+    from carbongpt.core.methodology_rules import get_methodology_metadata, has_methodology_fuel_choices
+
     po = intake.get("project_overview", {})
     tech = intake.get("technology", {})
     loc = intake.get("location", {})
@@ -6314,7 +6197,21 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
     prior = intake.get("prior_consideration", {})
     legal = intake.get("legal_compliance", {})
 
+    meth_meta = get_methodology_metadata(methodology)
+    fuel_from_methodology = has_methodology_fuel_choices(methodology)
+
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="pdd")
+
+    if meth_meta:
+        derived_parts = []
+        if meth_meta.get("activity_type"):
+            derived_parts.append(f"Activity type: **{meth_meta['activity_type']}**")
+        if meth_meta.get("sectoral_scope"):
+            derived_parts.append(f"Sectoral scope: **{meth_meta['sectoral_scope']}**")
+        if meth_meta.get("scale_options"):
+            derived_parts.append(f"Scale: **{', '.join(meth_meta['scale_options'])}**")
+        if derived_parts:
+            st.caption("Derived from methodology: " + " | ".join(derived_parts))
 
     with st.container(border=True):
         st.markdown("#### Project Facts")
@@ -6326,9 +6223,12 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                            placeholder="YYYY-MM-DD")
             _intel_source_label(intake, "project_overview", "start_date")
         with pc2:
+            available_scales = SCALE_OPTIONS
+            if meth_meta and meth_meta.get("scale_options"):
+                available_scales = [""] + meth_meta["scale_options"]
             current_scale = po.get("scale", "")
-            scale_idx = SCALE_OPTIONS.index(current_scale) if current_scale in SCALE_OPTIONS else 0
-            po_scale = st.selectbox("Project scale", SCALE_OPTIONS,
+            scale_idx = available_scales.index(current_scale) if current_scale in available_scales else 0
+            po_scale = st.selectbox("Project scale", available_scales,
                                      index=scale_idx,
                                      key=f"setup_po_scale_{project_id}",
                                      format_func=lambda x: x if x else "Select scale...")
@@ -6338,18 +6238,9 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                           key=f"setup_po_num_units_{project_id}",
                                           placeholder="e.g., 50,000 stoves")
             _intel_source_label(intake, "project_overview", "num_units")
-        ac1, ac2 = st.columns(2)
-        with ac1:
-            current_activity = po.get("activity_type", "")
-            activity_idx = ACTIVITY_TYPE_OPTIONS.index(current_activity) if current_activity in ACTIVITY_TYPE_OPTIONS else 0
-            po_activity_type = st.selectbox("Activity type", ACTIVITY_TYPE_OPTIONS,
-                                             index=activity_idx,
-                                             key=f"setup_po_activity_type_{project_id}",
-                                             format_func=lambda x: x if x else "Select activity type...")
-        with ac2:
-            po_sector = st.text_input("Sectoral scope", value=po.get("sectoral_scope", ""),
-                                       key=f"setup_po_sector_{project_id}",
-                                       placeholder="e.g., Energy industries, Household")
+
+    po_activity_type = meth_meta["activity_type"] if meth_meta and meth_meta.get("activity_type") else po.get("activity_type", "")
+    po_sector = meth_meta["sectoral_scope"] if meth_meta and meth_meta.get("sectoral_scope") else po.get("sectoral_scope", "")
 
     with st.container(border=True):
         st.markdown("#### Technology & Approach")
@@ -6364,19 +6255,33 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                                key=f"setup_tech_mfr_{project_id}",
                                                placeholder="e.g., BioLite, Tesla, Vestas")
             _intel_source_label(intake, "technology", "manufacturer")
-            tech_baseline_scenario = st.text_input("Baseline practice / fuel", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
-                                                key=f"setup_tech_fuel_bl_{project_id}",
-                                                placeholder="e.g., Wood, Diesel, Grid electricity")
-            _intel_source_label(intake, "technology", "fuel_baseline")
+            if fuel_from_methodology:
+                tech_baseline_scenario = tech.get("fuel_baseline", tech.get("baseline_scenario", ""))
+                if tech_baseline_scenario:
+                    st.caption(f"Baseline fuel: **{tech_baseline_scenario}** (set in Methodology Choices below)")
+                else:
+                    st.caption("Baseline fuel: set in Methodology Choices below")
+            else:
+                tech_baseline_scenario = st.text_input("Baseline practice / fuel", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
+                                                    key=f"setup_tech_fuel_bl_{project_id}",
+                                                    placeholder="e.g., Wood, Diesel, Grid electricity")
+                _intel_source_label(intake, "technology", "fuel_baseline")
         with tc2:
             tech_model = st.text_input("Model / specification", value=tech.get("model", ""),
                                         key=f"setup_tech_model_{project_id}",
                                         placeholder="e.g., HomeStove 2, V150-4.2MW")
             _intel_source_label(intake, "technology", "model")
-            tech_project_scenario = st.text_input("Project practice / fuel", value=tech.get("fuel_project", tech.get("project_scenario", "")),
-                                               key=f"setup_tech_fuel_pj_{project_id}",
-                                               placeholder="e.g., LPG, Solar PV, Improved cookstove")
-            _intel_source_label(intake, "technology", "fuel_project")
+            if fuel_from_methodology:
+                tech_project_scenario = tech.get("fuel_project", tech.get("project_scenario", ""))
+                if tech_project_scenario:
+                    st.caption(f"Project fuel: **{tech_project_scenario}** (set in Methodology Choices below)")
+                else:
+                    st.caption("Project fuel: set in Methodology Choices below")
+            else:
+                tech_project_scenario = st.text_input("Project practice / fuel", value=tech.get("fuel_project", tech.get("project_scenario", "")),
+                                                   key=f"setup_tech_fuel_pj_{project_id}",
+                                                   placeholder="e.g., LPG, Solar PV, Improved cookstove")
+                _intel_source_label(intake, "technology", "fuel_project")
         tech_distribution = st.text_input("Distribution / implementation method", value=tech.get("distribution_method", ""),
                                            key=f"setup_tech_dist_{project_id}",
                                            placeholder="e.g., Direct sales, Lease model, Government programme")
@@ -6403,20 +6308,6 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
                                                key=f"setup_loc_bene_{project_id}",
                                                placeholder="e.g., 250,000 people")
             _intel_source_label(intake, "location", "beneficiaries")
-
-    with st.container(border=True):
-        st.markdown("#### Emission Reductions")
-        ec1, ec2 = st.columns(2)
-        with ec1:
-            er_annual = st.text_input("Annual ER estimate (tCO2e)", value=er.get("annual_er_estimate", ""),
-                                       key=f"setup_er_annual_{project_id}",
-                                       placeholder="e.g., 150,000")
-            _intel_source_label(intake, "emission_reductions", "annual_er_estimate")
-        with ec2:
-            er_total = st.text_input("Total ER estimate (tCO2e)", value=er.get("total_er_estimate", ""),
-                                      key=f"setup_er_total_{project_id}",
-                                      placeholder="e.g., 1,050,000")
-            _intel_source_label(intake, "emission_reductions", "total_er_estimate")
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 
@@ -6484,7 +6375,8 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard"):
             "qa_qc": mon.get("qa_qc", ""),
         },
         "emission_reductions": {
-            "annual_er_estimate": er_annual, "total_er_estimate": er_total,
+            "annual_er_estimate": er.get("annual_er_estimate", ""),
+            "total_er_estimate": er.get("total_er_estimate", ""),
             "calculation_approach": er.get("calculation_approach", ""),
             "er_summary": er.get("er_summary", ""),
         },
@@ -6974,12 +6866,13 @@ def _render_project_settings(project):
                                    if project.get("status") in STATUS_LABELS else 0,
                                    key=f"setup_status_{project_id}")
 
-    intake_data = _render_intake_by_type(project_id, project_type, intake, standard=new_standard)
+    intake_data = _render_intake_by_type(project_id, project_type, intake, standard=new_standard, methodology=new_methodology)
 
     st.divider()
     st.subheader("Crediting Period")
 
     from datetime import date as _date
+    from carbongpt.core.methodology_rules import get_crediting_period_default
 
     cp_start_raw = project.get("crediting_period_start")
     cp_start_val = None
@@ -6996,10 +6889,12 @@ def _render_project_settings(project):
         value=cp_start_val,
         key=f"setup_cp_start_{project_id}",
     )
+    saved_cp_years = project.get("crediting_period_years")
+    cp_default = saved_cp_years if saved_cp_years else get_crediting_period_default(new_standard)
     cp_years = st.number_input(
         "Crediting period (years)",
         min_value=1, max_value=30,
-        value=project.get("crediting_period_years") or 7,
+        value=cp_default,
         key=f"setup_cp_years_{project_id}",
     )
     if cp_start:
@@ -7012,7 +6907,7 @@ def _render_project_settings(project):
     existing_settings = project.get("project_settings") or {}
 
     meth_parsed = None
-    methodology = project.get("methodology")
+    methodology = new_methodology or project.get("methodology")
     if methodology:
         meth_data = _fetch(f"/projects/{project_id}/methodology-data")
         if meth_data and meth_data.get("status") == "ready":
@@ -7050,6 +6945,27 @@ def _render_project_settings(project):
             new_settings = {k: v for k, v in new_settings.items() if k in dim_keys_to_keep}
         elif meth_layer_inputs:
             intake_data["methodology_parameters"] = meth_layer_inputs
+
+        fuel_dim_map = {
+            "baseline_fuel": ("fuel_baseline", "baseline_scenario"),
+            "project_fuel": ("fuel_project", "project_scenario"),
+        }
+        if meth_parsed:
+            for dim in meth_parsed.get("context_dimensions", []):
+                dk = dim.get("dimension_key", "")
+                if dk in fuel_dim_map and new_settings.get(dk):
+                    if "technology" not in intake_data:
+                        intake_data["technology"] = {}
+                    for field in fuel_dim_map[dk]:
+                        intake_data["technology"][field] = new_settings[dk]
+        else:
+            for dk, fields in fuel_dim_map.items():
+                if new_settings.get(dk):
+                    if "technology" not in intake_data:
+                        intake_data["technology"] = {}
+                    for field in fields:
+                        intake_data["technology"][field] = new_settings[dk]
+
         update_payload = {
             "name": new_name,
             "standard": new_standard,

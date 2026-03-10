@@ -1,0 +1,156 @@
+We need to stop patching isolated UI fields and redesign the project setup flow so it becomes methodology-driven, simpler, and more intelligent.
+
+Do NOT add new big features.
+This is a V1 setup hardening pass focused only on removing duplication, applying methodology rules correctly, and simplifying the user flow.
+
+The current Setup page still feels like a large online form mixed with calculation inputs.
+That is not acceptable.
+The user should not be asked the same thing multiple times, and the system should derive obvious choices automatically from the selected standard/methodology/pathway.
+
+Please analyze and fix the Setup logic based on the following problems:
+
+--------------------------------------------------
+1. REMOVE FIELDS THAT SHOULD BE DERIVED AUTOMATICALLY
+--------------------------------------------------
+
+If the user already selected the standard and methodology, the system should derive as much as possible automatically.
+
+Examples:
+- Activity type should not be a broad free choice if the methodology already implies the activity type
+- Sectoral scope should come from the methodology/standard mapping, not from a broad repeated manual choice
+- Project scale classification should not be asked in multiple places
+- Calculation method should be derived from the selected methodology pathway, not asked manually if the pathway already determines it
+
+Please identify all fields in Setup that should be:
+- auto-filled
+- hidden
+- reduced to a small controlled list
+- removed entirely from Setup
+
+--------------------------------------------------
+2. REMOVE DUPLICATED QUESTIONS
+--------------------------------------------------
+
+The current Setup asks overlapping things multiple times.
+
+Examples:
+- baseline practice / project practice / project fuel
+- baseline fuel type / project fuel type again later
+- project scale repeated
+- activity data repeated later in parameters/simulator
+
+Please redesign this so that:
+- each core question is asked once
+- dependent values are derived automatically
+- repeated questions are removed across Setup / Parameters / Simulator
+
+--------------------------------------------------
+3. METHODOLOGY-PATHWAY LOGIC MUST DRIVE THE UI
+--------------------------------------------------
+
+For methodologies like TPDDTEC, the UI must be driven by the actual methodological options/pathways.
+
+Example:
+- baseline fuel = wood / charcoal / mixed
+- project fuel = wood / charcoal / electric / etc.
+- same fuel vs different fuel
+- default values pathway vs measured values pathway
+- method 1 / method 2 / method 3
+
+Once the user selects the relevant methodological pathway inputs, the system should:
+- determine the correct pathway automatically
+- show only the parameters relevant to that pathway
+- update parameter names and labels correctly
+
+Example problem:
+When method changes, parameter labels still show the wrong notation (e.g. still showing SFS when the selected method should use SFC or SE).
+
+Please fix this so that methodology pathway selection dynamically controls:
+- visible inputs
+- parameter labels
+- parameter names
+- default values
+- equations used later in calculation
+
+--------------------------------------------------
+4. REMOVE CALCULATION OUTPUTS FROM SETUP
+--------------------------------------------------
+
+The Setup page currently asks for:
+- annual emission reduction estimate
+- total emission reduction estimate
+
+These should NOT be in Setup.
+These belong to the calculation/simulation stage.
+
+Also, monitoring calculation parameters like:
+- SFC
+- PBy
+- PPy
+- UP
+should not clutter the early setup flow if they belong to later calculation logic.
+
+Please redesign Setup so it only contains what is needed to define the project and the selected methodology pathway.
+Do not expose calculation outputs or detailed calculation parameters too early.
+
+--------------------------------------------------
+5. METHODOLOGY DEFAULTS MUST BE SELECTION-BASED, NOT RAW TEXT FIELDS
+--------------------------------------------------
+
+Methodology defaults should not appear as fixed text values that the user has to manually erase.
+
+Example:
+If baseline fuel = wood, default emission factor should be selected automatically.
+If baseline fuel = charcoal, the UI should offer the valid default options (for example 112, 165, or other allowed value), not a raw prefilled text field that must be overwritten manually.
+
+The user experience should be:
+- system proposes valid defaults
+- user can choose from allowed options
+- user can override only when appropriate
+
+Please redesign methodology defaults in this way.
+
+--------------------------------------------------
+6. STANDARD-SPECIFIC RULES MUST BE APPLIED AUTOMATICALLY
+--------------------------------------------------
+
+Examples:
+- Gold Standard crediting period should default correctly according to the applicable rule
+- SDG handling should follow the actual standard structure, not just show a generic checkbox/list with no real logic
+- if the standard has specific required indicators, the UI should reflect that structure
+
+Please audit the current Setup flow for incorrect or missing standard-driven logic and fix it.
+
+--------------------------------------------------
+7. NO HARDCODING IN THE UI LOGIC
+--------------------------------------------------
+
+Important:
+Do NOT solve this by hardcoding random UI conditions directly in the page.
+
+The UI should be driven by:
+- methodology definitions
+- pathway logic
+- parameter definitions
+- standard rules
+
+The goal is:
+methodology-aware setup
+not a pile of custom UI if-statements.
+
+Please explain how the corrected setup flow will remain generic and extensible for future methodologies and versions.
+
+--------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------
+
+Before coding, provide a focused implementation plan that includes:
+
+1. Which current Setup fields should be removed, hidden, auto-derived, or moved
+2. What the new simplified Setup flow should look like step by step
+3. How methodology/pathway logic will drive visible fields and parameter labels
+4. Which files need to change
+5. How you will avoid hardcoding and instead rely on the methodology/parameter definition layer
+
+This is a core usability and methodology-correctness redesign of the Setup flow only.
+Do not propose unrelated new features.
