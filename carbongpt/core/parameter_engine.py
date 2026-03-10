@@ -259,6 +259,8 @@ def initialize_project_parameters(project_id):
         raw_baseline_fuel = settings.get("baseline_fuel") or intake.get("baseline_fuel", "wood")
         baseline_fuel = normalize_fuel_type(raw_baseline_fuel)
         raw_project_fuel = settings.get("project_fuel") or intake.get("project_fuel", "")
+        if not raw_project_fuel and methodology in ("VM0050", "TPDDTEC"):
+            raw_project_fuel = raw_baseline_fuel
         project_fuel = normalize_fuel_type(raw_project_fuel) if raw_project_fuel else ""
         is_charcoal = baseline_fuel == "charcoal"
 
@@ -323,6 +325,9 @@ def initialize_project_parameters(project_id):
                         baseline_fuel, project_fuel, is_charcoal, intake, settings,
                         intake_num_units=intake_num_units,
                         intake_beneficiaries=intake_beneficiaries,
+                    )
+                    value, source_type, source_reference = _resolve_with_definition_fallback(
+                        defn, value, source_type, source_reference,
                     )
 
             if value is None or (isinstance(value, str) and not value.strip()):
@@ -471,6 +476,10 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         value = 5.0
         source_type = "default"
         source_reference = "Common assumption (SSA average)"
+    elif param_key == "SFC_project":
+        value = None
+        source_type = "default"
+        source_reference = "Must be determined from project stove testing (Kitchen Performance Test or Water Boiling Test)"
     elif param_key == "baseline_fuel":
         value = baseline_fuel or "wood"
         source_type = "default"
@@ -488,6 +497,12 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
     if source_type == "default" and source_reference is None:
         source_reference = "IPCC 2006 / Methodology default"
 
+    return value, source_type, source_reference
+
+
+def _resolve_with_definition_fallback(defn, value, source_type, source_reference):
+    if value is None and "default" in defn:
+        return defn["default"], "default", defn.get("description") or "Methodology default"
     return value, source_type, source_reference
 
 

@@ -139,26 +139,40 @@ def _render_audit_results(result):
         st.markdown("---")
         st.markdown("**Simulated Findings**")
 
+        _CATEGORY_NAV_HINTS = {
+            "project_setup": "Go to the Setup tab to update project details.",
+            "parameters": "Go to the Parameters tab to review and confirm parameter values.",
+            "evidence": "Go to the Documents tab to upload supporting evidence.",
+            "sections": "Go to the Write / Draft tab to revise the affected section.",
+            "er_calculation": "Go to the ER Scenarios tab to recalculate emission reductions.",
+        }
+
         for i, f in enumerate(findings):
             severity = f.get("severity", "medium")
             finding_type = f.get("type", "observation")
             severity_color = {"critical": "darkred", "high": "red", "medium": "orange", "low": "gray"}.get(severity, "gray")
+            category = f.get("category", "general")
 
             with st.expander(f"[{finding_type.upper()}] {f.get('title', 'Finding')} -- Severity: {severity}"):
-                st.markdown(f"<span style='color:{severity_color};font-weight:bold;'>{severity.upper()}</span> | Category: {f.get('category', 'general')}", unsafe_allow_html=True)
+                st.markdown(f"<span style='color:{severity_color};font-weight:bold;'>{severity.upper()}</span> | Category: {category}", unsafe_allow_html=True)
                 st.write(f.get("description", ""))
+                nav_hint = _CATEGORY_NAV_HINTS.get(category)
+                if nav_hint:
+                    st.caption(nav_hint)
 
     parameter_issues = result.get("parameter_issues", [])
     if parameter_issues:
         with st.expander(f"Parameter Issues ({len(parameter_issues)})"):
             for pi in parameter_issues:
                 st.write(f"- **{pi['param_key']}**: {pi.get('message', pi.get('status', ''))}")
+            st.caption("Go to the Parameters tab to review and confirm parameter values.")
 
     evidence_gaps = result.get("evidence_gaps", [])
     if evidence_gaps:
         with st.expander(f"Evidence Gaps ({len(evidence_gaps)})"):
             for eg in evidence_gaps:
                 st.write(f"- **{eg['param_name']}** ({eg['param_key']}): No supporting evidence linked. Source: {eg.get('source_type', 'N/A')}")
+            st.caption("Go to the Documents tab to upload supporting evidence for these parameters.")
 
     recommendations = result.get("recommendations", [])
     if recommendations:

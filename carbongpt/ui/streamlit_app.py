@@ -5219,34 +5219,46 @@ def _render_review_tab(project):
 def _render_review_result(result):
     risk = result.get("overall_risk", "UNKNOWN")
     risk_colors = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red"}
-    risk_color = risk_colors.get(risk, "red")
+    risk_color = risk_colors.get(risk, "gray")
     score = result.get("overall_score", "N/A")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Overall Risk", risk)
+        st.markdown(
+            f"<span style='font-size:1.3em;font-weight:bold;color:{risk_color};'>Overall Risk: {risk}</span>",
+            unsafe_allow_html=True,
+        )
     with col2:
-        st.metric("Overall Score", f"{score}/100" if isinstance(score, int) else score)
+        score_label = f"{score}/100" if isinstance(score, int) else str(score)
+        st.metric("Overall Score", score_label)
 
     pdd_consistency = result.get("pdd_consistency", [])
     if pdd_consistency:
+        st.markdown("---")
         st.warning("**PDD Consistency Issues:**")
         for issue in pdd_consistency:
             st.write(f"- {issue}")
 
     priority = result.get("priority_actions", [])
     if priority:
-        st.subheader("Priority Actions")
+        st.markdown("---")
+        st.markdown("**Priority Actions**")
         for i, action in enumerate(priority, 1):
             st.write(f"{i}. {action}")
 
     sections = result.get("sections", [])
     if sections:
-        st.subheader("Section-by-Section Review")
+        st.markdown("---")
+        st.markdown("**Section-by-Section Review**")
         for sec in sections:
             sec_name = sec.get("section", "Unknown")
             sec_score = sec.get("score", "N/A")
-            with st.expander(f"{sec_name} (Score: {sec_score}/100)"):
+            score_color = "green" if isinstance(sec_score, int) and sec_score >= 80 else "orange" if isinstance(sec_score, int) and sec_score >= 60 else "red"
+            with st.expander(f"{sec_name} -- Score: {sec_score}/100"):
+                st.markdown(
+                    f"<span style='color:{score_color};font-weight:bold;'>Score: {sec_score}/100</span>",
+                    unsafe_allow_html=True,
+                )
                 issues = sec.get("issues", [])
                 if issues:
                     st.markdown("**Issues:**")
@@ -5266,7 +5278,7 @@ def _render_review_result(result):
     raw = result.get("raw_review")
     if raw:
         with st.expander("Full Review Text"):
-            st.write(raw)
+            st.markdown(raw)
 
 
 LAYER_LABELS = {
