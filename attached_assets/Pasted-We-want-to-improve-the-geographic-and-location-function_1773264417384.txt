@@ -1,0 +1,121 @@
+We want to improve the geographic and location functionality of the platform.
+
+This is not about methodology logic. It is about improving the project setup and monitoring usability.
+
+Please analyze whether the following features are possible to implement in the current architecture and propose a technical approach.
+
+----------------------------------
+1. COUNTRY SELECTION
+----------------------------------
+
+Currently the country field is a free text field.
+
+This should be replaced with a searchable dropdown list of countries.
+
+Requirements:
+
+- A full predefined list of countries
+- Autocomplete search (example: typing "GH" suggests "Ghana")
+- Standardized country names
+- Ideally ISO country codes (ISO 3166)
+
+Example user flow:
+
+User starts typing:
+
+"Gh"
+
+System suggests:
+
+"Ghana"
+
+Please propose:
+
+- best data source for the country list
+- how to implement the autocomplete
+- where this should be stored in the database
+
+----------------------------------
+2. LOCATION AND GPS COORDINATES
+----------------------------------
+
+Carbon projects often require precise project location information.
+
+We want to support:
+
+- latitude
+- longitude
+- region / district
+- project boundary information
+
+Questions:
+
+1. Can we allow users to enter GPS coordinates manually?
+2. Can the system automatically retrieve coordinates when a region or location is selected?
+3. Is it possible to use a geolocation API (Google Maps, OpenStreetMap, etc.)?
+
+Please propose:
+
+- a recommended architecture
+- which APIs could be used
+- how coordinates should be stored
+
+----------------------------------
+3. MAP VISUALIZATION
+----------------------------------
+
+For carbon project documentation, maps are often required.
+
+For example:
+
+- project location map
+- distribution area map
+- sampling map
+- monitoring locations
+
+We want to know if the platform could support map visualization.
+
+Possible features:
+
+- display project location on a map
+- draw project boundaries
+- show distribution points
+- export map images for reports (PDD / Monitoring Reports)
+
+Please analyze whether it is possible to integrate a mapping module.
+
+Potential options to analyze:
+
+- Leaflet.js
+- Mapbox
+- OpenLayers
+- Google Maps API
+
+Please explain:
+
+- which option would work best with the current stack
+- complexity of integration
+- performance considerations
+
+----------------------------------
+4. PROJECT LOCATION WORKFLOW
+----------------------------------
+
+Please propose a simple workflow:
+
+Project setup:
+- select country
+- select region (optional)
+- enter or pick GPS coordinates
+- visualize on map
+
+Optional:
+- upload shapefile or geojson
+- draw project area polygon
+
+----------------------------------
+IMPORTANT
+
+Do NOT implement anything yet.
+
+We want a technical feasibility analysis and architecture proposal first.
