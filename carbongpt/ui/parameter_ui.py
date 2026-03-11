@@ -30,7 +30,7 @@ def _get_project_method_settings(project_id, all_params):
     try:
         from carbongpt.repository.db import get_cursor
         with get_cursor() as cur:
-            cur.execute("SELECT methodology_settings FROM projects WHERE id = %s", (project_id,))
+            cur.execute("SELECT methodology_settings FROM user_projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             if row and row[0]:
                 settings = row[0] if isinstance(row[0], dict) else {}
