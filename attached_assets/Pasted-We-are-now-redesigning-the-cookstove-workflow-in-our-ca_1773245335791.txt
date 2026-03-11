@@ -1,0 +1,155 @@
+We are now redesigning the cookstove workflow in our carbon project platform.
+
+IMPORTANT:
+We will work methodology by methodology.
+For now, we will work ONLY on the Gold Standard methodology:
+
+TPDDTEC v4.0 – Technologies and Practices to Displace Decentralized Thermal Energy Consumption.
+
+Do NOT analyze any other methodology yet.
+
+I will upload the TPDDTEC methodology PDF. You must analyze it carefully.
+
+------------------------------------------------
+PROJECT ENTRY LOGIC
+------------------------------------------------
+
+In the application, the user will first define the project concept before we determine the methodology pathway.
+
+The user will provide:
+
+1. Standard
+2. Project type
+3. Baseline fuel
+4. Project fuel
+
+For this phase we are focusing on:
+
+Standard = Gold Standard
+Project type = Cookstove
+
+------------------------------------------------
+FUEL OPTIONS
+------------------------------------------------
+
+For TPDDTEC we will simplify the fuel selection.
+
+Baseline fuel options:
+
+- wood
+- charcoal
+
+Project fuel options:
+
+- wood
+- charcoal
+- LPG
+- electricity
+- renewable biomass briquettes
+
+The system will use baseline fuel and project fuel to determine the correct TPDDTEC methodological pathway.
+
+------------------------------------------------
+YOUR TASK
+------------------------------------------------
+
+After analyzing the TPDDTEC methodology, explain how the methodology should be translated into a software logic engine.
+
+You must NOT give generic explanations.
+
+You must structure your answer in a way that allows software implementation.
+
+------------------------------------------------
+PLEASE STRUCTURE YOUR RESPONSE AS FOLLOWS
+------------------------------------------------
+
+1. TPDDTEC APPLICABILITY
+
+Based on the methodology text:
+
+- In which baseline/project fuel combinations is TPDDTEC applicable?
+- In which cases is it NOT applicable?
+
+2. TPDDTEC METHODS
+
+The methodology mentions multiple methodological approaches.
+
+Explain clearly:
+
+- How many methods exist
+- What triggers each method
+- Which parameters change depending on the method
+- Which parameters are irrelevant depending on the method
+
+3. PARAMETER LOGIC
+
+List the parameters required for TPDDTEC and classify them:
+
+- Required parameters
+- Conditional parameters
+- Derived parameters
+- Monitoring parameters
+- Default parameters
+
+Also specify which parameters depend on:
+
+- baseline fuel
+- project fuel
+- chosen method
+
+4. FORMULA LOGIC
+
+Explain the formula logic used in TPDDTEC:
+
+- Baseline emissions
+- Project emissions
+- Emission reductions
+
+For each formula:
+
+- list input parameters
+- explain calculation sequence
+- explain conditions
+
+5. CHARCOAL AND CF LOGIC
+
+Explain precisely:
+
+- when charcoal conversion factor (CF) must be used
+- when charcoal emission factors must be used instead
+- when CF should NOT be used
+- how software should avoid mixing these two approaches
+
+6. UNIT CONSISTENCY
+
+Explain:
+
+- the correct units for each major parameter
+- typical mistakes (kg/person vs kg/household, MJ/kg vs TJ/Gg, etc.)
+- how the software should enforce unit consistency
+
+7. SOFTWARE IMPLEMENTATION LOGIC
+
+Finally, explain how TPDDTEC should be implemented in a software interface:
+
+What the user should select first.
+What the system should derive automatically.
+What parameters should only appear after method determination.
+
+Describe the logical sequence:
+
+Project setup → method detection → parameter activation → calculation.
+
+------------------------------------------------
+IMPORTANT
+------------------------------------------------
+
+Do not design UI yet.
+
+Do not discuss Metered & Measured Cooking Devices.
+
+Do not discuss VM0050.
+
+Focus ONLY on TPDDTEC.
+
+Your goal is to translate the methodology into a clear logical structure that can later be coded.
