@@ -2503,27 +2503,22 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
     if fnrb is not None:
         st.caption(f"TOOL33 default fNRB for {country}: {fnrb:.0%}")
 
-    location_name = st.text_input(
-        "Project site / community name",
-        value=project.get("location_name", "") or "",
-        key=f"{key_prefix}_location_name",
-        placeholder="e.g., Juaben community",
+    region = st.text_input(
+        "Region / Province",
+        value=project.get("region", "") or "",
+        key=f"{key_prefix}_region",
+        placeholder="e.g., Ashanti Region, Northern Region",
     )
-    lc1, lc2 = st.columns(2)
-    with lc1:
-        region = st.text_input(
-            "Region / Province",
-            value=project.get("region", "") or "",
-            key=f"{key_prefix}_region",
-            placeholder="e.g., Ashanti Region",
-        )
-    with lc2:
-        district = st.text_input(
-            "District / County",
-            value=project.get("district", "") or "",
-            key=f"{key_prefix}_district",
-            placeholder="e.g., Kumasi Metropolitan",
-        )
+
+    # Consume any pending geocoded values BEFORE rendering coordinate widgets
+    _pending_lat = f"{key_prefix}_pending_lat"
+    _pending_lon = f"{key_prefix}_pending_lon"
+    _geo_lat = st.session_state.pop(_pending_lat, None)
+    _geo_lon = st.session_state.pop(_pending_lon, None)
+    if _geo_lat is not None:
+        st.session_state[f"{key_prefix}_lat"] = _geo_lat
+    if _geo_lon is not None:
+        st.session_state[f"{key_prefix}_lon"] = _geo_lon
 
     gc1, gc2, gc3 = st.columns([2, 2, 1])
     lat_val = project.get("latitude")
@@ -2550,40 +2545,39 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
         st.write("")
         st.write("")
         if st.button("Look up", key=f"{key_prefix}_geocode",
-                     help="Auto-fill coordinates from region, district or site name"):
-            query = district or region or location_name
-            if query:
-                geo = geocode_location(query, country)
+                     help="Auto-fill coordinates from region name"):
+            if region:
+                geo = geocode_location(region, country)
                 if geo:
-                    st.session_state[f"{key_prefix}_lat"] = geo["latitude"]
-                    st.session_state[f"{key_prefix}_lon"] = geo["longitude"]
+                    st.session_state[_pending_lat] = geo["latitude"]
+                    st.session_state[_pending_lon] = geo["longitude"]
                     st.rerun()
                 else:
-                    st.warning("Could not auto-fill coordinates. Please enter them manually.")
+                    st.warning("Could not auto-fill coordinates. Enter them manually.")
             else:
-                st.info("Enter a region, district or site name first.")
+                st.info("Enter a region / province first.")
 
     if lat is not None and lon is not None:
         try:
             import folium
             from streamlit_folium import st_folium
-            popup_text = location_name or district or region or country or "Project location"
-            m = folium.Map(location=[lat, lon], zoom_start=8, tiles="OpenStreetMap")
+            popup_text = region or country or "Project location"
+            m = folium.Map(location=[lat, lon], zoom_start=7, tiles="OpenStreetMap")
             folium.Marker(
                 [lat, lon],
                 popup=popup_text,
                 tooltip=popup_text,
                 icon=folium.Icon(color="green", icon="leaf"),
             ).add_to(m)
-            st_folium(m, height=280, use_container_width=True, returned_objects=[])
+            st_folium(m, height=260, use_container_width=True, returned_objects=[])
         except Exception:
             st.caption(f"Map preview unavailable. Coordinates: {lat:.4f}, {lon:.4f}")
 
     return {
         "country": country,
-        "location_name": location_name or None,
+        "location_name": None,
         "region": region or None,
-        "district": district or None,
+        "district": None,
         "latitude": lat,
         "longitude": lon,
     }
@@ -6546,9 +6540,9 @@ def _intel_source_label(intake, category, field_key):
         )
 
 
-def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard", methodology=None):
+def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard", methodology=None, methodology_settings=None):
     if project_type in ("standalone_pdd", ""):
-        return _render_intake_pdd(project_id, intake, standard, methodology=methodology)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings)
     elif project_type == "poa_programme":
         return _render_intake_poa(project_id, intake, standard)
     elif project_type == "vpa_component":
@@ -6558,7 +6552,7 @@ def _render_intake_by_type(project_id, project_type, intake, standard="GoldStand
     elif project_type == "valver_report":
         return _render_intake_valver(project_id, intake, standard)
     else:
-        return _render_intake_pdd(project_id, intake, standard, methodology=methodology)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings)
 
 
 def _render_proponent_card(project_id, intake, standard, prefix=""):
@@ -6613,7 +6607,7 @@ SCALE_OPTIONS = ["", "Micro-scale", "Small-scale", "Large-scale"]
 ACTIVITY_TYPE_OPTIONS = ["", "Greenfield", "Switch from existing", "Capacity addition", "Energy efficiency", "Other"]
 
 
-def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None):
+def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None, methodology_settings=None):
     from carbongpt.core.methodology_rules import get_methodology_metadata, has_methodology_fuel_choices
 
     po = intake.get("project_overview", {})
@@ -6628,8 +6622,12 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
     prior = intake.get("prior_consideration", {})
     legal = intake.get("legal_compliance", {})
 
+    meth_settings = methodology_settings or {}
     meth_meta = get_methodology_metadata(methodology)
-    fuel_from_methodology = has_methodology_fuel_choices(methodology)
+    fuel_from_methodology = (
+        has_methodology_fuel_choices(methodology)
+        or bool(meth_settings.get("baseline_fuel"))
+    )
 
     proponent_data = _render_proponent_card(project_id, intake, standard, prefix="pdd")
 
@@ -7248,39 +7246,56 @@ def _render_project_settings(project):
         st.markdown("**Location**")
         setup_loc = _render_location_section(f"setup_{project_id}", project)
         new_country = setup_loc["country"]
-        new_methodology = _methodology_selector(
-            f"setup_{project_id}", standard=new_standard,
-            current_value=project.get("methodology"))
 
-        meth_detail = None
-        if new_methodology:
-            meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
-        if meth_detail:
+        # If methodology was set via the TPDDTEC wizard, show it as read-only info
+        # rather than showing a blank selector that confuses the user.
+        _meth_settings = project.get("methodology_settings") or {}
+        _tpddtec_active = bool(_meth_settings.get("baseline_fuel") and _meth_settings.get("calculation_method"))
+        if _tpddtec_active:
             with st.container(border=True):
-                st.caption("Selected methodology")
-                meth_name = meth_detail.get("name") or ""
-                meth_code = meth_detail.get("code", "")
-                meth_version = meth_detail.get("version") or ""
-                header = f"**{meth_code}**"
-                if meth_version:
-                    header += f" v{meth_version}"
-                if meth_name:
-                    header += f" - {meth_name}"
-                st.markdown(header)
-                detail_parts = []
-                if meth_detail.get("standard"):
-                    std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS", "CDM": "CDM"}.get(meth_detail["standard"], meth_detail["standard"])
-                    detail_parts.append(f"Standard: {std_display}")
-                if meth_detail.get("sector"):
-                    detail_parts.append(f"Sector: {meth_detail['sector']}")
-                if meth_detail.get("category"):
-                    detail_parts.append(f"Category: {meth_detail['category']}")
-                if detail_parts:
-                    st.markdown(" | ".join(detail_parts))
-                if meth_detail.get("applicability"):
-                    st.markdown(f"Applicability: {meth_detail['applicability']}")
-                if meth_detail.get("status") == "deprecated":
-                    st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
+                st.caption("Methodology (set via wizard)")
+                _calc = _meth_settings.get("method_selection") or _meth_settings.get("calculation_method", "")
+                _bl = _meth_settings.get("baseline_fuel", "")
+                _pj = _meth_settings.get("project_fuel", "")
+                _sc = _meth_settings.get("scale_classification", "")
+                st.markdown(f"**TPDDTEC v4.0** — {_calc}")
+                if _bl or _pj:
+                    st.caption(f"Baseline: {_bl} | Project: {_pj}" + (f" | {_sc}" if _sc else ""))
+                st.caption("Change fuel and scale choices in Methodology Choices below.")
+            new_methodology = project.get("methodology") or ""
+        else:
+            new_methodology = _methodology_selector(
+                f"setup_{project_id}", standard=new_standard,
+                current_value=project.get("methodology"))
+            meth_detail = None
+            if new_methodology:
+                meth_detail = _fetch(f"/projects/methodologies/{new_methodology}")
+            if meth_detail:
+                with st.container(border=True):
+                    st.caption("Selected methodology")
+                    meth_name = meth_detail.get("name") or ""
+                    meth_code = meth_detail.get("code", "")
+                    meth_version = meth_detail.get("version") or ""
+                    header = f"**{meth_code}**"
+                    if meth_version:
+                        header += f" v{meth_version}"
+                    if meth_name:
+                        header += f" - {meth_name}"
+                    st.markdown(header)
+                    detail_parts = []
+                    if meth_detail.get("standard"):
+                        std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS", "CDM": "CDM"}.get(meth_detail["standard"], meth_detail["standard"])
+                        detail_parts.append(f"Standard: {std_display}")
+                    if meth_detail.get("sector"):
+                        detail_parts.append(f"Sector: {meth_detail['sector']}")
+                    if meth_detail.get("category"):
+                        detail_parts.append(f"Category: {meth_detail['category']}")
+                    if detail_parts:
+                        st.markdown(" | ".join(detail_parts))
+                    if meth_detail.get("applicability"):
+                        st.markdown(f"Applicability: {meth_detail['applicability']}")
+                    if meth_detail.get("status") == "deprecated":
+                        st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
 
         new_desc = st.text_area("Project description / objective", value=project.get("description", "") or "",
                                  key=f"setup_desc_{project_id}",
@@ -7291,7 +7306,7 @@ def _render_project_settings(project):
                                    if project.get("status") in STATUS_LABELS else 0,
                                    key=f"setup_status_{project_id}")
 
-    intake_data = _render_intake_by_type(project_id, project_type, intake, standard=new_standard, methodology=new_methodology)
+    intake_data = _render_intake_by_type(project_id, project_type, intake, standard=new_standard, methodology=new_methodology, methodology_settings=project.get("methodology_settings") or {})
 
     st.divider()
     st.subheader("Crediting Period")
