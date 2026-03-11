@@ -29,6 +29,11 @@ class ProjectCreate(BaseModel):
     monitoring_period_start: str | None = None
     monitoring_period_end: str | None = None
     methodology_settings: dict | None = None
+    location_name: str | None = None
+    region: str | None = None
+    district: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -44,6 +49,11 @@ class ProjectUpdate(BaseModel):
     project_settings: dict | None = None
     project_intake: dict | None = None
     methodology_settings: dict | None = None
+    location_name: str | None = None
+    region: str | None = None
+    district: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     project_type: str | None = None
     parent_project_id: int | None = None
     monitoring_period_start: str | None = None
@@ -145,6 +155,11 @@ def create_project(data: ProjectCreate):
         monitoring_period_start=data.monitoring_period_start,
         monitoring_period_end=data.monitoring_period_end,
         methodology_settings=data.methodology_settings,
+        location_name=data.location_name,
+        region=data.region,
+        district=data.district,
+        latitude=data.latitude,
+        longitude=data.longitude,
     )
     project_dir = PROJECT_FILES_DIR / str(project_id)
     project_dir.mkdir(parents=True, exist_ok=True)

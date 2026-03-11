@@ -3,6 +3,9 @@ import time
 import requests
 import streamlit as st
 
+from carbongpt.core.location_utils import (
+    ALL_COUNTRIES, TOOL33_TO_PYCOUNTRY, get_fnrb_for_country, geocode_location,
+)
 from carbongpt.ui.parameter_ui import render_parameter_dashboard
 from carbongpt.ui.er_simulator_ui import render_er_simulator
 from carbongpt.ui.lifecycle_ui import render_lifecycle_dashboard, render_monitoring_dashboard
@@ -2468,6 +2471,124 @@ PRIORITY_METHODOLOGIES = {
     "AMS-I.D.": "CDM AMS-I.D. - Grid-Connected Renewable Electricity Generation (small-scale)",
 }
 
+def _render_country_selector(key_prefix: str, current_value: str = "") -> str:
+    display_value = TOOL33_TO_PYCOUNTRY.get(current_value, current_value)
+    search = st.text_input(
+        "Country (type to search)",
+        value=display_value,
+        key=f"{key_prefix}_country_search",
+        placeholder="Type to filter countries...",
+    )
+    filtered = [c for c in ALL_COUNTRIES if search.strip().lower() in c.lower()] if search.strip() else ALL_COUNTRIES
+    if not filtered:
+        filtered = ALL_COUNTRIES
+    try:
+        idx = filtered.index(search.strip()) if search.strip() in filtered else 0
+    except ValueError:
+        idx = 0
+    selected = st.selectbox(
+        "Country",
+        filtered,
+        index=idx,
+        key=f"{key_prefix}_country_select",
+        label_visibility="collapsed",
+    )
+    return selected
+
+
+def _render_location_section(key_prefix: str, project: dict = None) -> dict:
+    project = project or {}
+    country = _render_country_selector(key_prefix, project.get("country", "") or "")
+    fnrb = get_fnrb_for_country(country)
+    if fnrb is not None:
+        st.caption(f"TOOL33 default fNRB for {country}: {fnrb:.0%}")
+
+    location_name = st.text_input(
+        "Project site / community name",
+        value=project.get("location_name", "") or "",
+        key=f"{key_prefix}_location_name",
+        placeholder="e.g., Juaben community",
+    )
+    lc1, lc2 = st.columns(2)
+    with lc1:
+        region = st.text_input(
+            "Region / Province",
+            value=project.get("region", "") or "",
+            key=f"{key_prefix}_region",
+            placeholder="e.g., Ashanti Region",
+        )
+    with lc2:
+        district = st.text_input(
+            "District / County",
+            value=project.get("district", "") or "",
+            key=f"{key_prefix}_district",
+            placeholder="e.g., Kumasi Metropolitan",
+        )
+
+    gc1, gc2, gc3 = st.columns([2, 2, 1])
+    lat_val = project.get("latitude")
+    lon_val = project.get("longitude")
+    with gc1:
+        lat = st.number_input(
+            "Latitude",
+            value=float(lat_val) if lat_val is not None else None,
+            min_value=-90.0, max_value=90.0,
+            format="%.6f",
+            key=f"{key_prefix}_lat",
+            placeholder="e.g., 6.6885",
+        )
+    with gc2:
+        lon = st.number_input(
+            "Longitude",
+            value=float(lon_val) if lon_val is not None else None,
+            min_value=-180.0, max_value=180.0,
+            format="%.6f",
+            key=f"{key_prefix}_lon",
+            placeholder="e.g., -1.6244",
+        )
+    with gc3:
+        st.write("")
+        st.write("")
+        if st.button("Look up", key=f"{key_prefix}_geocode",
+                     help="Auto-fill coordinates from region, district or site name"):
+            query = district or region or location_name
+            if query:
+                geo = geocode_location(query, country)
+                if geo:
+                    st.session_state[f"{key_prefix}_lat"] = geo["latitude"]
+                    st.session_state[f"{key_prefix}_lon"] = geo["longitude"]
+                    st.rerun()
+                else:
+                    st.warning("Could not auto-fill coordinates. Please enter them manually.")
+            else:
+                st.info("Enter a region, district or site name first.")
+
+    if lat is not None and lon is not None:
+        try:
+            import folium
+            from streamlit_folium import st_folium
+            popup_text = location_name or district or region or country or "Project location"
+            m = folium.Map(location=[lat, lon], zoom_start=8, tiles="OpenStreetMap")
+            folium.Marker(
+                [lat, lon],
+                popup=popup_text,
+                tooltip=popup_text,
+                icon=folium.Icon(color="green", icon="leaf"),
+            ).add_to(m)
+            st_folium(m, height=280, use_container_width=True, returned_objects=[])
+        except Exception:
+            st.caption(f"Map preview unavailable. Coordinates: {lat:.4f}, {lon:.4f}")
+
+    return {
+        "country": country,
+        "location_name": location_name or None,
+        "region": region or None,
+        "district": district or None,
+        "latitude": lat,
+        "longitude": lon,
+    }
+
+
 def _methodology_selector(key_prefix, standard=None, current_value=None):
     meths = _load_methodologies()
 
@@ -2810,12 +2931,11 @@ def _render_new_project_wizard(existing_projects):
 
         new_name = st.text_input("Project name", key="wizard_name",
                                   placeholder="e.g., Ghana Improved Cookstoves")
-        c1, c2 = st.columns(2)
-        with c1:
-            new_country = st.text_input("Country", key="wizard_country", placeholder="e.g., Ghana")
-        with c2:
-            new_desc = st.text_area("Description (optional)", key="wizard_desc",
-                                     placeholder="Brief description...", height=68)
+        new_desc = st.text_area("Description (optional)", key="wizard_desc",
+                                 placeholder="Brief description...", height=68)
+        st.markdown("---")
+        loc_data = _render_location_section("wizard", {})
+        new_country = loc_data["country"]
 
         monitoring_start = None
         monitoring_end = None
@@ -2864,6 +2984,7 @@ def _render_new_project_wizard(existing_projects):
                         st.session_state["wizard_country_saved"] = new_country
                         st.session_state["wizard_desc_saved"] = new_desc
                         st.session_state["wizard_parent_saved"] = parent_id
+                        st.session_state["wizard_loc_saved"] = loc_data
                         if monitoring_start:
                             st.session_state["wizard_mon_start_saved"] = monitoring_start.isoformat()
                         if monitoring_end:
@@ -2893,6 +3014,11 @@ def _render_new_project_wizard(existing_projects):
                             "description": new_desc or None,
                             "project_type": selected_type,
                             "parent_project_id": parent_id,
+                            "location_name": loc_data.get("location_name"),
+                            "region": loc_data.get("region"),
+                            "district": loc_data.get("district"),
+                            "latitude": loc_data.get("latitude"),
+                            "longitude": loc_data.get("longitude"),
                         }
                         if monitoring_start:
                             payload["monitoring_period_start"] = monitoring_start.isoformat()
@@ -3051,6 +3177,7 @@ def _render_new_project_wizard(existing_projects):
                         "calculation_method": method_result["method_id"],
                     }
 
+                    saved_loc = st.session_state.get("wizard_loc_saved") or {}
                     payload = {
                         "name": saved_name,
                         "standard": saved_standard,
@@ -3060,6 +3187,11 @@ def _render_new_project_wizard(existing_projects):
                         "project_type": selected_type,
                         "parent_project_id": saved_parent,
                         "methodology_settings": meth_settings,
+                        "location_name": saved_loc.get("location_name"),
+                        "region": saved_loc.get("region"),
+                        "district": saved_loc.get("district"),
+                        "latitude": saved_loc.get("latitude"),
+                        "longitude": saved_loc.get("longitude"),
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -7109,15 +7241,13 @@ def _render_project_settings(project):
         st.markdown("#### About Your Project")
         new_name = st.text_input("Project name", value=project.get("name", ""),
                                   key=f"setup_name_{project_id}")
-        c1, c2 = st.columns(2)
-        with c1:
-            new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
-                                         index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
-                                         if project.get("standard") in STANDARD_OPTIONS else 0,
-                                         key=f"setup_standard_{project_id}")
-        with c2:
-            new_country = st.text_input("Country", value=project.get("country", "") or "",
-                                         key=f"setup_country_{project_id}")
+        new_standard = st.selectbox("Standard", STANDARD_OPTIONS,
+                                     index=STANDARD_OPTIONS.index(project.get("standard", "GoldStandard"))
+                                     if project.get("standard") in STANDARD_OPTIONS else 0,
+                                     key=f"setup_standard_{project_id}")
+        st.markdown("**Location**")
+        setup_loc = _render_location_section(f"setup_{project_id}", project)
+        new_country = setup_loc["country"]
         new_methodology = _methodology_selector(
             f"setup_{project_id}", standard=new_standard,
             current_value=project.get("methodology"))
@@ -7271,6 +7401,11 @@ def _render_project_settings(project):
             "crediting_period_years": cp_years,
             "project_settings": new_settings,
             "project_intake": intake_data,
+            "location_name": setup_loc.get("location_name"),
+            "region": setup_loc.get("region"),
+            "district": setup_loc.get("district"),
+            "latitude": setup_loc.get("latitude"),
+            "longitude": setup_loc.get("longitude"),
         }
         if cp_start:
             update_payload["crediting_period_start"] = cp_start.isoformat()
@@ -7357,8 +7492,9 @@ def _render_project_settings_legacy(project):
             if meth_detail.get("status") == "deprecated":
                 st.warning(f"This methodology is deprecated. Superseded by: {meth_detail.get('superseded_by', 'N/A')}")
 
-    new_country = st.text_input("Country", value=project.get("country", "") or "",
-                                 key=f"settings_country_{project_id}")
+    st.markdown("**Location**")
+    settings_loc = _render_location_section(f"settings_{project_id}", project)
+    new_country = settings_loc["country"]
     new_desc = st.text_area("Description", value=project.get("description", "") or "",
                              key=f"settings_desc_{project_id}")
     new_status = st.selectbox("Status", list(STATUS_LABELS.keys()),
@@ -7448,6 +7584,11 @@ def _render_project_settings_legacy(project):
             "status": new_status,
             "crediting_period_years": cp_years,
             "project_settings": new_settings,
+            "location_name": settings_loc.get("location_name"),
+            "region": settings_loc.get("region"),
+            "district": settings_loc.get("district"),
+            "latitude": settings_loc.get("latitude"),
+            "longitude": settings_loc.get("longitude"),
         }
         if cp_start:
             update_payload["crediting_period_start"] = cp_start.isoformat()
