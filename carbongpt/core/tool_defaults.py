@@ -249,37 +249,89 @@ METHODOLOGY_EQUATIONS = {
         ],
     },
     "TPDDTEC": {
-        "name": "TPDDTEC - Technologies to Displace Decentralized Thermal Energy Consumption",
+        "name": "TPDDTEC v4.0 - Technologies to Displace Decentralized Thermal Energy Consumption",
         "equations": [
             {
-                "id": "TPDDTEC_Eq1",
-                "name": "Emission Reductions (Method 1 - same fuel)",
-                "formula": "ER_y = SUM_i [ (SFC_b,i - SFC_p,i,y) * N_i,y * n_i,y * NCV_f * (EF_CO2 + EF_nonCO2) * fNRB ]",
-                "description": "When baseline and project fuels are the same",
-                "parameters": ["SFC_b,i", "SFC_p,i,y", "N_i,y", "n_i,y", "NCV_f", "EF_CO2", "EF_nonCO2", "fNRB"],
+                "id": "TPDDTEC_M1_Eq1",
+                "name": "Method 1 — Same fuel, measured baseline (ER formula)",
+                "formula": "ER_y = SUM_i [ SFS_i,y * N_i,y * n_i,y * NCV_f * (fNRB_i,y * EF_CO2 + EF_nonCO2) ]",
+                "description": (
+                    "Method 1: same baseline and project fuel, baseline consumption from "
+                    "Baseline Performance Field Test (BFT). SFS = SFC_b,i - SFC_p,i,y. "
+                    "fNRB multiplies EF_CO2 ONLY (not the combined EF). "
+                    "N_i,y = number of devices; n_i,y = technology-days per year (= N_i,y * 365 in simple model)."
+                ),
+                "parameters": ["SFC_b,i", "SFC_p,i,y", "N_i,y", "n_i,y", "NCV_f", "EF_CO2", "EF_nonCO2", "fNRB_i,y"],
             },
             {
-                "id": "TPDDTEC_Eq2",
-                "name": "Emission Reductions (Method 2 - different fuels)",
-                "formula": "ER_y = SUM_i [ SFC_b,i * N_i,y * n_i,y * NCV_b * (EF_b,CO2 + EF_b,nonCO2) * fNRB - SFC_p,i,y * N_i,y * n_i,y * NCV_p * (EF_p,CO2 + EF_p,nonCO2) ]",
-                "description": "When baseline and project fuels are different",
-                "parameters": ["SFC_b,i", "SFC_p,i,y", "N_i,y", "n_i,y", "NCV_b", "NCV_p", "EF_b,CO2", "EF_b,nonCO2", "EF_p,CO2", "EF_p,nonCO2", "fNRB"],
+                "id": "TPDDTEC_M2_Eq1",
+                "name": "Method 2 — Same fuel (wood), methodology default baseline",
+                "formula": "ER_y = SUM_i [ SFS_i,y * N_i,y * n_i,y * NCV_wood * (fNRB_i,y * EF_CO2_wood + EF_nonCO2_wood) ]",
+                "description": (
+                    "Method 2: same fuel (woody biomass only), SFC_b derived from methodology default "
+                    "(0.5 t/capita/yr fuelwood). No Baseline Performance Field Test required. "
+                    "Only available for micro-scale and small-scale projects. "
+                    "NCV_wood = 15.6 TJ/Gg; EF_CO2_wood = 112 tCO2/TJ; EF_nonCO2_wood = 9.46 tCO2e/TJ (AR5). "
+                    "SFC_b,i = 0.5 * household_size / devices_per_hh / 365 (kg/technology-day, locked read-only)."
+                ),
+                "parameters": ["SFC_b,i_derived", "SFC_p,i,y", "N_i,y", "n_i,y", "NCV_wood", "EF_CO2_wood", "EF_nonCO2_wood", "fNRB_i,y"],
             },
             {
-                "id": "TPDDTEC_Eq3",
-                "name": "Baseline Specific Fuel Consumption",
-                "formula": "SFC_b,i = SUM(fuel_consumed_per_test) / n_tests",
-                "description": "Baseline fuel consumption per cooking task from KPT or WBT",
+                "id": "TPDDTEC_M3_Eq1",
+                "name": "Method 3 — Different fuels (fuel switch), baseline emissions",
+                "formula": "BE_y = SUM_i [ SFC_b,i * N_i,y * n_i,y * NCV_b * (fNRB_i,y * EF_b,CO2 + EF_b,nonCO2) ]",
+                "description": (
+                    "Method 3 baseline emissions. fNRB applies to EF_b,CO2 only. "
+                    "Baseline fuel can be wood or charcoal."
+                ),
+                "parameters": ["SFC_b,i", "N_i,y", "n_i,y", "NCV_b", "EF_b,CO2", "EF_b,nonCO2", "fNRB_i,y"],
+            },
+            {
+                "id": "TPDDTEC_M3_Eq2",
+                "name": "Method 3 — Different fuels (fuel switch), project emissions",
+                "formula": "PE_y = SUM_i [ SFC_p,i,y * N_i,y * n_i,y * NCV_p * (EF_p,CO2 + EF_p,nonCO2) ]",
+                "description": (
+                    "Method 3 project emissions. NO fNRB on the project side — "
+                    "the project fuel is not non-renewable biomass. "
+                    "Project fuel can be wood or charcoal (no LPG for new projects under Footnote 1)."
+                ),
+                "parameters": ["SFC_p,i,y", "N_i,y", "n_i,y", "NCV_p", "EF_p,CO2", "EF_p,nonCO2"],
+            },
+            {
+                "id": "TPDDTEC_M3_Eq3",
+                "name": "Method 3 — Net emission reductions",
+                "formula": "ER_y = BE_y - PE_y - Leakage_y",
+                "description": "Net ER for Method 3. Leakage Option 1: Leakage = 0.05 * BE_y (5% deduction on gross ER).",
+                "parameters": ["BE_y", "PE_y", "Leakage_y"],
+            },
+            {
+                "id": "TPDDTEC_Eq_SFCb",
+                "name": "Baseline Specific Fuel Consumption (measured — Methods 1 & 3)",
+                "formula": "SFC_b,i = SUM(fuel_consumed_per_test) / n_tests  [kg/technology-day]",
+                "description": "From Baseline Performance Field Test (BFT) — Kitchen Performance Test or Water Boiling Test.",
                 "parameters": ["fuel_consumed_per_test", "n_tests"],
             },
             {
-                "id": "TPDDTEC_Eq4",
+                "id": "TPDDTEC_Eq_SFCb_M2",
+                "name": "Baseline Specific Fuel Consumption (default — Method 2 only)",
+                "formula": "SFC_b,i = 0.5 [t/capita/yr] * household_size / devices_per_hh / 365  [kg/technology-day]",
+                "description": "Method 2 default from TPDDTEC v4.0 ICS 14. Applies to fuelwood only. Locked read-only.",
+                "parameters": ["household_size", "devices_per_hh"],
+            },
+            {
+                "id": "TPDDTEC_Eq_SFCp",
                 "name": "Project Specific Fuel Consumption",
                 "formula": "SFC_p,i,y = SFC_p,1 * (n_new,i,1 / n_new,i,y)",
-                "description": "Project fuel consumption adjusted for aging/degradation",
+                "description": "Project fuel consumption from Project Performance Field Test (PFT), adjusted for stove aging/degradation.",
                 "parameters": ["SFC_p,1", "n_new,i,1", "n_new,i,y"],
             },
         ],
+        "method_derivation": {
+            "method_1": "Same fuel + measured baseline (BFT required). All scales. Wood or charcoal.",
+            "method_2": "Same fuel (wood only) + methodology default (0.5 t/capita/yr). Micro or small-scale only.",
+            "method_3": "Different fuels (fuel switch). All scales. fNRB excluded from project emissions.",
+            "blocked": "LPG as project fuel blocked for new projects (TPDDTEC v4.0 Footnote 1, Table 1).",
+        },
     },
     "ACM0002": {
         "name": "ACM0002 - Grid-connected electricity generation from renewable sources",

@@ -7,109 +7,183 @@ from carbongpt.core.parameter_engine import get_parameters_as_dict
 logger = logging.getLogger(__name__)
 
 
-def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodology="VM0050"):
+def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodology="VM0050",
+                           method_id=None):
+    """
+    Calculate cookstove emission reductions (simple yearly model).
+
+    method_id : str | None
+        For TPDDTEC projects pass "method_1", "method_2", or "method_3".
+        Controls fNRB placement and SFC_b derivation.
+        If None the legacy VM0050 path is used.
+
+    fNRB placement (TPDDTEC v4.0):
+        Baseline:        EC_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+        Project (same fuel):  EC_p * (fNRB * EF_CO2_p + EF_nonCO2_p)
+        Project (fuel switch, Method 3): EC_p * (EF_CO2_p + EF_nonCO2_p)  -- no fNRB
+    """
+    from carbongpt.core.methodology_rules import (
+        TPDDTEC_NCV_WOOD_TJ_PER_TON,
+        TPDDTEC_EF_CO2_WOOD,
+        TPDDTEC_EF_NONCO2_WOOD_AR5,
+        TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION,
+        TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
+        TPDDTEC_NCV_CHARCOAL_TJ_PER_TON,
+        TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+    )
+
     fNRB = _pval(params, "fNRB", 0.30)
-    NCV_b = _pval(params, "NCV_baseline", 15.6)
-    EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
-    EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", 9.46)
-    NCV_p = _pval(params, "NCV_project", NCV_b)
-    EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
-    EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
-    CF = _pval(params, "CF", 1.0)
+    hh_size = _pval(params, "household_size", 5.0)
+    num_hh = _pval(params, "num_households", 1000)
     leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
     usage_rate_base = _pval(params, "usage_rate", 0.90)
     usage_rate_decay = _pval(params, "usage_rate_decay", 0.02)
     usage_rate_floor = _pval(params, "usage_rate_floor", 0.50)
-    num_hh = _pval(params, "num_households", 1000)
-    hh_size = _pval(params, "household_size", 5.0)
 
     baseline_fuel = _ptext(params, "baseline_fuel", "wood")
+    project_fuel = _ptext(params, "project_fuel", baseline_fuel)
     is_charcoal_baseline = baseline_fuel.lower() in ("charcoal", "charbon")
+    is_charcoal_project = project_fuel.lower() in ("charcoal", "charbon")
+    CF = _pval(params, "CF", 4.0 if is_charcoal_baseline else 1.0)
 
-    if methodology in ("VM0050",):
-        bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.4)
+    is_tpddtec = methodology in ("TPDDTEC", "GS-TPDDTEC") or (method_id is not None and method_id.startswith("method_"))
+    is_method_3 = (method_id == "method_3") or (is_tpddtec and baseline_fuel.lower() != project_fuel.lower())
+
+    if is_tpddtec:
+        if is_charcoal_baseline:
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
+            EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
+        else:
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_WOOD)
+            EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_WOOD_AR5)
+        if is_charcoal_project:
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
+            EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
+        else:
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
+            EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
+    else:
+        NCV_b = _pval(params, "NCV_baseline", 15.6)
+        EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
+        EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", 9.46)
+        NCV_p = _pval(params, "NCV_project", NCV_b)
+        EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
+        EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+
+    if methodology in ("VM0050",) and not is_tpddtec:
+        bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.5)
         pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
         consumption_label = "baseline_fuel_consumption"
         consumption_pj_label = "project_fuel_consumption"
+    elif is_tpddtec and method_id == "method_2":
+        devices_per_hh = _pval(params, "devices_per_household", 1.0)
+        sfc_b = (TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh / 365.0) * 1000.0
+        sfc_p = _pval(params, "SFC_project", sfc_b * 0.5)
+        bl_consumption = sfc_b * 365.0 / 1000.0
+        pj_consumption = sfc_p * 365.0 / 1000.0
+        consumption_label = (
+            f"Method 2 default: 0.5 t/capita/yr × {hh_size} persons / {devices_per_hh} devices / 365 × 365 "
+            f"= {bl_consumption:.4f} t/device/yr (SFC_b = {sfc_b:.4f} kg/day, locked)"
+        )
+        consumption_pj_label = f"SFC_project × 365 / 1000 = {sfc_p:.4f} × 365 / 1000"
     else:
-        sfc_b = _pval(params, "SFC_baseline", 400.0)
-        sfc_p = _pval(params, "SFC_project", 200.0)
-        bl_consumption = sfc_b * hh_size / 1000.0
-        pj_consumption = sfc_p * hh_size / 1000.0
-        consumption_label = f"SFC_baseline * household_size / 1000 = {sfc_b} * {hh_size} / 1000"
-        consumption_pj_label = f"SFC_project * household_size / 1000 = {sfc_p} * {hh_size} / 1000"
+        sfc_b = _pval(params, "SFC_baseline", 1.37)
+        sfc_p = _pval(params, "SFC_project", 0.68)
+        bl_consumption = sfc_b * 365.0 / 1000.0
+        pj_consumption = sfc_p * 365.0 / 1000.0
+        consumption_label = f"SFC_baseline × 365 days / 1000 = {sfc_b} × 365 / 1000"
+        consumption_pj_label = f"SFC_project × 365 days / 1000 = {sfc_p} × 365 / 1000"
 
     if is_charcoal_baseline and CF > 1.0:
         bl_consumption_wood_equiv = bl_consumption * CF
-        pj_consumption_wood_equiv = pj_consumption * CF
-        cf_note = f"Charcoal baseline: consumption * CF = {bl_consumption:.4f} * {CF} = {bl_consumption_wood_equiv:.4f} t wood-equiv/hh/yr"
+        cf_note = f"Charcoal baseline: consumption × CF = {bl_consumption:.4f} × {CF} = {bl_consumption_wood_equiv:.4f} t wood-equiv/device/yr"
     else:
         bl_consumption_wood_equiv = bl_consumption
-        pj_consumption_wood_equiv = pj_consumption
         cf_note = f"Wood baseline: CF not applied (CF={CF})"
 
+    if is_charcoal_project and CF > 1.0 and not is_method_3:
+        pj_consumption_wood_equiv = pj_consumption * CF
+    else:
+        pj_consumption_wood_equiv = pj_consumption
+
     ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
-    be_per_hh = ec_b * (EF_CO2_b + EF_nonCO2_b) * fNRB
     ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
-    pe_per_hh = ec_p * (EF_CO2_p + EF_nonCO2_p) * fNRB
+
+    be_per_hh = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+    if is_method_3:
+        pe_per_hh = ec_p * (EF_CO2_p + EF_nonCO2_p)
+        pe_formula_str = (
+            f"EC_p × (EF_CO2_p + EF_nonCO2_p) [no fNRB on project fuel] = "
+            f"{ec_p:.6f} × ({EF_CO2_p} + {EF_nonCO2_p})"
+        )
+    else:
+        pe_per_hh = ec_p * (fNRB * EF_CO2_p + EF_nonCO2_p)
+        pe_formula_str = (
+            f"EC_p × (fNRB × EF_CO2_p + EF_nonCO2_p) = "
+            f"{ec_p:.6f} × ({fNRB} × {EF_CO2_p} + {EF_nonCO2_p})"
+        )
 
     calculation_steps = [
         {
             "step": 1,
-            "name": "Baseline fuel consumption per household",
+            "name": "Baseline fuel consumption per device",
             "formula": consumption_label,
             "value": round(bl_consumption, 6),
-            "unit": "t/hh/yr",
+            "unit": "t/device/yr",
         },
         {
             "step": 2,
-            "name": "Project fuel consumption per household",
+            "name": "Project fuel consumption per device",
             "formula": consumption_pj_label,
             "value": round(pj_consumption, 6),
-            "unit": "t/hh/yr",
+            "unit": "t/device/yr",
         },
         {
             "step": 3,
-            "name": "CF adjustment (charcoal-to-wood equivalent)",
+            "name": "CF adjustment (charcoal native vs wood-equivalent)",
             "formula": cf_note,
             "value_baseline": round(bl_consumption_wood_equiv, 6),
             "value_project": round(pj_consumption_wood_equiv, 6),
-            "unit": "t wood-equiv/hh/yr",
+            "unit": "t wood-equiv/device/yr",
         },
         {
             "step": 4,
-            "name": "Baseline energy content per household",
-            "formula": f"B_cons_wood_equiv * NCV_b / 1000 = {bl_consumption_wood_equiv:.6f} * {NCV_b} / 1000",
+            "name": "Baseline energy content per device",
+            "formula": f"bl_cons_wood_equiv × NCV_b / 1000 = {bl_consumption_wood_equiv:.6f} × {NCV_b} / 1000",
             "value": round(ec_b, 6),
-            "unit": "TJ/hh/yr",
+            "unit": "TJ/device/yr",
         },
         {
             "step": 5,
-            "name": "Baseline emissions per household",
-            "formula": f"EC_b * (EF_CO2_b + EF_nonCO2_b) * fNRB = {ec_b:.6f} * ({EF_CO2_b} + {EF_nonCO2_b}) * {fNRB}",
+            "name": "Baseline emissions per device (fNRB on CO2 term only)",
+            "formula": f"EC_b × (fNRB × EF_CO2_b + EF_nonCO2_b) = {ec_b:.6f} × ({fNRB} × {EF_CO2_b} + {EF_nonCO2_b})",
             "value": round(be_per_hh, 6),
-            "unit": "tCO2e/hh/yr",
+            "unit": "tCO2e/device/yr",
         },
         {
             "step": 6,
-            "name": "Project energy content per household",
-            "formula": f"P_cons_wood_equiv * NCV_p / 1000 = {pj_consumption_wood_equiv:.6f} * {NCV_p} / 1000",
+            "name": "Project energy content per device",
+            "formula": f"pj_cons_wood_equiv × NCV_p / 1000 = {pj_consumption_wood_equiv:.6f} × {NCV_p} / 1000",
             "value": round(ec_p, 6),
-            "unit": "TJ/hh/yr",
+            "unit": "TJ/device/yr",
         },
         {
             "step": 7,
-            "name": "Project emissions per household",
-            "formula": f"EC_p * (EF_CO2_p + EF_nonCO2_p) * fNRB = {ec_p:.6f} * ({EF_CO2_p} + {EF_nonCO2_p}) * {fNRB}",
+            "name": "Project emissions per device",
+            "formula": pe_formula_str,
             "value": round(pe_per_hh, 6),
-            "unit": "tCO2e/hh/yr",
+            "unit": "tCO2e/device/yr",
         },
         {
             "step": 8,
-            "name": "ER per household per year (before leakage)",
-            "formula": f"BE_per_hh - PE_per_hh = {be_per_hh:.6f} - {pe_per_hh:.6f}",
+            "name": "ER per device per year (before leakage)",
+            "formula": f"BE_per_device - PE_per_device = {be_per_hh:.6f} - {pe_per_hh:.6f}",
             "value": round(be_per_hh - pe_per_hh, 6),
-            "unit": "tCO2e/hh/yr",
+            "unit": "tCO2e/device/yr",
         },
     ]
 
@@ -168,70 +242,125 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "methodology": methodology,
         },
         "parameters_used": {
-            "fNRB": {"value": fNRB, "unit": "fraction", "description": "Fraction of non-renewable biomass"},
+            "fNRB": {"value": fNRB, "unit": "fraction", "description": "Fraction of non-renewable biomass (applied to CO2 term only)"},
             "NCV_baseline": {"value": NCV_b, "unit": "TJ/Gg", "description": "Net calorific value (baseline fuel)"},
             "NCV_project": {"value": NCV_p, "unit": "TJ/Gg", "description": "Net calorific value (project fuel)"},
             "EF_CO2_baseline": {"value": EF_CO2_b, "unit": "tCO2/TJ", "description": "CO2 emission factor (baseline)"},
             "EF_nonCO2_baseline": {"value": EF_nonCO2_b, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (baseline)"},
             "EF_CO2_project": {"value": EF_CO2_p, "unit": "tCO2/TJ", "description": "CO2 emission factor (project)"},
-            "EF_nonCO2_project": {"value": EF_nonCO2_p, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (project)"},
+            "EF_nonCO2_project": {"value": EF_nonCO2_p, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (project, fNRB excluded for Method 3)"},
             "CF": {"value": CF, "unit": "kg wood/kg charcoal", "description": "Charcoal-to-wood conversion factor"},
             "baseline_fuel": {"value": baseline_fuel, "unit": "", "description": "Baseline fuel type"},
-            "is_charcoal_baseline": {"value": is_charcoal_baseline, "unit": "", "description": "Charcoal baseline applied"},
-            "bl_consumption": {"value": round(bl_consumption, 4), "unit": "t/hh/yr", "description": "Baseline consumption (raw)"},
-            "bl_consumption_wood_equiv": {"value": round(bl_consumption_wood_equiv, 4), "unit": "t/hh/yr", "description": "Baseline consumption (wood-equiv)"},
-            "pj_consumption": {"value": round(pj_consumption, 4), "unit": "t/hh/yr", "description": "Project consumption (raw)"},
-            "pj_consumption_wood_equiv": {"value": round(pj_consumption_wood_equiv, 4), "unit": "t/hh/yr", "description": "Project consumption (wood-equiv)"},
+            "project_fuel": {"value": project_fuel, "unit": "", "description": "Project fuel type"},
+            "method_id": {"value": method_id or "legacy", "unit": "", "description": "TPDDTEC method (method_1/2/3) or legacy"},
+            "is_method_3": {"value": is_method_3, "unit": "", "description": "True = different fuels (fNRB excluded from PE)"},
+            "bl_consumption": {"value": round(bl_consumption, 4), "unit": "t/device/yr", "description": "Baseline consumption (raw)"},
+            "bl_consumption_wood_equiv": {"value": round(bl_consumption_wood_equiv, 4), "unit": "t/device/yr", "description": "Baseline consumption (wood-equiv)"},
+            "pj_consumption": {"value": round(pj_consumption, 4), "unit": "t/device/yr", "description": "Project consumption (raw)"},
+            "pj_consumption_wood_equiv": {"value": round(pj_consumption_wood_equiv, 4), "unit": "t/device/yr", "description": "Project consumption (wood-equiv)"},
             "leakage_pct": {"value": leakage_pct, "unit": "fraction", "description": "Leakage deduction percentage"},
             "usage_rate": {"value": usage_rate_base, "unit": "fraction", "description": f"Initial usage rate (decays {usage_rate_decay}/yr, floor {usage_rate_floor})"},
             "usage_rate_decay": {"value": usage_rate_decay, "unit": "fraction/yr", "description": "Annual usage rate decay rate"},
             "usage_rate_floor": {"value": usage_rate_floor, "unit": "fraction", "description": "Minimum usage rate floor"},
-            "num_households": {"value": num_hh, "unit": "count", "description": "Number of households"},
+            "num_devices": {"value": num_hh, "unit": "count", "description": "Number of cookstove devices (N_i,y)"},
             "household_size": {"value": hh_size, "unit": "persons", "description": "Average household size"},
         },
     }
 
 
 def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, methodology="VM0050",
-                                   deployment_config=None):
+                                   deployment_config=None, method_id=None):
+    """
+    Cohort-based cookstove ER model with deployment ramps, drop-off, and lifetime curves.
+
+    method_id : str | None — pass "method_1", "method_2", or "method_3" for TPDDTEC.
+    fNRB placement follows the same rules as calculate_cookstove_er.
+    """
     if deployment_config is None:
         deployment_config = {}
 
+    from carbongpt.core.methodology_rules import (
+        TPDDTEC_NCV_WOOD_TJ_PER_TON,
+        TPDDTEC_EF_CO2_WOOD,
+        TPDDTEC_EF_NONCO2_WOOD_AR5,
+        TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION,
+        TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
+        TPDDTEC_NCV_CHARCOAL_TJ_PER_TON,
+        TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+    )
+
     fNRB = _pval(params, "fNRB", 0.30)
-    NCV_b = _pval(params, "NCV_baseline", 15.6)
-    EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
-    EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", 9.46)
-    NCV_p = _pval(params, "NCV_project", NCV_b)
-    EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
-    EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
-    CF = _pval(params, "CF", 1.0)
-    leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
     num_hh = int(_pval(params, "num_households", 1000))
     hh_size = _pval(params, "household_size", 5.0)
+    leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
 
     baseline_fuel = _ptext(params, "baseline_fuel", "wood")
+    project_fuel = _ptext(params, "project_fuel", baseline_fuel)
     is_charcoal_baseline = baseline_fuel.lower() in ("charcoal", "charbon")
+    is_charcoal_project = project_fuel.lower() in ("charcoal", "charbon")
+    CF = _pval(params, "CF", 4.0 if is_charcoal_baseline else 1.0)
 
-    if methodology in ("VM0050",):
-        bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.4)
-        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
+    is_tpddtec = methodology in ("TPDDTEC", "GS-TPDDTEC") or (method_id is not None and method_id.startswith("method_"))
+    is_method_3 = (method_id == "method_3") or (is_tpddtec and baseline_fuel.lower() != project_fuel.lower())
+
+    if is_tpddtec:
+        if is_charcoal_baseline:
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
+            EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
+        else:
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_WOOD)
+            EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_WOOD_AR5)
+        if is_charcoal_project:
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
+            EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
+        else:
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
+            EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
     else:
-        sfc_b = _pval(params, "SFC_baseline", 400.0)
-        sfc_p = _pval(params, "SFC_project", 200.0)
-        bl_consumption = sfc_b * hh_size / 1000.0
-        pj_consumption = sfc_p * hh_size / 1000.0
+        NCV_b = _pval(params, "NCV_baseline", 15.6)
+        EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
+        EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", 9.46)
+        NCV_p = _pval(params, "NCV_project", NCV_b)
+        EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
+        EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+
+    if methodology in ("VM0050",) and not is_tpddtec:
+        bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.5)
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
+    elif is_tpddtec and method_id == "method_2":
+        devices_per_hh = _pval(params, "devices_per_household", 1.0)
+        sfc_b = (TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh / 365.0) * 1000.0
+        sfc_p = _pval(params, "SFC_project", sfc_b * 0.5)
+        bl_consumption = sfc_b * 365.0 / 1000.0
+        pj_consumption = sfc_p * 365.0 / 1000.0
+    else:
+        sfc_b = _pval(params, "SFC_baseline", 1.37)
+        sfc_p = _pval(params, "SFC_project", 0.68)
+        bl_consumption = sfc_b * 365.0 / 1000.0
+        pj_consumption = sfc_p * 365.0 / 1000.0
 
     if is_charcoal_baseline and CF > 1.0:
         bl_consumption_wood_equiv = bl_consumption * CF
-        pj_consumption_wood_equiv = pj_consumption * CF
     else:
         bl_consumption_wood_equiv = bl_consumption
+
+    if is_charcoal_project and CF > 1.0 and not is_method_3:
+        pj_consumption_wood_equiv = pj_consumption * CF
+    else:
         pj_consumption_wood_equiv = pj_consumption
 
     ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
-    be_per_unit = ec_b * (EF_CO2_b + EF_nonCO2_b) * fNRB
     ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
-    pe_per_unit = ec_p * (EF_CO2_p + EF_nonCO2_p) * fNRB
+
+    be_per_unit = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+    if is_method_3:
+        pe_per_unit = ec_p * (EF_CO2_p + EF_nonCO2_p)
+    else:
+        pe_per_unit = ec_p * (fNRB * EF_CO2_p + EF_nonCO2_p)
     er_per_unit = be_per_unit - pe_per_unit
 
     deployment_mode = deployment_config.get("deployment_mode", "instant")

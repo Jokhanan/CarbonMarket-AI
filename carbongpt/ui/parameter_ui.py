@@ -16,10 +16,17 @@ DERIVED_PARAMS = {"num_beneficiaries", "num_households"}
 
 CHARCOAL_ONLY_PARAMS = {"CF"}
 
+METHOD3_ONLY_PARAMS = {"NCV_project", "EF_CO2_project", "EF_nonCO2_project"}
 
-def _get_project_fuels(project_id, all_params):
+METHOD2_LOCKED_PARAMS = {"SFC_baseline"}
+
+
+def _get_project_method_settings(project_id, all_params):
+    """Return (baseline_fuel, project_fuel, method_id, methodology_settings)."""
     baseline_fuel = "wood"
     project_fuel = "wood"
+    method_id = None
+    settings = {}
     try:
         from carbongpt.repository.db import get_cursor
         with get_cursor() as cur:
@@ -31,6 +38,7 @@ def _get_project_fuels(project_id, all_params):
                     baseline_fuel = normalize_fuel_type(str(settings["baseline_fuel"]))
                 if settings.get("project_fuel"):
                     project_fuel = normalize_fuel_type(str(settings["project_fuel"]))
+                method_id = settings.get("calculation_method") or settings.get("method_id")
     except Exception:
         pass
     for p in all_params:
@@ -38,12 +46,19 @@ def _get_project_fuels(project_id, all_params):
             baseline_fuel = normalize_fuel_type(str(p["value"]))
         if p["param_key"] == "project_fuel" and p["value"]:
             project_fuel = normalize_fuel_type(str(p["value"]))
-    return baseline_fuel, project_fuel
+    return baseline_fuel, project_fuel, method_id, settings
 
 
-def _should_show_param(param_key, baseline_fuel, project_fuel):
+def _get_project_fuels(project_id, all_params):
+    bl, pj, _, _ = _get_project_method_settings(project_id, all_params)
+    return bl, pj
+
+
+def _should_show_param(param_key, baseline_fuel, project_fuel, method_id=None):
     if param_key in CHARCOAL_ONLY_PARAMS:
         return baseline_fuel == "charcoal" or project_fuel == "charcoal"
+    if method_id in ("method_1", "method_2") and param_key in METHOD3_ONLY_PARAMS:
+        return False
     return True
 
 
@@ -135,7 +150,30 @@ def render_parameter_dashboard(project):
     }
 
     all_params = get_project_parameters(project_id)
-    baseline_fuel, project_fuel = _get_project_fuels(project_id, all_params)
+    baseline_fuel, project_fuel, method_id, meth_settings = _get_project_method_settings(project_id, all_params)
+
+    if method_id:
+        try:
+            from carbongpt.core.methodology_rules import get_tpddtec_method_badge_info
+            badge_info = get_tpddtec_method_badge_info(method_id)
+            st.markdown(
+                f'<span style="background:{badge_info["color"]};color:white;padding:3px 10px;border-radius:4px;'
+                f'font-size:0.85em;font-weight:bold;">{badge_info["label"]}</span>'
+                f' <span style="font-size:0.85em;color:#666;">{badge_info["description"]}</span>',
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
+
+    if method_id == "method_2":
+        hh_size = next((float(p["value"]) for p in all_params if p["param_key"] == "household_size" and p["value"]), 5.0)
+        devices_per_hh = next((float(p["value"]) for p in all_params if p["param_key"] == "devices_per_household" and p["value"]), 1.0)
+        sfc_b_locked = 0.5 * hh_size / devices_per_hh / 365.0 * 1000.0
+        st.caption(
+            f"Method 2: SFC_b is locked at {sfc_b_locked:.4f} kg/technology-day "
+            f"(0.5 t/capita/yr × {hh_size:.0f} persons / {devices_per_hh:.0f} device / 365 days). "
+            "NCV and EF are locked to wood defaults."
+        )
 
     evidence = get_evidence_links(project_id, target_type="parameter")
     evidence_by_param = {}
@@ -155,7 +193,7 @@ def render_parameter_dashboard(project):
         cat_params = [p for p in all_params if p["category"] == cat]
         displayable = [p for p in cat_params
                        if p["param_key"] not in globally_rendered
-                       and _should_show_param(p["param_key"], baseline_fuel, project_fuel)]
+                       and _should_show_param(p["param_key"], baseline_fuel, project_fuel, method_id)]
         if not displayable:
             continue
 
@@ -164,7 +202,7 @@ def render_parameter_dashboard(project):
                 key = p["param_key"]
                 if key in globally_rendered:
                     continue
-                if not _should_show_param(key, baseline_fuel, project_fuel):
+                if not _should_show_param(key, baseline_fuel, project_fuel, method_id):
                     globally_rendered.add(key)
                     continue
 

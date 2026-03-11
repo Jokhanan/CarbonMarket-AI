@@ -2810,7 +2810,6 @@ def _render_new_project_wizard(existing_projects):
 
         new_name = st.text_input("Project name", key="wizard_name",
                                   placeholder="e.g., Ghana Improved Cookstoves")
-        new_methodology = _methodology_selector("wizard", standard=new_standard)
         c1, c2 = st.columns(2)
         with c1:
             new_country = st.text_input("Country", key="wizard_country", placeholder="e.g., Ghana")
@@ -2830,12 +2829,20 @@ def _render_new_project_wizard(existing_projects):
             if monitoring_start and monitoring_end and monitoring_end <= monitoring_start:
                 st.warning("Monitoring period end date must be after the start date.")
 
+        supports_cookstove_wizard = selected_type in (
+            "standalone_pdd", "poa_programme", "vpa_component", "monitoring_report"
+        ) and new_standard in ("GoldStandard", "Verra")
+
+        if supports_cookstove_wizard:
+            st.caption("The methodology will be automatically derived in the next step based on activity type and fuel choices.")
+        else:
+            new_methodology_step2 = _methodology_selector("wizard", standard=new_standard)
+            st.session_state["wizard_methodology_step2"] = new_methodology_step2
+
         if parent_id:
             parent_proj = next((p for p in existing_projects if p["id"] == parent_id), None)
             if parent_proj:
                 inherited = []
-                if parent_proj.get("methodology") and not new_methodology:
-                    inherited.append(f"Methodology: {parent_proj['methodology']}")
                 if parent_proj.get("country") and not new_country:
                     inherited.append(f"Country: {parent_proj['country']}")
                 if inherited:
@@ -2847,42 +2854,284 @@ def _render_new_project_wizard(existing_projects):
                 st.session_state[step_key] = 1
                 st.rerun()
         with bc2:
-            if st.button("Create Project", key="wizard_create", type="primary"):
-                if not new_name:
-                    st.warning("Please enter a project name.")
-                else:
-                    final_methodology = new_methodology
-                    final_country = new_country
-                    if parent_id:
-                        parent_proj = next((p for p in existing_projects if p["id"] == parent_id), None)
-                        if parent_proj:
-                            if not final_methodology:
-                                final_methodology = parent_proj.get("methodology")
-                            if not final_country:
-                                final_country = parent_proj.get("country")
+            if supports_cookstove_wizard:
+                if st.button("Continue", key="wizard_to_step3", type="primary"):
+                    if not new_name:
+                        st.warning("Please enter a project name.")
+                    else:
+                        st.session_state["wizard_name_saved"] = new_name
+                        st.session_state["wizard_standard_saved"] = new_standard
+                        st.session_state["wizard_country_saved"] = new_country
+                        st.session_state["wizard_desc_saved"] = new_desc
+                        st.session_state["wizard_parent_saved"] = parent_id
+                        if monitoring_start:
+                            st.session_state["wizard_mon_start_saved"] = monitoring_start.isoformat()
+                        if monitoring_end:
+                            st.session_state["wizard_mon_end_saved"] = monitoring_end.isoformat()
+                        st.session_state[step_key] = 3
+                        st.rerun()
+            else:
+                if st.button("Create Project", key="wizard_create", type="primary"):
+                    if not new_name:
+                        st.warning("Please enter a project name.")
+                    else:
+                        final_methodology = st.session_state.get("wizard_methodology_step2")
+                        final_country = new_country
+                        if parent_id:
+                            parent_proj = next((p for p in existing_projects if p["id"] == parent_id), None)
+                            if parent_proj:
+                                if not final_methodology:
+                                    final_methodology = parent_proj.get("methodology")
+                                if not final_country:
+                                    final_country = parent_proj.get("country")
+
+                        payload = {
+                            "name": new_name,
+                            "standard": new_standard,
+                            "methodology": final_methodology,
+                            "country": final_country or None,
+                            "description": new_desc or None,
+                            "project_type": selected_type,
+                            "parent_project_id": parent_id,
+                        }
+                        if monitoring_start:
+                            payload["monitoring_period_start"] = monitoring_start.isoformat()
+                        if monitoring_end:
+                            payload["monitoring_period_end"] = monitoring_end.isoformat()
+
+                        result = _fetch("/projects", method="POST", json=payload)
+                        if result:
+                            st.success("Project created!")
+                            st.session_state["show_new_project"] = False
+                            st.session_state.pop(step_key, None)
+                            time.sleep(0.5)
+                            st.session_state.selected_project_id = result["id"]
+                            st.rerun()
+
+    elif step == 3:
+        from carbongpt.core.methodology_rules import (
+            derive_tpddtec_method,
+            derive_methodology_from_fuels,
+            get_tpddtec_method_badge_info,
+            TPDDTEC_FUEL_DISPLAY,
+            TPDDTEC_BASELINE_FUEL_OPTIONS,
+            TPDDTEC_PROJECT_FUEL_OPTIONS,
+            TPDDTEC_SCALE_OPTIONS,
+            TPDDTEC_SCALE_DESCRIPTIONS,
+        )
+
+        saved_name = st.session_state.get("wizard_name_saved", "")
+        saved_standard = st.session_state.get("wizard_standard_saved", "GoldStandard")
+        saved_country = st.session_state.get("wizard_country_saved", "")
+        saved_desc = st.session_state.get("wizard_desc_saved", "")
+        saved_parent = st.session_state.get("wizard_parent_saved")
+        selected_type = st.session_state.get("new_proj_type", "standalone_pdd")
+
+        std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(saved_standard, saved_standard)
+        st.caption(f"Project: **{saved_name}** | Standard: **{std_display}**" + (f" | Country: **{saved_country}**" if saved_country else ""))
+
+        st.markdown("**Step 3: Activity type**")
+        activity_options = ["Cookstoves / Thermal energy", "Renewable electricity", "Other (manual methodology)"]
+        activity = st.radio(
+            "What kind of activity does this project cover?",
+            activity_options,
+            key="wizard_activity_type",
+            horizontal=True,
+        )
+
+        if activity == "Cookstoves / Thermal energy":
+            st.markdown("---")
+            st.markdown("**Fuel setup**")
+            st.caption("LPG is not available as a project fuel for new projects under TPDDTEC v4.0 (Footnote 1). For LPG projects, use the Metered & Measured methodology.")
+
+            fuel_col1, fuel_col2 = st.columns(2)
+            with fuel_col1:
+                bl_fuel_choice = st.radio(
+                    "Baseline fuel (what households currently use)",
+                    TPDDTEC_BASELINE_FUEL_OPTIONS,
+                    key="wizard_baseline_fuel",
+                    format_func=lambda x: TPDDTEC_FUEL_DISPLAY.get(x, x),
+                )
+            with fuel_col2:
+                pj_fuel_choice = st.radio(
+                    "Project fuel (what the project stoves will use)",
+                    TPDDTEC_PROJECT_FUEL_OPTIONS,
+                    key="wizard_project_fuel",
+                    format_func=lambda x: TPDDTEC_FUEL_DISPLAY.get(x, x),
+                )
+
+            st.markdown("---")
+            st.markdown("**Scale**")
+            scale_labels = [f"{s} ({TPDDTEC_SCALE_DESCRIPTIONS[s]})" for s in TPDDTEC_SCALE_OPTIONS]
+            scale_choice_label = st.radio(
+                "Expected scale of the project",
+                scale_labels,
+                key="wizard_scale_label",
+            )
+            scale_choice = TPDDTEC_SCALE_OPTIONS[scale_labels.index(scale_choice_label)]
+
+            meth_info = derive_methodology_from_fuels(saved_standard, bl_fuel_choice, pj_fuel_choice)
+            method_result = derive_tpddtec_method(bl_fuel_choice, pj_fuel_choice, scale_choice, "measured")
+
+            baseline_approach = "measured"
+            if method_result["method2_available"]:
+                st.markdown("---")
+                st.markdown("**Baseline fuel consumption approach**")
+                approach_labels = [
+                    "Use methodology default  (0.5 t/capita/year fuelwood — no field test needed)",
+                    "Use measured field data  (Baseline Performance Field Test required)",
+                ]
+                approach_choice = st.radio(
+                    "How will you determine baseline fuel consumption?",
+                    approach_labels,
+                    key="wizard_baseline_approach",
+                )
+                baseline_approach = "default" if "default" in approach_choice else "measured"
+                method_result = derive_tpddtec_method(bl_fuel_choice, pj_fuel_choice, scale_choice, baseline_approach)
+            elif method_result["baseline_approach_locked"]:
+                st.caption(f"Baseline approach: {method_result['approach_lock_reason']}")
+
+            st.markdown("---")
+            st.markdown("**Leakage**")
+            leakage_labels = [
+                "Standard 5% deduction  (Option 1 — recommended, no additional inputs needed)",
+                "Project-specific leakage calculation  (Option 2 — requires additional field measurements)",
+            ]
+            leakage_choice = st.radio(
+                "How will you handle leakage?",
+                leakage_labels,
+                key="wizard_leakage_approach",
+            )
+            leakage_option = "option_1" if "Option 1" in leakage_choice else "option_2"
+
+            st.markdown("---")
+            badge_info = get_tpddtec_method_badge_info(method_result["method_id"])
+
+            if meth_info.get("blocked"):
+                st.warning(f"Note: {meth_info['note']}")
+            else:
+                with st.container(border=True):
+                    st.markdown("**Your project will use:**")
+                    s1, s2, s3 = st.columns(3)
+                    with s1:
+                        st.markdown(f"Methodology: **{meth_info['methodology_display']}**")
+                        st.caption(meth_info["note"])
+                    with s2:
+                        st.markdown(f"Method: **{method_result['method_label']}**")
+                        st.caption(method_result["reason"])
+                    with s3:
+                        bl_label = TPDDTEC_FUEL_DISPLAY.get(bl_fuel_choice, bl_fuel_choice)
+                        pj_label = TPDDTEC_FUEL_DISPLAY.get(pj_fuel_choice, pj_fuel_choice)
+                        st.markdown(f"Fuel: **{bl_label} → {pj_label}**")
+                        st.markdown(f"Scale: **{scale_choice}**")
+                        leakage_label = "5% standard deduction" if leakage_option == "option_1" else "Project-specific"
+                        st.caption(f"Leakage: {leakage_label}")
+
+            bk1, cr2 = st.columns([1, 3])
+            with bk1:
+                if st.button("Back", key="wizard_back_step3"):
+                    st.session_state[step_key] = 2
+                    st.rerun()
+            with cr2:
+                if st.button("Create Project", key="wizard_create_step3", type="primary",
+                             disabled=meth_info.get("blocked", False)):
+                    final_country = saved_country
+                    if saved_parent:
+                        parent_proj = next((p for p in existing_projects if p["id"] == saved_parent), None)
+                        if parent_proj and not final_country:
+                            final_country = parent_proj.get("country")
+
+                    meth_settings = {
+                        "baseline_fuel": bl_fuel_choice,
+                        "project_fuel": pj_fuel_choice,
+                        "scale_classification": scale_choice,
+                        "baseline_approach": baseline_approach,
+                        "leakage_option": leakage_option,
+                        "method_selection": method_result["method_label"],
+                        "calculation_method": method_result["method_id"],
+                    }
 
                     payload = {
-                        "name": new_name,
-                        "standard": new_standard,
-                        "methodology": final_methodology,
+                        "name": saved_name,
+                        "standard": saved_standard,
+                        "methodology": meth_info.get("methodology") or "",
                         "country": final_country or None,
-                        "description": new_desc or None,
+                        "description": saved_desc or None,
                         "project_type": selected_type,
-                        "parent_project_id": parent_id,
+                        "parent_project_id": saved_parent,
+                        "methodology_settings": meth_settings,
                     }
-                    if monitoring_start:
-                        payload["monitoring_period_start"] = monitoring_start.isoformat()
-                    if monitoring_end:
-                        payload["monitoring_period_end"] = monitoring_end.isoformat()
+                    mon_start = st.session_state.get("wizard_mon_start_saved")
+                    mon_end = st.session_state.get("wizard_mon_end_saved")
+                    if mon_start:
+                        payload["monitoring_period_start"] = mon_start
+                    if mon_end:
+                        payload["monitoring_period_end"] = mon_end
 
                     result = _fetch("/projects", method="POST", json=payload)
                     if result:
-                        st.success("Project created!")
+                        st.success(f"Project created with {meth_info['methodology_display']} — {method_result['method_label']}!")
                         st.session_state["show_new_project"] = False
                         st.session_state.pop(step_key, None)
+                        for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
+                                  "wizard_desc_saved", "wizard_parent_saved",
+                                  "wizard_mon_start_saved", "wizard_mon_end_saved"]:
+                            st.session_state.pop(k, None)
                         time.sleep(0.5)
                         st.session_state.selected_project_id = result["id"]
                         st.rerun()
+
+        else:
+            st.markdown("---")
+            if activity == "Other (manual methodology)":
+                new_methodology_s3 = _methodology_selector("wizard_s3", standard=saved_standard)
+            else:
+                new_methodology_s3 = _methodology_selector("wizard_s3", standard=saved_standard)
+
+            bk1, cr2 = st.columns([1, 3])
+            with bk1:
+                if st.button("Back", key="wizard_back_other"):
+                    st.session_state[step_key] = 2
+                    st.rerun()
+            with cr2:
+                if st.button("Create Project", key="wizard_create_other", type="primary"):
+                    if not saved_name:
+                        st.warning("Please go back and enter a project name.")
+                    else:
+                        final_country = saved_country
+                        if saved_parent:
+                            parent_proj = next((p for p in existing_projects if p["id"] == saved_parent), None)
+                            if parent_proj and not final_country:
+                                final_country = parent_proj.get("country")
+
+                        payload = {
+                            "name": saved_name,
+                            "standard": saved_standard,
+                            "methodology": new_methodology_s3 or None,
+                            "country": final_country or None,
+                            "description": saved_desc or None,
+                            "project_type": selected_type,
+                            "parent_project_id": saved_parent,
+                        }
+                        mon_start = st.session_state.get("wizard_mon_start_saved")
+                        mon_end = st.session_state.get("wizard_mon_end_saved")
+                        if mon_start:
+                            payload["monitoring_period_start"] = mon_start
+                        if mon_end:
+                            payload["monitoring_period_end"] = mon_end
+
+                        result = _fetch("/projects", method="POST", json=payload)
+                        if result:
+                            st.success("Project created!")
+                            st.session_state["show_new_project"] = False
+                            st.session_state.pop(step_key, None)
+                            for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
+                                      "wizard_desc_saved", "wizard_parent_saved",
+                                      "wizard_mon_start_saved", "wizard_mon_end_saved"]:
+                                st.session_state.pop(k, None)
+                            time.sleep(0.5)
+                            st.session_state.selected_project_id = result["id"]
+                            st.rerun()
 
 
 def _get_project_readiness(project, project_id):
@@ -6072,19 +6321,49 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
 
     if selected_baseline and selected_project:
         from carbongpt.core.parameter_engine import normalize_fuel_type
+        from carbongpt.core.methodology_rules import derive_tpddtec_method, get_tpddtec_method_badge_info
         bl_norm = normalize_fuel_type(selected_baseline)
         pj_norm = normalize_fuel_type(selected_project)
-        if bl_norm == pj_norm:
-            derived_method = "Method 1"
-            derived_method_id = "method_1"
-            method_reason = f"Same fuel ({selected_baseline}) -- Method 1 applies"
-        else:
-            derived_method = "Method 2"
-            derived_method_id = "method_2"
-            method_reason = f"Different fuels ({selected_baseline} / {selected_project}) -- Method 2 applies"
+        scale_val = new_settings.get("scale_classification", "")
+        baseline_approach = new_settings.get("baseline_approach", existing_settings.get("baseline_approach", "measured"))
+        method_result = derive_tpddtec_method(bl_norm, pj_norm, scale_val, baseline_approach)
+        derived_method = method_result["method_label"]
+        derived_method_id = method_result["method_id"]
         new_settings["method_selection"] = derived_method
         new_settings["calculation_method"] = derived_method_id
-        st.caption(f"Calculation method: **{derived_method}** ({method_reason})")
+
+        badge_info = get_tpddtec_method_badge_info(derived_method_id)
+        st.markdown(
+            f'<span style="background:{badge_info["color"]};color:white;padding:3px 10px;border-radius:4px;font-size:0.85em;font-weight:bold;">'
+            f'{badge_info["label"]}</span>',
+            unsafe_allow_html=True,
+        )
+        st.caption(method_result["reason"])
+
+        if method_result["method2_available"] and not method_result["baseline_approach_locked"]:
+            approach_options = ["measured", "default"]
+            current_approach = baseline_approach if baseline_approach in approach_options else "measured"
+            approach_labels = {
+                "measured": "Measured field data (Baseline Performance Field Test — BFT required)",
+                "default": "Methodology default (0.5 t/capita/yr fuelwood, no BFT needed)",
+            }
+            new_approach = st.radio(
+                "Baseline fuel consumption approach",
+                approach_options,
+                index=approach_options.index(current_approach),
+                format_func=lambda x: approach_labels[x],
+                key=f"meth_approach_{project_id}",
+            )
+            if new_approach != baseline_approach:
+                new_settings["baseline_approach"] = new_approach
+                method_result2 = derive_tpddtec_method(bl_norm, pj_norm, scale_val, new_approach)
+                new_settings["method_selection"] = method_result2["method_label"]
+                new_settings["calculation_method"] = method_result2["method_id"]
+                badge_info2 = get_tpddtec_method_badge_info(method_result2["method_id"])
+                st.caption(f"Approach changed: will use {badge_info2['label']}")
+            else:
+                new_settings["baseline_approach"] = baseline_approach
+
         if auto_derived_dims:
             derived_info = []
             if "scale_classification" in auto_derived_dims:
