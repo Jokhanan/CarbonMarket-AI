@@ -2,8 +2,14 @@
 cd /home/runner/workspace
 export PYTHONPATH=/home/runner/workspace
 
+pkill -f "streamlit" 2>/dev/null || true
+pkill -f "uvicorn" 2>/dev/null || true
 pkill -f "ai_review_worker.py" 2>/dev/null || true
-sleep 0.5
+sleep 2
+
+fuser -k 5000/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
+sleep 1
 
 /home/runner/workspace/.pythonlibs/bin/streamlit run carbongpt/ui/streamlit_app.py --server.port 5000 --server.headless true --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false &
 
