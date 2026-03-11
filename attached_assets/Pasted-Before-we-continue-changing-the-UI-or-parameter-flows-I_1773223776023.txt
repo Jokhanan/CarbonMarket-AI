@@ -1,0 +1,150 @@
+Before we continue changing the UI or parameter flows, I want to verify that you truly understand the methodological logic of the two main cookstove methodologies we are building around:
+
+1. TPDDTEC
+2. VM0050
+
+Do NOT implement code yet.
+Do NOT redesign the UI yet.
+
+First, I want you to deeply analyze these two methodologies and produce a clear, structured, implementation-oriented methodology logic document.
+
+The objective is to prove that you understand:
+- the possible methodological pathways / scenarios
+- the required parameters
+- the formulas
+- the conditions that determine which formula/pathway applies
+- the role of default values vs measured values
+- the role of fuel combinations
+- the units and conversions
+- how this should be organized in a software system without hardcoding random UI logic
+
+--------------------------------------------------
+PART 1 — TPDDTEC LOGIC ANALYSIS
+--------------------------------------------------
+
+Please analyze TPDDTEC in detail and explain:
+
+1. What are the main methodological pathways / cases?
+For example:
+- baseline fuel and project fuel are the same
+- baseline fuel and project fuel are different
+- default consumption values are used
+- measured values are used
+- single fuel vs mixed / multiple fuels
+
+2. For each pathway:
+- what conditions trigger that pathway?
+- what are the required inputs?
+- what are the derived values?
+- what formulas apply?
+- which parameters are mandatory?
+- which parameters are optional?
+- which parameters are conditional?
+
+3. Explain the role of:
+- SFC
+- SFS
+- SE
+- baseline fuel consumption
+- project fuel consumption
+- per person vs per household values
+- default consumption values
+- household size / number of persons
+- fuel type combinations
+
+4. Explain exactly when “wood to charcoal conversion factor” / “charcoal conversion factor” is needed:
+- in which pathway?
+- in which formula?
+- when it should appear in the software
+- when it should NOT appear
+
+5. Explain the units carefully:
+- what units each parameter should use
+- where conversions are required
+- how to avoid unit inconsistencies in software
+- what common mistakes would create wrong results
+
+--------------------------------------------------
+PART 2 — VM0050 LOGIC ANALYSIS
+--------------------------------------------------
+
+Please do the same for VM0050.
+
+I want a structured explanation of:
+- the major methodological pathways
+- same fuel vs different fuel logic
+- single fuel vs multi-fuel logic if applicable
+- default values vs measured values
+- required parameters by pathway
+- conditional parameters
+- formulas used by pathway
+- where leakage, fuel switching, conversion factors, and project emissions enter
+- units and conversion requirements
+
+Please also explain:
+- in what cases certain parameters should be shown or hidden
+- in what cases defaults should be proposed automatically
+- in what cases the user must provide measured values
+
+--------------------------------------------------
+PART 3 — IMPLEMENTATION LOGIC
+--------------------------------------------------
+
+After analyzing both methodologies, translate them into implementation logic.
+
+For each methodology, provide:
+
+1. A decision-tree / pathway logic
+Example style:
+- first determine baseline fuel
+- then determine project fuel
+- then determine whether same or different
+- then determine whether default or measured values are used
+- then infer the correct method/pathway
+- then expose only the relevant parameters
+
+2. A parameter dependency map
+For each methodology:
+- which user choices determine other fields?
+- which parameters should be auto-derived?
+- which parameters should auto-update when fuel changes?
+- which parameters should be selectable defaults rather than free text?
+
+3. A formula map
+For each pathway:
+- formula name / formula role
+- input parameters
+- unit expectations
+- outputs
+
+4. A software design recommendation
+Explain how these methodologies should be represented in software:
+- methodology definition layer
+- pathway logic layer
+- parameter definition layer
+- default-option mapping layer
+- unit conversion / validation layer
+
+Important:
+I do NOT want random UI suggestions here.
+I want the underlying methodology logic that the UI should later follow.
+
+--------------------------------------------------
+PART 4 — OUTPUT FORMAT
+--------------------------------------------------
+
+Please structure your answer like this:
+
+A. TPDDTEC methodology logic
+B. VM0050 methodology logic
+C. Comparison of TPDDTEC vs VM0050
+D. Decision trees / pathway logic for software
+E. Parameter dependency and unit consistency analysis
+F. Recommended implementation structure
+
+Important:
+- Be precise and implementation-oriented
+- Do not stay generic
+- Do not just summarize the methodology
+- Show that you understand how a software system should decide what to ask, what to derive, what to calculate, and when
+- If something is ambiguous or needs the source methodology text to confirm, say so explicitly
