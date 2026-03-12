@@ -2513,12 +2513,16 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
     # Consume any pending geocoded values BEFORE rendering coordinate widgets
     _pending_lat = f"{key_prefix}_pending_lat"
     _pending_lon = f"{key_prefix}_pending_lon"
+    _pending_geojson = f"{key_prefix}_pending_geojson"
     _geo_lat = st.session_state.pop(_pending_lat, None)
     _geo_lon = st.session_state.pop(_pending_lon, None)
+    _geo_geojson = st.session_state.pop(_pending_geojson, None)
     if _geo_lat is not None:
         st.session_state[f"{key_prefix}_lat"] = _geo_lat
     if _geo_lon is not None:
         st.session_state[f"{key_prefix}_lon"] = _geo_lon
+    if _geo_geojson is not None:
+        st.session_state[f"{key_prefix}_geojson"] = _geo_geojson
 
     gc1, gc2, gc3 = st.columns([2, 2, 1])
     lat_val = project.get("latitude")
@@ -2545,12 +2549,16 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
         st.write("")
         st.write("")
         if st.button("Look up", key=f"{key_prefix}_geocode",
-                     help="Auto-fill coordinates from region name"):
+                     help="Auto-fill coordinates and boundary from region name"):
             if region:
                 geo = geocode_location(region, country)
                 if geo:
                     st.session_state[_pending_lat] = geo["latitude"]
                     st.session_state[_pending_lon] = geo["longitude"]
+                    if geo.get("geojson"):
+                        st.session_state[_pending_geojson] = geo["geojson"]
+                    else:
+                        st.session_state.pop(f"{key_prefix}_geojson", None)
                     st.rerun()
                 else:
                     st.warning("Could not auto-fill coordinates. Enter them manually.")
@@ -2562,14 +2570,35 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
             import folium
             from streamlit_folium import st_folium
             popup_text = region or country or "Project location"
+            stored_geojson = st.session_state.get(f"{key_prefix}_geojson")
             m = folium.Map(location=[lat, lon], zoom_start=7, tiles="OpenStreetMap")
-            folium.Marker(
-                [lat, lon],
-                popup=popup_text,
-                tooltip=popup_text,
-                icon=folium.Icon(color="green", icon="leaf"),
-            ).add_to(m)
-            st_folium(m, height=260, use_container_width=True, returned_objects=[])
+            if stored_geojson:
+                folium.GeoJson(
+                    {"type": "Feature", "geometry": stored_geojson, "properties": {"name": popup_text}},
+                    name=popup_text,
+                    style_function=lambda _: {
+                        "fillColor": "#2d6a4f",
+                        "color": "#1b4332",
+                        "weight": 2,
+                        "fillOpacity": 0.15,
+                    },
+                    tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Location:"]),
+                ).add_to(m)
+                folium.Marker(
+                    [lat, lon],
+                    popup=popup_text,
+                    tooltip=popup_text,
+                    icon=folium.Icon(color="green", icon="leaf"),
+                ).add_to(m)
+                m.fit_bounds(m.get_bounds())
+            else:
+                folium.Marker(
+                    [lat, lon],
+                    popup=popup_text,
+                    tooltip=popup_text,
+                    icon=folium.Icon(color="green", icon="leaf"),
+                ).add_to(m)
+            st_folium(m, height=280, use_container_width=True, returned_objects=[])
         except Exception:
             st.caption(f"Map preview unavailable. Coordinates: {lat:.4f}, {lon:.4f}")
 
@@ -3066,40 +3095,72 @@ def _render_new_project_wizard(existing_projects):
         st.caption(f"Project: **{saved_name}** | Standard: **{std_display}**" + (f" | Country: **{saved_country}**" if saved_country else ""))
 
         st.markdown("**Step 3: Activity type**")
-        activity_options = [
-            "Cookstoves / Thermal energy",
-            "Metered & Measured cooking device (MECD)",
-            "Renewable electricity",
-            "Other (manual methodology)",
-        ]
-        activity = st.radio(
+        activity_category = st.radio(
             "What kind of activity does this project cover?",
-            activity_options,
+            ["Cooking devices", "Renewable electricity", "Other (manual methodology)"],
             key="wizard_activity_type",
             horizontal=False,
         )
 
-        if activity == "Cookstoves / Thermal energy":
+        _detected = None
+        bl_fuel_top = None
+        pj_fuel_top = None
+        if activity_category == "Cooking devices":
             st.markdown("---")
-            st.markdown("**Fuel setup**")
-            st.caption("LPG is not available as a project fuel for new projects under TPDDTEC v4.0 (Footnote 1). For LPG projects, use the Metered & Measured methodology.")
-
+            st.markdown("**Fuel selection**")
+            st.caption("Select baseline and project fuels. The applicable methodology is determined automatically from your selection.")
+            _BL_FUELS = ["wood", "charcoal", "lpg", "kerosene", "mixed_biomass", "other"]
+            _BL_FUEL_DISP = {
+                "wood": "Wood / Firewood", "charcoal": "Charcoal", "lpg": "LPG",
+                "kerosene": "Kerosene", "mixed_biomass": "Mixed biomass", "other": "Other",
+            }
+            _PJ_FUELS = ["wood", "charcoal", "lpg", "electricity", "biogas", "bioethanol", "other"]
+            _PJ_FUEL_DISP = {
+                "wood": "Wood / Firewood (improved)", "charcoal": "Charcoal (improved)",
+                "lpg": "LPG", "electricity": "Electricity (grid)",
+                "biogas": "Biogas", "bioethanol": "Bio-ethanol", "other": "Other",
+            }
             fuel_col1, fuel_col2 = st.columns(2)
             with fuel_col1:
-                bl_fuel_choice = st.radio(
+                bl_fuel_top = st.radio(
                     "Baseline fuel (what households currently use)",
-                    TPDDTEC_BASELINE_FUEL_OPTIONS,
-                    key="wizard_baseline_fuel",
-                    format_func=lambda x: TPDDTEC_FUEL_DISPLAY.get(x, x),
+                    _BL_FUELS,
+                    key="wizard_cookstove_bl_fuel",
+                    format_func=lambda x: _BL_FUEL_DISP.get(x, x),
                 )
             with fuel_col2:
-                pj_fuel_choice = st.radio(
-                    "Project fuel (what the project stoves will use)",
-                    TPDDTEC_PROJECT_FUEL_OPTIONS,
-                    key="wizard_project_fuel",
-                    format_func=lambda x: TPDDTEC_FUEL_DISPLAY.get(x, x),
+                pj_fuel_top = st.radio(
+                    "Project fuel (what the project device will use)",
+                    _PJ_FUELS,
+                    key="wizard_cookstove_pj_fuel",
+                    format_func=lambda x: _PJ_FUEL_DISP.get(x, x),
                 )
+            if saved_standard == "Verra":
+                _detected = "VM0050"
+            elif pj_fuel_top in ("electricity", "lpg", "biogas", "bioethanol"):
+                _detected = "GS-MECD"
+            elif pj_fuel_top in ("wood", "charcoal"):
+                _detected = "TPDDTEC"
+            else:
+                _detected = None
+            if _detected is None:
+                st.warning("Project fuel 'Other' requires manual methodology confirmation. Please contact your standard body.")
+            elif _detected == "GS-MECD":
+                st.info("Methodology auto-detected: **GS-MECD v1.2** – Metered & Measured Energy Cooking Devices")
+            else:
+                _meth_disp = "TPDDTEC v4.0" if _detected == "TPDDTEC" else "VM0050"
+                st.info(f"Methodology auto-detected: **{_meth_disp}**")
 
+        if activity_category == "Cooking devices" and _detected in ("TPDDTEC", "VM0050"):
+            _compat_activity = "Cookstoves / Thermal energy"
+        elif activity_category == "Cooking devices" and _detected == "GS-MECD":
+            _compat_activity = "Metered & Measured cooking device (MECD)"
+        else:
+            _compat_activity = activity_category
+
+        if _compat_activity == "Cookstoves / Thermal energy":
+            bl_fuel_choice = bl_fuel_top if (bl_fuel_top in TPDDTEC_BASELINE_FUEL_OPTIONS) else "wood"
+            pj_fuel_choice = pj_fuel_top if (pj_fuel_top in TPDDTEC_PROJECT_FUEL_OPTIONS) else "wood"
             st.markdown("---")
             st.markdown("**Scale**")
             scale_labels = [f"{s} ({TPDDTEC_SCALE_DESCRIPTIONS[s]})" for s in TPDDTEC_SCALE_OPTIONS]
@@ -3227,7 +3288,7 @@ def _render_new_project_wizard(existing_projects):
                         st.session_state.selected_project_id = result["id"]
                         st.rerun()
 
-        elif activity == "Metered & Measured cooking device (MECD)":
+        elif _compat_activity == "Metered & Measured cooking device (MECD)":
             st.markdown("---")
             st.markdown("**Device type**")
             device_key = st.radio(
@@ -3256,6 +3317,16 @@ def _render_new_project_wizard(existing_projects):
                     "Fossil fuel project device — under MECD v1.2 §2.2.1(g), only efficiency improvement "
                     "ER is eligible. Fuel-switch ER cannot be claimed for LPG project devices."
                 )
+
+            st.markdown("---")
+            st.markdown("**Region**")
+            st.caption("Used to select SC_b/SC_p defaults (Case 2) and for contextual reference data.")
+            region = st.selectbox(
+                "Project region",
+                MECD_REGION_OPTIONS,
+                key="mecd_region",
+                format_func=lambda x: MECD_REGION_DISPLAY.get(x, x),
+            )
 
             st.markdown("---")
             st.markdown("**Baseline fuel mix**")
@@ -3328,16 +3399,6 @@ def _render_new_project_wizard(existing_projects):
             else:
                 st.success(f"Baseline shares: {total_share:.1f}% — OK")
 
-            st.markdown("---")
-            st.markdown("**Region**")
-            st.caption("Used to select SC_b/SC_p defaults (Case 2) and for contextual reference data.")
-            region = st.selectbox(
-                "Project region",
-                MECD_REGION_OPTIONS,
-                key="mecd_region",
-                format_func=lambda x: MECD_REGION_DISPLAY.get(x, x),
-            )
-
             if has_woody_baseline:
                 st.markdown("---")
                 st.markdown("**fNRB approach (MECD 13)**")
@@ -3357,69 +3418,28 @@ def _render_new_project_wizard(existing_projects):
             else:
                 fnrb_approach = "not_applicable"
 
-            st.markdown("---")
-            st.markdown("**Key project parameters**")
             is_electric = fuel_type == "electric"
-
-            pp1, pp2 = st.columns(2)
-            with pp1:
-                n_persons = st.number_input(
-                    "Total persons covered by project devices",
-                    min_value=1,
-                    value=5000,
-                    step=100,
-                    key="mecd_n_persons",
-                    help="Used to apply the 1 kWh/capita/day energy cap in baseline emission calculations (MECD 10).",
-                )
-            with pp2:
-                if mecd_case == "1":
-                    eta_p_default = 0.85 if is_electric else 0.55
-                    eta_p = st.number_input(
-                        "Project device efficiency (fraction) — MECD 9",
-                        min_value=0.01,
-                        max_value=1.0,
-                        value=float(eta_p_default),
-                        step=0.01,
-                        key="mecd_eta_p",
-                    )
-                else:
-                    eta_p = None
-                    st.caption("Case 2: efficiency not determined by WBT — SC_b/SC_p ratio used instead.")
+            n_persons = None
+            eta_p = None
 
             if is_electric:
-                pe1, pe2, pe3 = st.columns(3)
-                with pe1:
-                    eg_mwh = st.number_input(
-                        "Annual electricity per device (MWh/yr) — MECD 10",
-                        min_value=0.01,
-                        value=1.2,
-                        step=0.01,
-                        key="mecd_eg_mwh_annual",
-                    )
-                with pe2:
-                    ef_el = st.number_input(
-                        "Grid emission factor EF_el (tCO2e/MWh) — MECD 11",
-                        min_value=0.001,
-                        value=0.50,
-                        step=0.001,
-                        format="%.4f",
-                        key="mecd_ef_el",
-                    )
-                with pe3:
-                    tdl = st.number_input(
-                        "T&D losses TDL (fraction) — MECD 12",
-                        min_value=0.0,
-                        max_value=0.5,
-                        value=0.08,
-                        step=0.001,
-                        format="%.4f",
-                        key="mecd_tdl",
-                        help="T&D losses are always required for grid-connected project devices.",
-                    )
+                eg_mwh = None
+                ef_el = None
+                tdl = None
                 p_kg = None
                 ncv_p = None
                 ef_p = None
+                st.info(
+                    "Electric project device: EG (MWh/device/yr), EF_el, T&D losses, and n_persons "
+                    "are measurement inputs — enter them in the Parameters tab after project creation."
+                )
             else:
+                st.markdown("---")
+                st.markdown("**Project fuel parameters**")
+                st.caption(
+                    "Enter default values for the project fuel. "
+                    "These can be refined in the Parameters tab after project creation."
+                )
                 fp1, fp2, fp3 = st.columns(3)
                 with fp1:
                     p_kg = st.number_input(
@@ -3616,7 +3636,7 @@ def _render_new_project_wizard(existing_projects):
 
         else:
             st.markdown("---")
-            if activity == "Other (manual methodology)":
+            if activity_category == "Other (manual methodology)":
                 new_methodology_s3 = _methodology_selector("wizard_s3", standard=saved_standard)
             else:
                 new_methodology_s3 = _methodology_selector("wizard_s3", standard=saved_standard)

@@ -64,11 +64,12 @@ def geocode_location(query: str, country: str = "") -> dict | None:
 
     Returns
     -------
-    dict with keys: latitude, longitude, display_name
-    or None if the request fails or returns no results.
+    dict with keys: latitude, longitude, display_name, and optionally geojson
+    (a GeoJSON geometry dict when Nominatim returns a boundary polygon).
+    Returns None if the request fails or returns no results.
 
     The caller is responsible for showing an appropriate message on None.
-    Timeout is 5 seconds — never blocks the UI.
+    Timeout is 8 seconds — never blocks the UI.
     """
     try:
         import requests
@@ -76,22 +77,29 @@ def geocode_location(query: str, country: str = "") -> dict | None:
             "q": f"{query}, {country}" if country else query,
             "format": "json",
             "limit": 1,
+            "polygon_geojson": 1,
         }
         headers = {"User-Agent": "CarbonGPT/1.0 (carbon project management platform)"}
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",
             params=params,
             headers=headers,
-            timeout=5,
+            timeout=8,
         )
         results = resp.json()
         if results:
             r = results[0]
-            return {
+            result = {
                 "latitude": float(r["lat"]),
                 "longitude": float(r["lon"]),
                 "display_name": r.get("display_name", ""),
             }
+            geojson = r.get("geojson")
+            if geojson and geojson.get("type") in (
+                "Polygon", "MultiPolygon", "GeometryCollection"
+            ):
+                result["geojson"] = geojson
+            return result
         return None
     except Exception:
         return None
