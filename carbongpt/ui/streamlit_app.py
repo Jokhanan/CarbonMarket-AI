@@ -2501,7 +2501,7 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
     country = _render_country_selector(key_prefix, project.get("country", "") or "")
     fnrb = get_fnrb_for_country(country)
     if fnrb is not None:
-        st.caption(f"TOOL33 default fNRB for {country}: {fnrb:.0%}")
+        st.caption(f"CDM TOOL33 v3 default fNRB for {country}: {fnrb:.0%}")
 
     region = st.text_input(
         "Region / Province",
@@ -6652,8 +6652,8 @@ def _render_tool33_defaults(project_id, meth_parsed, settings, meth_inputs, coun
     project_fuel = settings.get("project_fuel", "")
 
     with st.container(border=True):
-        st.markdown("#### Reference Default Values (CDM TOOL33 / IPCC)")
-        st.caption("Official default values for your methodology. These are auto-populated from CDM TOOL33 and IPCC guidelines.")
+        st.markdown("#### Reference Default Values (CDM TOOL33 v3 / IPCC)")
+        st.caption("Official default values for your methodology. These are auto-populated from CDM TOOL33 v3 and IPCC guidelines.")
 
         if country:
             fnrb_data = get_fnrb_for_country(country)

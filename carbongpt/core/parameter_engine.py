@@ -48,9 +48,9 @@ def get_fuel_display_label(canonical_value):
 
 PARAMETER_DEFINITIONS = {
     "VM0050": [
-        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": [],
+        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
          "aliases": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y", "fNRB,i,y"],
-         "extraction_hint": "Only extract the fraction of non-renewable biomass for the project region.",
+         "extraction_hint": "Only extract the fraction of non-renewable biomass for the project region. Default values sourced from CDM TOOL33 v3 Table 3 (national) or Table 2 (regional). Project-specific calculation uses CDM TOOL30.",
          "noise_terms": []},
         {"param_key": "NCV_baseline", "param_name": "Net calorific value (baseline fuel)", "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0, "is_ex_ante": True, "depends_on": [],
          "aliases": ["NCV_b", "net calorific value baseline", "NCV of baseline fuel", "calorific value of wood", "calorific value of charcoal"],
@@ -94,7 +94,7 @@ PARAMETER_DEFINITIONS = {
          "aliases": ["adoption rate", "utilization rate", "active use rate", "proportion of devices in use", "usage survey rate", "n_i,y / N_i,y"],
          "noise_terms": []},
         {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
-        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": [],
+        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
          "aliases": ["conversion factor", "charcoal conversion factor", "wood to charcoal ratio"],
          "noise_terms": []},
         {"param_key": "baseline_efficiency", "param_name": "Baseline device thermal efficiency", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.05, "max_value": 0.50, "is_ex_ante": True, "depends_on": [],
@@ -116,9 +116,9 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "TPDDTEC": [
-        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": [],
+        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
          "aliases": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y", "fNRB,i,y"],
-         "extraction_hint": "Only extract the fraction of non-renewable biomass for the project region.",
+         "extraction_hint": "Only extract the fraction of non-renewable biomass for the project region. Default values sourced from CDM TOOL33 v3 Table 3 (national) or Table 2 (regional). Project-specific calculation uses CDM TOOL30.",
          "noise_terms": []},
         {"param_key": "NCV_baseline", "param_name": "Net calorific value (baseline fuel)", "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0, "is_ex_ante": True, "depends_on": [],
          "aliases": ["NCV_b", "net calorific value baseline", "NCV of baseline fuel"],
@@ -162,7 +162,7 @@ PARAMETER_DEFINITIONS = {
          "aliases": ["adoption rate", "utilization rate", "active use rate", "proportion of devices in use", "usage survey rate", "n_i,y / N_i,y"],
          "noise_terms": []},
         {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
-        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "TOOL33", "depends_on": [],
+        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
          "aliases": ["conversion factor", "charcoal conversion factor", "wood to charcoal ratio"],
          "noise_terms": []},
         {"param_key": "household_size", "param_name": "Average household size", "category": "activity_data", "unit": "persons/household", "data_type": "number", "min_value": 1, "max_value": 20, "is_ex_ante": True, "depends_on": [],
@@ -206,9 +206,9 @@ PARAMETER_DEFINITIONS = {
          "aliases": ["EF_b,useful", "EF_b,input", "baseline emission factor MECD"],
          "extraction_hint": "Only extract the ex-ante baseline emission factor expressed per TJ of useful or input cooking energy."},
         {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass (MECD 13)", "category": "baseline",
-         "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "TOOL30", "depends_on": [],
+         "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
          "aliases": ["fNRB_i,y", "non-renewable biomass fraction", "fraction non-renewable biomass"],
-         "extraction_hint": "Extract the fNRB fraction for the project region from TOOL30 or TOOL33."},
+         "extraction_hint": "Extract the fNRB fraction for the project region. Default values sourced from CDM TOOL33 v3 Table 3 (national) or Table 2 (regional). Project-specific calculation uses CDM TOOL30."},
         {"param_key": "eta_b", "param_name": "Baseline device efficiency (MECD 5)", "category": "baseline",
          "unit": "fraction", "data_type": "number", "min_value": 0.01, "max_value": 1.0, "is_ex_ante": True, "depends_on": [],
          "aliases": ["eta_b,i,j", "baseline efficiency", "baseline thermal efficiency"],
@@ -378,7 +378,7 @@ def initialize_project_parameters(project_id):
                 if tool33_val is not None:
                     value = tool33_val
                     source_type = "user_override"
-                    source_reference = "Seeded from TOOL33 setup values"
+                    source_reference = "Seeded from CDM TOOL33 v3 setup values"
                     param_status = "confirmed"
                 else:
                     value, source_type, source_reference = _resolve_parameter_value(
@@ -453,7 +453,7 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         if fnrb and isinstance(fnrb, dict):
             value = fnrb.get("value")
             source_type = "default"
-            source_reference = fnrb.get("source", "TOOL33")
+            source_reference = fnrb.get("source", "CDM TOOL33 v3")
     elif param_key == "NCV_baseline":
         ncv = param_values.get("baseline_NCV")
         if ncv and isinstance(ncv, dict):
@@ -493,21 +493,21 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         cf = param_values.get("CF")
         if cf and isinstance(cf, dict):
             value = cf.get("value")
-            source_reference = cf.get("source", "TOOL33")
+            source_reference = cf.get("source", "CDM TOOL33 v3")
     elif param_key == "baseline_fuel_consumption":
         if is_charcoal:
             value = 0.1 * 5.0
-            source_reference = "TOOL33 default: 0.1 t charcoal/person/yr * 5 persons/hh"
+            source_reference = "CDM TOOL33 v3 §5.4 default: 0.1 t charcoal/person/yr * 5 persons/hh"
         else:
             value = 0.4 * 5.0
-            source_reference = "TOOL33 default: 0.4 t wood/person/yr * 5 persons/hh"
+            source_reference = "CDM TOOL33 v3 §5.4 default: 0.4 t wood/person/yr * 5 persons/hh"
     elif param_key == "SFC_baseline":
         if is_charcoal:
             value = 100.0
-            source_reference = "TOOL33 derived: 0.1 t/person/yr = 100 kg/person/yr"
+            source_reference = "CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr = 100 kg/person/yr"
         else:
             value = 400.0
-            source_reference = "TOOL33 default: 0.4 t/person/yr = 400 kg/person/yr"
+            source_reference = "CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr = 400 kg/person/yr"
     elif param_key == "usage_rate":
         value = 0.90
         source_type = "default"
@@ -554,7 +554,7 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
     elif param_key == "baseline_efficiency":
         value = 0.15
         source_type = "default"
-        source_reference = "TOOL33 v03.0 para 19(a) - three-stone fire"
+        source_reference = "CDM TOOL33 v3 §5.6 para 19(a) – three-stone fire default efficiency"
     elif param_key == "project_efficiency":
         value = None
         source_type = "default"
