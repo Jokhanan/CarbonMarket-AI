@@ -3038,6 +3038,21 @@ def _render_new_project_wizard(existing_projects):
             TPDDTEC_PROJECT_FUEL_OPTIONS,
             TPDDTEC_SCALE_OPTIONS,
             TPDDTEC_SCALE_DESCRIPTIONS,
+            MECD_DEVICE_OPTIONS,
+            MECD_DEVICE_DISPLAY,
+            MECD_DEVICE_FUEL_TYPE,
+            MECD_DEVICE_CASE,
+            MECD_DEVICE_ER_ELIGIBILITY,
+            MECD_BASELINE_FUEL_OPTIONS,
+            MECD_BASELINE_FUEL_DISPLAY,
+            MECD_REGION_OPTIONS,
+            MECD_REGION_DISPLAY,
+        )
+        from carbongpt.core.mecd_simulator import (
+            MECD_BASELINE_FUEL_LIBRARY,
+            MECD_SC_DEFAULTS,
+            MECD_SC_P_EPC_DEFAULTS,
+            compute_mecd_baseline_ef,
         )
 
         saved_name = st.session_state.get("wizard_name_saved", "")
@@ -3202,6 +3217,393 @@ def _render_new_project_wizard(existing_projects):
                     result = _fetch("/projects", method="POST", json=payload)
                     if result:
                         st.success(f"Project created with {meth_info['methodology_display']} — {method_result['method_label']}!")
+                        st.session_state["show_new_project"] = False
+                        st.session_state.pop(step_key, None)
+                        for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
+                                  "wizard_desc_saved", "wizard_parent_saved",
+                                  "wizard_mon_start_saved", "wizard_mon_end_saved"]:
+                            st.session_state.pop(k, None)
+                        time.sleep(0.5)
+                        st.session_state.selected_project_id = result["id"]
+                        st.rerun()
+
+        elif activity == "Metered & Measured cooking device (MECD)":
+            st.markdown("---")
+            st.markdown("**Device type**")
+            device_key = st.radio(
+                "Project cooking device",
+                MECD_DEVICE_OPTIONS,
+                key="mecd_device_type",
+                format_func=lambda x: MECD_DEVICE_DISPLAY.get(x, x),
+            )
+            mecd_case = MECD_DEVICE_CASE[device_key]
+            fuel_type = MECD_DEVICE_FUEL_TYPE[device_key]
+            er_mode = MECD_DEVICE_ER_ELIGIBILITY[device_key]
+
+            if mecd_case == "1":
+                st.info(
+                    "Case 1: thermal efficiency determinable by Water Boiling Test (WBT). "
+                    "Baseline emission factor is expressed per unit of useful cooking energy (Eq. 1 / Eq. 3)."
+                )
+            else:
+                st.info(
+                    "Case 2: WBT cannot determine thermal efficiency for this device type (e.g. EPC). "
+                    "An SC_b/SC_p energy equivalence ratio is used instead (Eq. 2 / Eq. 4)."
+                )
+
+            if er_mode == "efficiency_only":
+                st.warning(
+                    "Fossil fuel project device — under MECD v1.2 §2.2.1(g), only efficiency improvement "
+                    "ER is eligible. Fuel-switch ER cannot be claimed for LPG project devices."
+                )
+
+            st.markdown("---")
+            st.markdown("**Baseline fuel mix**")
+            st.caption("Add all fuels currently used by target households. Shares must sum to 100%.")
+
+            n_fuels = st.selectbox(
+                "Number of baseline fuel types",
+                [1, 2, 3, 4],
+                key="mecd_n_fuels",
+            )
+
+            baseline_fuels_data = []
+            has_woody_baseline = False
+            total_share = 0.0
+
+            for i in range(n_fuels):
+                st.markdown(f"**Baseline fuel {i + 1}**")
+                rc1, rc2, rc3 = st.columns([2, 1, 1])
+                with rc1:
+                    fk = st.selectbox(
+                        "Fuel type",
+                        MECD_BASELINE_FUEL_OPTIONS,
+                        key=f"mecd_bl_fk_{i}",
+                        format_func=lambda x: MECD_BASELINE_FUEL_DISPLAY.get(x, x),
+                    )
+                lib_row = MECD_BASELINE_FUEL_LIBRARY.get(fk, MECD_BASELINE_FUEL_LIBRARY["wood_three_stone"])
+                with rc2:
+                    default_share = round(100.0 / n_fuels, 1)
+                    share_pct = st.number_input(
+                        "Share (%)",
+                        min_value=0.1,
+                        max_value=100.0,
+                        value=default_share,
+                        step=0.1,
+                        key=f"mecd_bl_share_{i}",
+                    )
+                with rc3:
+                    eta_default = lib_row["eta_b_default"] or 0.20
+                    eta_b = st.number_input(
+                        "Efficiency (0-1)",
+                        min_value=0.01,
+                        max_value=1.0,
+                        value=float(eta_default),
+                        step=0.01,
+                        key=f"mecd_bl_eta_{i}",
+                    )
+
+                fnrb_val = 0.0
+                if lib_row["uses_fnrb"]:
+                    has_woody_baseline = True
+                    fnrb_val = st.slider(
+                        f"fNRB – fraction non-renewable biomass (fuel {i + 1})",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=0.50,
+                        step=0.01,
+                        key=f"mecd_bl_fnrb_{i}",
+                    )
+
+                total_share += share_pct
+                baseline_fuels_data.append({
+                    "fuel_key": fk,
+                    "share_pct": share_pct,
+                    "eta_b": eta_b,
+                    "fnrb": fnrb_val,
+                })
+
+            if abs(total_share - 100.0) > 0.5:
+                st.warning(f"Baseline fuel shares sum to {total_share:.1f}% — must equal 100%.")
+            else:
+                st.success(f"Baseline shares: {total_share:.1f}% — OK")
+
+            st.markdown("---")
+            st.markdown("**Region**")
+            st.caption("Used to select SC_b/SC_p defaults (Case 2) and for contextual reference data.")
+            region = st.selectbox(
+                "Project region",
+                MECD_REGION_OPTIONS,
+                key="mecd_region",
+                format_func=lambda x: MECD_REGION_DISPLAY.get(x, x),
+            )
+
+            if has_woody_baseline:
+                st.markdown("---")
+                st.markdown("**fNRB approach (MECD 13)**")
+                st.caption(
+                    "fNRB enters the baseline emission factor. "
+                    "Choose whether to fix it ex-ante for the full crediting period or update it biennially."
+                )
+                fnrb_approach_choice = st.radio(
+                    "fNRB determination method",
+                    [
+                        "Fixed ex-ante for the full crediting period",
+                        "Updated biennially at each monitoring and verification",
+                    ],
+                    key="mecd_fnrb_approach",
+                )
+                fnrb_approach = "fixed" if "Fixed" in fnrb_approach_choice else "biennial"
+            else:
+                fnrb_approach = "not_applicable"
+
+            st.markdown("---")
+            st.markdown("**Key project parameters**")
+            is_electric = fuel_type == "electric"
+
+            pp1, pp2 = st.columns(2)
+            with pp1:
+                n_persons = st.number_input(
+                    "Total persons covered by project devices",
+                    min_value=1,
+                    value=5000,
+                    step=100,
+                    key="mecd_n_persons",
+                    help="Used to apply the 1 kWh/capita/day energy cap in baseline emission calculations (MECD 10).",
+                )
+            with pp2:
+                if mecd_case == "1":
+                    eta_p_default = 0.85 if is_electric else 0.55
+                    eta_p = st.number_input(
+                        "Project device efficiency (fraction) — MECD 9",
+                        min_value=0.01,
+                        max_value=1.0,
+                        value=float(eta_p_default),
+                        step=0.01,
+                        key="mecd_eta_p",
+                    )
+                else:
+                    eta_p = None
+                    st.caption("Case 2: efficiency not determined by WBT — SC_b/SC_p ratio used instead.")
+
+            if is_electric:
+                pe1, pe2, pe3 = st.columns(3)
+                with pe1:
+                    eg_mwh = st.number_input(
+                        "Annual electricity per device (MWh/yr) — MECD 10",
+                        min_value=0.01,
+                        value=1.2,
+                        step=0.01,
+                        key="mecd_eg_mwh_annual",
+                    )
+                with pe2:
+                    ef_el = st.number_input(
+                        "Grid emission factor EF_el (tCO2e/MWh) — MECD 11",
+                        min_value=0.001,
+                        value=0.50,
+                        step=0.001,
+                        format="%.4f",
+                        key="mecd_ef_el",
+                    )
+                with pe3:
+                    tdl = st.number_input(
+                        "T&D losses TDL (fraction) — MECD 12",
+                        min_value=0.0,
+                        max_value=0.5,
+                        value=0.08,
+                        step=0.001,
+                        format="%.4f",
+                        key="mecd_tdl",
+                        help="T&D losses are always required for grid-connected project devices.",
+                    )
+                p_kg = None
+                ncv_p = None
+                ef_p = None
+            else:
+                fp1, fp2, fp3 = st.columns(3)
+                with fp1:
+                    p_kg = st.number_input(
+                        "Annual fuel per device (kg/yr) — MECD 14",
+                        min_value=0.1,
+                        value=120.0,
+                        step=1.0,
+                        key="mecd_p_kg_annual",
+                    )
+                with fp2:
+                    ncv_p = st.number_input(
+                        "Project fuel NCV (TJ/tonne)",
+                        min_value=0.001,
+                        value=0.04713,
+                        step=0.0001,
+                        format="%.5f",
+                        key="mecd_ncv_p",
+                    )
+                with fp3:
+                    ef_p = st.number_input(
+                        "Project fuel emission factor (tCO2e/TJ)",
+                        min_value=0.0,
+                        value=63.1,
+                        step=0.1,
+                        key="mecd_ef_p",
+                    )
+                eg_mwh = None
+                ef_el = None
+                tdl = None
+
+            if mecd_case == "2":
+                st.markdown("---")
+                st.markdown("**Case 2: Specific energy consumption parameters (MECD 7 / 8)**")
+                st.caption(
+                    "SC_b and SC_p in MJ/person/event. The ratio SC_b/SC_p is dimensionless — "
+                    "it acts as an energy equivalence factor in Eq. 4. "
+                    "Always store both in the same unit."
+                )
+                dominant_fk = max(baseline_fuels_data, key=lambda f: f["share_pct"])["fuel_key"] if baseline_fuels_data else "charcoal"
+                dominant_family = MECD_BASELINE_FUEL_LIBRARY.get(dominant_fk, {}).get("fuel_family", "charcoal")
+                sc_b_raw = MECD_SC_DEFAULTS.get(region, {}).get(dominant_family)
+                sc_b_default = float(sc_b_raw) if sc_b_raw is not None else 3.92
+                sc_p_default = float(MECD_SC_P_EPC_DEFAULTS.get(region, 0.258))
+                sc_col1, sc_col2 = st.columns(2)
+                with sc_col1:
+                    sc_b_mj = st.number_input(
+                        "SC_b – baseline specific consumption (MJ/person/event)",
+                        min_value=0.01,
+                        value=sc_b_default,
+                        step=0.01,
+                        format="%.4f",
+                        key="mecd_sc_b",
+                    )
+                with sc_col2:
+                    sc_p_mj = st.number_input(
+                        "SC_p – project device specific consumption (MJ/person/event)",
+                        min_value=0.001,
+                        value=sc_p_default,
+                        step=0.001,
+                        format="%.4f",
+                        key="mecd_sc_p",
+                    )
+                if sc_p_mj > 0:
+                    st.caption(f"SC_b/SC_p ratio: {sc_b_mj / sc_p_mj:.4f}")
+            else:
+                sc_b_mj = None
+                sc_p_mj = None
+
+            st.markdown("---")
+            st.markdown("**Leakage**")
+            leakage_labels_m = [
+                "Option 1 – Standard 5% deduction (recommended, no additional inputs needed)",
+                "Option 2 – Project-specific calculation (RECH V4.0 §3.11, requires additional field measurements)",
+            ]
+            leakage_choice_m = st.radio(
+                "Leakage approach",
+                leakage_labels_m,
+                key="mecd_leakage_option",
+            )
+            leakage_option = "option_1" if "Option 1" in leakage_choice_m else "option_2"
+
+            st.markdown("---")
+
+            shares_ok = abs(total_share - 100.0) <= 0.5
+            ef_preview = None
+            ef_label_preview = ""
+            if shares_ok and baseline_fuels_data:
+                try:
+                    bf = compute_mecd_baseline_ef(mecd_case, baseline_fuels_data)
+                    ef_preview = bf["ef_b"]
+                    ef_label_preview = bf["label"]
+                except Exception:
+                    ef_preview = None
+
+            with st.container(border=True):
+                st.markdown("**Project configuration summary**")
+                s1, s2, s3 = st.columns(3)
+                with s1:
+                    st.markdown("Methodology: **MECD v1.2**")
+                    st.caption("Gold Standard – Metered & Measured Energy Cooking Devices")
+                with s2:
+                    st.markdown(f"Device: **{MECD_DEVICE_DISPLAY.get(device_key, device_key)}**")
+                    er_disp = "Efficiency improvement only" if er_mode == "efficiency_only" else "Fuel-switch + efficiency ER"
+                    st.caption(f"Case {mecd_case} | {fuel_type.upper()} | {er_disp}")
+                with s3:
+                    if ef_preview is not None:
+                        st.markdown(f"{ef_label_preview} (ex-ante): **{ef_preview:.2f} tCO2e/TJ**")
+                    else:
+                        st.caption("Baseline EF: fix fuel shares to preview.")
+                    leakage_disp = "5% standard deduction" if leakage_option == "option_1" else "Project-specific (RECH §3.11)"
+                    st.caption(f"Leakage: {leakage_disp}")
+
+            bk1_m, cr2_m = st.columns([1, 3])
+            with bk1_m:
+                if st.button("Back", key="mecd_wizard_back"):
+                    st.session_state[step_key] = 2
+                    st.rerun()
+            with cr2_m:
+                if st.button(
+                    "Create Project",
+                    key="mecd_wizard_create",
+                    type="primary",
+                    disabled=not shares_ok,
+                ):
+                    final_country = saved_country
+                    if saved_parent:
+                        parent_proj = next((p for p in existing_projects if p["id"] == saved_parent), None)
+                        if parent_proj and not final_country:
+                            final_country = parent_proj.get("country")
+
+                    meth_settings = {
+                        "mecd_case": mecd_case,
+                        "project_fuel_type": fuel_type,
+                        "device_type": device_key,
+                        "device_label": MECD_DEVICE_DISPLAY.get(device_key, device_key),
+                        "er_eligibility": er_mode,
+                        "baseline_fuels": baseline_fuels_data,
+                        "region": region,
+                        "fnrb_approach": fnrb_approach,
+                        "leakage_option": leakage_option,
+                        "n_persons": n_persons,
+                    }
+                    if mecd_case == "1" and eta_p is not None:
+                        meth_settings["eta_p"] = eta_p
+                    if is_electric:
+                        meth_settings["eg_p_mwh_annual"] = eg_mwh
+                        meth_settings["ef_el"] = ef_el
+                        meth_settings["tdl"] = tdl
+                    else:
+                        meth_settings["p_p_kg_annual"] = p_kg
+                        meth_settings["ncv_p"] = ncv_p
+                        meth_settings["ef_p"] = ef_p
+                    if mecd_case == "2":
+                        meth_settings["sc_b_mj"] = sc_b_mj
+                        meth_settings["sc_p_mj"] = sc_p_mj
+                    if ef_preview is not None:
+                        meth_settings["baseline_ef_exante"] = round(ef_preview, 4)
+
+                    saved_loc = st.session_state.get("wizard_loc_saved") or {}
+                    payload = {
+                        "name": saved_name,
+                        "standard": saved_standard,
+                        "methodology": "GS-MECD",
+                        "country": final_country or None,
+                        "description": saved_desc or None,
+                        "project_type": selected_type,
+                        "parent_project_id": saved_parent,
+                        "methodology_settings": meth_settings,
+                        "location_name": saved_loc.get("location_name"),
+                        "region": saved_loc.get("region"),
+                        "district": saved_loc.get("district"),
+                        "latitude": saved_loc.get("latitude"),
+                        "longitude": saved_loc.get("longitude"),
+                    }
+                    mon_start = st.session_state.get("wizard_mon_start_saved")
+                    mon_end = st.session_state.get("wizard_mon_end_saved")
+                    if mon_start:
+                        payload["monitoring_period_start"] = mon_start
+                    if mon_end:
+                        payload["monitoring_period_end"] = mon_end
+
+                    result = _fetch("/projects", method="POST", json=payload)
+                    if result:
+                        st.success("Project created with MECD v1.2 (Metered & Measured Energy Cooking Devices)!")
                         st.session_state["show_new_project"] = False
                         st.session_state.pop(step_key, None)
                         for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
