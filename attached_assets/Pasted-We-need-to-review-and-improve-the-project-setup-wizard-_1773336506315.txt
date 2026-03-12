@@ -1,0 +1,211 @@
+We need to review and improve the project setup wizard.
+
+Do NOT code immediately.
+First analyze the UX, methodology logic, and data sources.
+
+Below are several issues I observed while testing the interface.
+
+Your task is:
+1. Evaluate whether the current design is correct
+2. Propose improvements if needed
+3. Confirm methodology sources for specific parameters
+4. Suggest the correct implementation approach
+
+Please respond point-by-point.
+
+--------------------------------------------------
+
+1. PROJECT TYPE LOGIC (Cookstoves vs MECD)
+
+Currently the wizard asks:
+
+Activity type:
+- Cookstoves / Thermal energy
+- Metered & Measured Cooking Device (MECD)
+
+This is confusing.
+
+From a user perspective, a developer usually knows:
+- baseline fuel
+- project fuel
+
+They often do NOT know the methodology name yet.
+
+A better workflow may be:
+
+Step 1
+Select project category:
+- Cooking devices
+- Renewable electricity
+- Other
+
+Step 2 (if cooking devices selected)
+Select baseline fuel:
+- wood
+- charcoal
+
+Step 3
+Select project fuel:
+- wood
+- charcoal
+- LPG
+- electricity
+- biogas
+- bioethanol
+- other
+
+Then the system automatically determines the methodology:
+
+Example:
+
+baseline = wood
+project = wood
+→ TPDDTEC
+
+baseline = wood
+project = LPG
+→ Metered & Measured Cooking Devices
+
+baseline = wood
+project = electricity
+→ Metered & Measured Cooking Devices
+
+If standard = Verra
+→ VM0050
+
+Question:
+Is this automatic methodology detection approach better than the current two-branch approach?
+
+If yes, propose the revised decision tree.
+
+--------------------------------------------------
+
+2. fNRB SOURCE
+
+The interface currently shows:
+
+"TOOL33 default fNRB"
+
+I want you to verify the actual methodological source.
+
+Questions:
+
+Is fNRB really defined in TOOL33?
+
+Or does TOOL33 only provide default fuel consumption values while fNRB comes from:
+
+CDM TOOL30
+"Calculation of the fraction of non-renewable biomass"
+
+Please verify carefully.
+
+If TOOL30 is the correct source,
+we must correct the label in the interface.
+
+--------------------------------------------------
+
+3. GRID EMISSION FACTOR
+
+For electric cooking devices we will need a grid emission factor.
+
+Please verify the correct methodological source.
+
+Possible sources include:
+
+CDM TOOL07
+"Tool to calculate the emission factor for an electricity system"
+
+or
+
+official national grid emission factors
+or
+
+IEA grid intensity datasets.
+
+Question:
+Which source is normally used in Gold Standard cooking device projects?
+
+What should the system propose by default?
+
+--------------------------------------------------
+
+4. TRANSMISSION AND DISTRIBUTION LOSSES
+
+The wizard currently expects "Transmission and Distribution losses".
+
+Please confirm:
+
+Where should these values come from?
+
+Possible sources:
+
+- national electricity statistics
+- CDM tool datasets
+- default factors
+- IEA datasets
+
+If there is a commonly accepted default approach,
+please specify.
+
+--------------------------------------------------
+
+5. MAP DISPLAY
+
+The current map only displays a single point.
+
+Example:
+User enters Bobo-Dioulasso → the system places a marker.
+
+Question:
+
+Is it possible to show a boundary polygon instead?
+
+Examples:
+
+- city boundary
+- administrative region boundary
+- project area polygon
+
+Possible approaches:
+
+- GeoJSON administrative boundaries
+- OpenStreetMap boundary API
+- user uploaded shapefile
+
+Please evaluate what is technically feasible in Streamlit + Leaflet.
+
+Also confirm:
+
+Can we allow users to upload a shapefile or GeoJSON for project boundaries?
+
+--------------------------------------------------
+
+6. GENERAL UX REVIEW
+
+Please evaluate the following parts of the wizard:
+
+- activity type selection
+- methodology detection logic
+- fuel selection flow
+- map interface
+- location inputs
+
+Identify:
+
+- unnecessary complexity
+- duplicated choices
+- confusing terminology
+- places where methodology logic should be automatic
+
+--------------------------------------------------
+
+RESPONSE FORMAT
+
+1. UX improvements recommended
+2. Correct methodology sources for:
+   - fNRB
+   - grid emission factor
+   - T&D losses
+3. Map improvements feasibility
+4. Proposed improved wizard flow
+5. Whether code changes are required and where
