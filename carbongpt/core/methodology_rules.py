@@ -18,6 +18,12 @@ METHODOLOGY_METADATA = {
         "scale_options": ["Micro-scale", "Small-scale", "Large-scale"],
         "fuel_field_mode": "methodology_choices",
     },
+    "GS-MECD": {
+        "activity_type": "Energy efficiency / Fuel switch",
+        "sectoral_scope": "Energy demand",
+        "scale_options": [],
+        "fuel_field_mode": "methodology_choices",
+    },
     "VM0050": {
         "activity_type": "Energy efficiency",
         "sectoral_scope": "Energy demand",
@@ -76,6 +82,76 @@ TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5 = 44.83
 TPDDTEC_EF_CO2_CHARCOAL_CAP = 197.15
 TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5 = 92.29
 TPDDTEC_NCV_CHARCOAL_TJ_PER_TON = 0.0295
+
+
+# ── MECD-specific constants ──────────────────────────────────────────────────
+
+MECD_DEVICE_OPTIONS = [
+    "electric_cookstove",
+    "electric_pressure_cooker",
+    "lpg_cookstove",
+    "biogas_cookstove",
+    "bioethanol_cookstove",
+]
+
+MECD_DEVICE_DISPLAY = {
+    "electric_cookstove": "Electric cookstove (induction / DC / AC heating)",
+    "electric_pressure_cooker": "Electric pressure cooker (EPC)",
+    "lpg_cookstove": "LPG cookstove",
+    "biogas_cookstove": "Biogas cookstove",
+    "bioethanol_cookstove": "Bio-ethanol cookstove",
+}
+
+# Fuel type (electric vs fossil/bio-fuel) derived from device
+MECD_DEVICE_FUEL_TYPE = {
+    "electric_cookstove": "electric",
+    "electric_pressure_cooker": "electric",
+    "lpg_cookstove": "lpg",
+    "biogas_cookstove": "biogas",
+    "bioethanol_cookstove": "bioethanol",
+}
+
+# Case 1 = WBT applicable; Case 2 = WBT not applicable (EPC, ratio logic)
+MECD_DEVICE_CASE = {
+    "electric_cookstove": "1",
+    "electric_pressure_cooker": "2",
+    "lpg_cookstove": "1",
+    "biogas_cookstove": "1",
+    "bioethanol_cookstove": "1",
+}
+
+# ER eligibility: "both" = fuel-switch + efficiency; "efficiency_only" = fossil fuel rule §2.2.1(g)
+MECD_DEVICE_ER_ELIGIBILITY = {
+    "electric_cookstove": "both",
+    "electric_pressure_cooker": "both",
+    "lpg_cookstove": "efficiency_only",
+    "biogas_cookstove": "both",
+    "bioethanol_cookstove": "both",
+}
+
+MECD_BASELINE_FUEL_OPTIONS = [
+    "wood_three_stone",
+    "wood_other_biomass",
+    "charcoal",
+    "lpg",
+    "kerosene",
+    "biogas",
+]
+
+MECD_BASELINE_FUEL_DISPLAY = {
+    "wood_three_stone": "Wood – three-stone fire",
+    "wood_other_biomass": "Wood – other conventional biomass stove",
+    "charcoal": "Charcoal – conventional cookstove",
+    "lpg": "LPG – conventional stove",
+    "kerosene": "Kerosene – conventional stove",
+    "biogas": "Biogas – conventional use",
+}
+
+MECD_REGION_OPTIONS = ["africa", "asia"]
+MECD_REGION_DISPLAY = {
+    "africa": "Sub-Saharan Africa",
+    "asia": "Asia",
+}
 
 
 def get_methodology_metadata(code):

@@ -3051,12 +3051,17 @@ def _render_new_project_wizard(existing_projects):
         st.caption(f"Project: **{saved_name}** | Standard: **{std_display}**" + (f" | Country: **{saved_country}**" if saved_country else ""))
 
         st.markdown("**Step 3: Activity type**")
-        activity_options = ["Cookstoves / Thermal energy", "Renewable electricity", "Other (manual methodology)"]
+        activity_options = [
+            "Cookstoves / Thermal energy",
+            "Metered & Measured cooking device (MECD)",
+            "Renewable electricity",
+            "Other (manual methodology)",
+        ]
         activity = st.radio(
             "What kind of activity does this project cover?",
             activity_options,
             key="wizard_activity_type",
-            horizontal=True,
+            horizontal=False,
         )
 
         if activity == "Cookstoves / Thermal energy":
