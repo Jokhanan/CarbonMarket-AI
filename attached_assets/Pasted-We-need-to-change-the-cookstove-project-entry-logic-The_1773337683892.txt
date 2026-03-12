@@ -1,0 +1,147 @@
+We need to change the cookstove project entry logic.
+
+The current wizard structure is still not correct because it asks the user to choose between:
+- Cookstoves / Thermal energy
+- Metered & Measured Cooking Devices (MECD)
+
+This is not the right user logic.
+
+A project developer usually does NOT start by thinking in methodology names.
+They start by thinking in:
+- baseline fuel
+- project fuel
+- technology type
+- standard
+
+So we want to move to a FUEL-FIRST methodology detection flow.
+
+--------------------------------------------------
+1. NEW COOKSTOVE ENTRY LOGIC
+--------------------------------------------------
+
+For cookstove projects, the flow should be:
+
+Step 1:
+Select standard
+- Gold Standard
+- Verra
+
+Step 2:
+Select project family
+- Cooking devices
+- Renewable electricity
+- Other
+
+Step 3:
+If Cooking devices is selected, ask:
+- Baseline fuel
+- Project fuel
+
+Proposed baseline fuel options:
+- wood / firewood
+- charcoal
+- mixed biomass
+- other
+
+Proposed project fuel options:
+- wood / firewood
+- charcoal
+- LPG
+- electricity
+- biogas
+- bio-ethanol
+- renewable biomass briquettes
+- other
+
+Then the system should automatically derive the applicable methodology.
+
+Examples:
+
+Gold Standard:
+- baseline biomass + project biomass → TPDDTEC
+- baseline biomass + project LPG/electricity/biogas/bio-ethanol → MECD
+
+Verra:
+- cookstove projects → VM0050
+
+So the user should not be asked to choose "TPDDTEC" vs "MECD" directly.
+The system should determine that automatically from:
+- standard
+- baseline fuel
+- project fuel
+
+Please evaluate this logic and tell me whether you agree with it.
+If you disagree anywhere, explain precisely why.
+
+--------------------------------------------------
+2. DEFAULT-FIRST, OVERRIDE-ALLOWED, SOURCE-EXPLICIT
+--------------------------------------------------
+
+We also want to apply this product principle consistently:
+
+DEFAULT-FIRST
+If a methodology-approved or dataset-approved default exists, the system should propose it automatically.
+
+OVERRIDE-ALLOWED
+The user must still be able to replace that default with a project-specific value.
+
+SOURCE-EXPLICIT
+The UI must always show the source of the proposed value.
+
+This applies to:
+- fNRB
+- default fuel consumption values
+- grid emission factor
+- transmission and distribution losses
+- GPS coordinates / location defaults
+- any accepted methodology or dataset defaults
+
+Examples:
+- If TOOL33 provides a default fNRB for the country, propose it automatically
+- If a project-specific TOOL30 calculation exists, allow the user to override with that
+- If a recognized default source exists for grid EF or T&D losses, propose it automatically
+- If a geolocation lookup can provide coordinates or an administrative boundary, prefill it automatically
+
+The system should not force manual entry when a valid default exists.
+But it should also not lock the user into defaults.
+
+The correct UX pattern is:
+- proposed value
+- source label
+- override option
+
+--------------------------------------------------
+3. WHAT WE WANT YOU TO ANALYZE
+--------------------------------------------------
+
+Please review the wizard and parameter logic with these two principles together:
+
+A. fuel-first methodology detection
+B. default-first, override-allowed, source-explicit
+
+And tell me:
+
+1. Whether the current cookstove/MECD split should be removed
+2. What the improved wizard decision tree should be
+3. Which fields should be auto-derived from baseline fuel + project fuel
+4. Which fields should be default-first
+5. What source labels should be shown
+6. Which fields should still allow override
+7. Which files would need to change
+
+--------------------------------------------------
+4. RESPONSE FORMAT
+--------------------------------------------------
+
+Please answer in this exact structure:
+
+1. Do you agree with the fuel-first methodology detection logic?
+2. Corrected wizard decision tree
+3. Fields that should be auto-derived
+4. Fields that should be default-first
+5. Source labels that should be shown
+6. Fields that should allow override
+7. Files that would need to change
+
+Do NOT code yet.
+We want the design logic confirmed first.
