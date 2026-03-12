@@ -1,0 +1,240 @@
+We will now work only on the Gold Standard methodology:
+
+Metered & Measured Energy Cooking Devices v1.2
+
+Do NOT discuss TPDDTEC.
+Do NOT discuss VM0050.
+Do NOT redesign the whole app.
+Do NOT code yet.
+
+I want you to validate and react to the methodology logic below.
+
+Your task is:
+1. Read the methodology carefully
+2. Compare it against the logic below
+3. Tell me explicitly whether you agree or disagree with each part
+4. If you disagree anywhere, explain precisely why, based on the methodology text
+5. Only after that, propose how this logic should be implemented in software
+
+IMPORTANT:
+This is not a generic summary task.
+This is a methodology-validation and implementation-logic task.
+
+--------------------------------------------------
+PROPOSED METHODOLOGY LOGIC
+--------------------------------------------------
+
+A. APPLICABILITY
+
+This methodology is for Gold Standard cookstove projects where the project device energy/fuel consumption is directly measured or otherwise monitored through measurement.
+
+It applies to project devices such as:
+- electric cooking devices
+- EPC / pressure-based electric cooking devices
+- LPG cookstoves
+- biogas cookstoves
+- bio-ethanol cookstoves
+- other metered fuel cooking devices
+
+It is not a biomass-efficiency methodology like TPDDTEC.
+It is a metered / measured cooking methodology.
+
+The project must involve a technology switch.
+Fuel switch only is not enough.
+
+Please confirm whether this understanding is correct.
+
+--------------------------------------------------
+B. MAIN SOFTWARE DECISION TREE
+--------------------------------------------------
+
+The first major branching logic should not be "Method 1 / Method 2 / Method 3" as in TPDDTEC.
+
+Instead, the main branching logic should be:
+
+1. Standard = Gold Standard
+2. Methodology = Metered & Measured Energy Cooking Devices
+3. Is project cooking energy/fuel directly measured or otherwise monitored?
+   - if no → methodology not applicable
+   - if yes → continue
+
+4. What is the project device type?
+   - electricity-based cooking device
+   - electric pressure cooker / electric device with additional characteristics affecting cooking energy consumption
+   - LPG cooking device
+   - biogas cooking device
+   - bio-ethanol cooking device
+   - other metered fuel-based cooking device
+
+5. Determine the methodology case:
+   - Case 1 = normal metered/measured project device
+   - Case 2 = electric device with additional characteristics affecting cooking energy consumption (for example EPC)
+
+Please confirm whether this is the correct high-level branching logic.
+
+--------------------------------------------------
+C. CASE 1 VS CASE 2
+--------------------------------------------------
+
+Proposed understanding:
+
+CASE 1
+Applies when the project device does not require the special ratio logic.
+In this case the methodology calculates:
+- baseline emission factor per unit of useful energy
+- useful project energy delivered
+- baseline emissions from useful project energy
+- project emissions from measured fuel or electricity
+- leakage
+- emission reductions
+
+CASE 2
+Applies when the project electric device has additional characteristics affecting cooking energy consumption such that the normal useful-energy approach is not sufficient.
+In this case:
+- SC_b and SC_p become important
+- a baseline/project ratio logic is used
+- EPC is a key example
+
+Please confirm if this distinction is correct.
+
+--------------------------------------------------
+D. PARAMETER LOGIC
+--------------------------------------------------
+
+Proposed parameter categories:
+
+1. Always required for project setup:
+- project device type
+- project energy/fuel type
+- baseline device type(s)
+- baseline fuel type(s)
+- evidence that project energy/fuel is measured or monitored
+- country
+- user category / cooking context if relevant
+
+2. Baseline factor parameters:
+- baseline fuel quantities
+- baseline device efficiencies
+- baseline fuel shares / usage shares
+- baseline NCV
+- baseline CO2 emission factor
+- baseline non-CO2 emission factor
+- fNRB where woody biomass is relevant
+
+3. Project-side parameters:
+For electric devices:
+- project electricity consumed
+- project efficiency
+- grid emission factor
+- T&D losses if relevant
+
+For fuel-based devices:
+- project fuel consumed
+- project NCV
+- project efficiency
+- project emission factors
+
+4. Case 2-specific parameters:
+- SC_b
+- SC_p
+- weighted baseline SC where multiple baseline devices exist
+- ratio-based logic
+
+Please confirm whether this parameter structure is correct and identify anything missing or wrongly grouped.
+
+--------------------------------------------------
+E. FORMULA LOGIC
+--------------------------------------------------
+
+Proposed formula flow:
+
+Step 1:
+Calculate baseline emission factor
+- Case 1: baseline factor per useful energy
+- Case 2: baseline factor per input-energy style ratio logic
+
+Step 2:
+Calculate baseline emissions
+- Case 1: based on useful project energy × baseline useful-energy factor
+- Case 2: based on measured project energy × SC_b / SC_p × baseline factor
+
+Step 3:
+Calculate project emissions
+- electricity route if project device is electric
+- fuel route if project device is fuel-based
+
+Step 4:
+Calculate leakage
+
+Step 5:
+Calculate emission reductions:
+ER = BE - PE - LE
+
+Please confirm whether this formula structure is correct.
+
+--------------------------------------------------
+F. UNIT LOGIC
+--------------------------------------------------
+
+Proposed unit logic:
+
+- project electricity consumed should be handled in MWh
+- conversion to TJ should be explicit where required
+- grid EF should be handled in tCO2e/MWh
+- project fuel quantities may be mass or volume depending on the fuel
+- NCV must be compatible with the fuel quantity unit
+- efficiencies must be fractions
+- fNRB must be stored as fraction, not percentage
+- SC_b and SC_p need strict unit control because they drive the Case 2 ratio logic
+
+Please confirm whether this unit logic is correct and identify any critical unit pitfalls from the methodology.
+
+--------------------------------------------------
+G. SOFTWARE IMPLEMENTATION LOGIC
+--------------------------------------------------
+
+Proposed implementation sequence:
+
+1. Applicability screen
+- confirm project is cookstove
+- confirm Gold Standard
+- confirm measured / metered project device
+- select project device type
+- determine Case 1 or Case 2
+
+2. Baseline characterization
+- collect baseline devices/fuels/shares
+- collect baseline factor inputs
+- determine whether woody biomass / fNRB applies
+
+3. Project characterization
+- if electric route: activate electric project parameters
+- if fuel route: activate fuel-based project parameters
+
+4. Activate only relevant parameters
+- Case 1 parameters only if Case 1
+- Case 2 ratio parameters only if Case 2
+- hide irrelevant parameters completely
+
+5. Run calculation engine:
+baseline factor → baseline emissions → project emissions → leakage → ER
+
+Please confirm whether this is the correct software logic.
+
+--------------------------------------------------
+RESPONSE FORMAT REQUIRED
+--------------------------------------------------
+
+Please answer in this exact structure:
+
+1. What you agree with
+2. What you disagree with
+3. What is incomplete or ambiguous
+4. Corrected methodology logic
+5. Recommended software implementation logic
+
+Important:
+- If something is not clearly supported by the methodology text, say so explicitly
+- Separate methodology facts from software modeling choices
+- Do not code yet
+- Do not redesign unrelated parts of the app
