@@ -3076,6 +3076,14 @@ def _render_new_project_wizard(existing_projects):
             MECD_BASELINE_FUEL_DISPLAY,
             MECD_REGION_OPTIONS,
             MECD_REGION_DISPLAY,
+            derive_vm0050_method,
+            vm0050_hierarchy_html,
+            VM0050_DEVICE_OPTIONS,
+            VM0050_DEVICE_DISPLAY,
+            VM0050_EC_OPTIONS,
+            VM0050_EC_OPTION_DISPLAY,
+            VM0050_FNRB_OPTIONS,
+            VM0050_FNRB_DISPLAY,
         )
         from carbongpt.core.mecd_simulator import (
             MECD_BASELINE_FUEL_LIBRARY,
@@ -3151,7 +3159,9 @@ def _render_new_project_wizard(existing_projects):
                 _meth_disp = "TPDDTEC v4.0" if _detected == "TPDDTEC" else "VM0050"
                 st.info(f"Methodology auto-detected: **{_meth_disp}**")
 
-        if activity_category == "Cooking devices" and _detected in ("TPDDTEC", "VM0050"):
+        if activity_category == "Cooking devices" and _detected == "VM0050":
+            _compat_activity = "VM0050"
+        elif activity_category == "Cooking devices" and _detected == "TPDDTEC":
             _compat_activity = "Cookstoves / Thermal energy"
         elif activity_category == "Cooking devices" and _detected == "GS-MECD":
             _compat_activity = "Metered & Measured cooking device (MECD)"
@@ -3278,6 +3288,183 @@ def _render_new_project_wizard(existing_projects):
                     result = _fetch("/projects", method="POST", json=payload)
                     if result:
                         st.success(f"Project created with {meth_info['methodology_display']} — {method_result['method_label']}!")
+                        st.session_state["show_new_project"] = False
+                        st.session_state.pop(step_key, None)
+                        for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
+                                  "wizard_desc_saved", "wizard_parent_saved",
+                                  "wizard_mon_start_saved", "wizard_mon_end_saved"]:
+                            st.session_state.pop(k, None)
+                        time.sleep(0.5)
+                        st.session_state.selected_project_id = result["id"]
+                        st.rerun()
+
+        elif _compat_activity == "VM0050":
+            # ── VM0050 v1.0 Wizard Branch ────────────────────────────────────
+            # Baseline is always biomass for VM0050 (§4 cond. 1)
+            vm_bl_fuel = bl_fuel_top if bl_fuel_top in ("wood", "charcoal") else "wood"
+
+            st.markdown("---")
+            st.markdown("**Baseline fuel**")
+            vm_bl_choice = st.radio(
+                "What fuel do households currently burn for cooking?",
+                ["wood", "charcoal"],
+                index=0 if vm_bl_fuel == "wood" else 1,
+                format_func=lambda x: "Wood (firewood)" if x == "wood" else "Charcoal",
+                key="vm0050_bl_fuel",
+                horizontal=True,
+            )
+
+            st.markdown("---")
+            st.markdown("**Project device**")
+            vm_device = st.radio(
+                "What device will the project distribute?",
+                VM0050_DEVICE_OPTIONS,
+                key="vm0050_device",
+                format_func=lambda x: VM0050_DEVICE_DISPLAY.get(x, x),
+            )
+
+            # ECi,y determination — show only options valid for the selected device
+            st.markdown("---")
+            st.markdown("**Baseline energy consumption (ECi,y) determination**")
+            _ec_opts_available = [
+                k for k in VM0050_EC_OPTIONS
+                if not (k == "eq3_efficiency" and vm_device not in ("biomass_ee",))
+                and not (k == "eq5_cct" and vm_device not in ("electric_grid", "electric_self"))
+            ]
+            vm_ec_option = st.radio(
+                "How will baseline fuel consumption be determined?",
+                _ec_opts_available,
+                key="vm0050_ec_option",
+                format_func=lambda x: VM0050_EC_OPTION_DISPLAY.get(x, x),
+            )
+
+            # fNRB source
+            st.markdown("---")
+            st.markdown("**Fraction of non-renewable biomass (fNRB) source**")
+            st.caption(
+                "VM0050 §9.2 requires using the highest-priority source available. "
+                "If using CDM TOOL30, the 26% uncertainty discount (×0.74) is mandatory."
+            )
+            vm_fnrb_source = st.radio(
+                "fNRB source for this project region",
+                VM0050_FNRB_OPTIONS,
+                key="vm0050_fnrb_source",
+                format_func=lambda x: VM0050_FNRB_DISPLAY.get(x, x),
+            )
+
+            # Derive the calculation route
+            vm_method = derive_vm0050_method(
+                baseline_fuel=vm_bl_choice,
+                project_device=vm_device,
+                baseline_ec_option=vm_ec_option,
+                fnrb_source=vm_fnrb_source,
+            )
+
+            # Show any auto-corrections from the derive function
+            for w in vm_method.get("warnings", []):
+                st.warning(w)
+
+            st.markdown("---")
+
+            # ── Visual hierarchy ──────────────────────────────────────────────
+            st.markdown("**Calculation route for your project**")
+            st.markdown(vm0050_hierarchy_html(vm_method), unsafe_allow_html=True)
+
+            # ── Leakage note ──────────────────────────────────────────────────
+            st.markdown("---")
+            st.info(
+                "Leakage: VM0050 §8.3 applies a standard 5% deduction — no additional leakage "
+                "measurements are required. Net ER = (BEy − PEy) × 0.95 − LERB,y. "
+                "Renewable biomass leakage (LERB,y) is calculated via CDM TOOL16 if applicable."
+            )
+
+            # ── LPG sunset warning ────────────────────────────────────────────
+            if vm_device == "lpg":
+                st.warning(
+                    "LPG sunset clause (VM0050 §4 cond. 11c): carbon credits cannot be issued for "
+                    "monitoring periods ending after 31 December 2045."
+                )
+
+            # ── Electric device efficiency thresholds ─────────────────────────
+            if vm_device == "electric_grid":
+                st.info(
+                    "Electric device minimum efficiency thresholds (VM0050 §4): "
+                    "hot plates and electric hobs >= 40%; induction stoves and other electric >= 70%. "
+                    "Source: WBT or manufacturer certification submitted at validation."
+                )
+
+            # ── Summary card ──────────────────────────────────────────────────
+            meth_info_vm = {
+                "methodology": "VM0050",
+                "methodology_display": "VM0050 v1.0",
+                "note": "Verra VCS VM0050 v1.0 — Energy Efficiency and Fuel-Switch Measures in Cookstoves",
+                "blocked": False,
+            }
+            with st.container(border=True):
+                st.markdown("**Your project will use:**")
+                v1, v2, v3 = st.columns(3)
+                with v1:
+                    st.markdown("Methodology: **VM0050 v1.0**")
+                    fuel_disp = "Wood (firewood)" if vm_bl_choice == "wood" else "Charcoal"
+                    st.caption(f"Baseline fuel: {fuel_disp}")
+                with v2:
+                    st.markdown(f"Baseline: **{vm_method['baseline_eq']} + {vm_method['baseline_ec_eq']}**")
+                    st.caption(f"Project: **{vm_method['project_eq']}**")
+                with v3:
+                    st.markdown(f"Leakage: **Eq. 11 — 0.95 factor**")
+                    st.caption(f"fNRB: {VM0050_FNRB_DISPLAY.get(vm_fnrb_source, vm_fnrb_source)[:50]}")
+
+            bk1, cr2 = st.columns([1, 3])
+            with bk1:
+                if st.button("Back", key="wizard_vm0050_back"):
+                    st.session_state[step_key] = 2
+                    st.rerun()
+            with cr2:
+                if st.button("Create Project", key="wizard_vm0050_create", type="primary"):
+                    vm_meth_settings = {
+                        "baseline_fuel": vm_bl_choice,
+                        "project_device": vm_device,
+                        "baseline_ec_option": vm_ec_option,
+                        "fnrb_source": vm_fnrb_source,
+                        "baseline_eq": vm_method["baseline_eq"],
+                        "baseline_ec_eq": vm_method["baseline_ec_eq"],
+                        "project_eq": vm_method["project_eq"],
+                        "leakage_option": "standard_0.95",
+                        "method_id": vm_method["method_id"],
+                        "requires_kpt": vm_method["requires_kpt"],
+                        "requires_cct": vm_method["requires_cct"],
+                        "requires_tool07": vm_method["requires_tool07"],
+                        "requires_tool05": vm_method["requires_tool05"],
+                    }
+                    saved_loc = st.session_state.get("wizard_loc_saved") or {}
+                    payload = {
+                        "name": saved_name,
+                        "standard": saved_standard,
+                        "methodology": "VM0050",
+                        "country": saved_country or None,
+                        "description": saved_desc or None,
+                        "project_type": selected_type,
+                        "parent_project_id": saved_parent,
+                        "methodology_settings": vm_meth_settings,
+                        "location_name": saved_loc.get("location_name"),
+                        "region": saved_loc.get("region"),
+                        "district": saved_loc.get("district"),
+                        "latitude": saved_loc.get("latitude"),
+                        "longitude": saved_loc.get("longitude"),
+                    }
+                    mon_start = st.session_state.get("wizard_mon_start_saved")
+                    mon_end = st.session_state.get("wizard_mon_end_saved")
+                    if mon_start:
+                        payload["monitoring_period_start"] = mon_start
+                    if mon_end:
+                        payload["monitoring_period_end"] = mon_end
+
+                    result = _fetch("/projects", method="POST", json=payload)
+                    if result:
+                        st.success(
+                            f"Project created — VM0050 v1.0 "
+                            f"({vm_method['baseline_eq']} / {vm_method['project_eq']})!"
+                        )
                         st.session_state["show_new_project"] = False
                         st.session_state.pop(step_key, None)
                         for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",

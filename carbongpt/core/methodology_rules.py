@@ -453,3 +453,381 @@ def compute_sfc_b_method2(household_size, devices_per_household=1):
 
 def _fuel_label(fuel_key):
     return TPDDTEC_FUEL_DISPLAY.get(fuel_key, fuel_key or "unknown fuel")
+
+
+# ── VM0050 decision engine ───────────────────────────────────────────────────
+
+#: Display labels for VM0050 project device types
+VM0050_DEVICE_OPTIONS = [
+    "biomass_ee",
+    "biomass_switch",
+    "lpg",
+    "bioethanol",
+    "electric_grid",
+    "electric_self",
+]
+
+VM0050_DEVICE_DISPLAY = {
+    "biomass_ee":    "Biomass improved stove (efficiency improvement, same fuel)",
+    "biomass_switch": "Biomass fuel switch (e.g. wood → charcoal or vice versa)",
+    "lpg":           "LPG stove (fossil fuel project device)",
+    "bioethanol":    "Bioethanol stove",
+    "electric_grid": "Electric stove / hot plate / induction (grid electricity)",
+    "electric_self": "Electric stove (self-generated renewable electricity)",
+}
+
+VM0050_DEVICE_FUEL_CLASS = {
+    "biomass_ee":    "biomass",
+    "biomass_switch": "biomass",
+    "lpg":           "fossil",
+    "bioethanol":    "fossil",
+    "electric_grid": "electric",
+    "electric_self": "electric",
+}
+
+#: Which project emissions equation each device type uses (VM0050)
+VM0050_DEVICE_PROJECT_EQ = {
+    "biomass_ee":    "Eq. 7",
+    "biomass_switch": "Eq. 7",
+    "lpg":           "Eq. 8",
+    "bioethanol":    "Eq. 8",
+    "electric_grid": "Eq. 9",
+    "electric_self": "Eq. 10",
+}
+
+#: ECi,y determination options for biomass-baseline projects
+VM0050_EC_OPTIONS = [
+    "option_2_default",
+    "option_1_kpt",
+    "eq3_efficiency",
+    "eq5_cct",
+]
+
+VM0050_EC_OPTION_DISPLAY = {
+    "option_2_default": "Option 2 — IPCC default (0.5 t/capita/yr wood or 0.13 t/capita/yr charcoal)",
+    "option_1_kpt":     "Option 1 — Kitchen Performance Test (KPT, 90/10 confidence/precision)",
+    "eq3_efficiency":   "Eq. 3 — Efficiency back-calculation from project device (same-fuel projects only)",
+    "eq5_cct":          "Eq. 5 — Controlled Cooking Test ratio (electric pressure cooker only)",
+}
+
+VM0050_EC_OPTION_EQ = {
+    "option_2_default": "Eq. 2",
+    "option_1_kpt":     "Eq. 2",
+    "eq3_efficiency":   "Eq. 3",
+    "eq5_cct":          "Eq. 5",
+}
+
+#: fNRB source options for VM0050 (§9.2 priority order)
+VM0050_FNRB_OPTIONS = [
+    "unfccc_national",
+    "tool30",
+    "tool33_v3",
+]
+
+VM0050_FNRB_DISPLAY = {
+    "unfccc_national": "UNFCCC national default (1st preference — draft values acceptable)",
+    "tool30":          "CDM TOOL30 result × 0.74 (26% uncertainty discount, VM0050 Footnote 22)",
+    "tool33_v3":       "CDM TOOL33 v3 Table 2 / Table 3 (regional or national default)",
+}
+
+
+def derive_vm0050_method(
+    baseline_fuel: str,
+    project_device: str,
+    baseline_ec_option: str,
+    fnrb_source: str = "unfccc_national",
+) -> dict:
+    """
+    Derive the VM0050 calculation route from user-selected inputs.
+
+    Parameters
+    ----------
+    baseline_fuel        : "wood" | "charcoal"
+    project_device       : one of VM0050_DEVICE_OPTIONS
+    baseline_ec_option   : one of VM0050_EC_OPTIONS
+    fnrb_source          : one of VM0050_FNRB_OPTIONS
+
+    Returns
+    -------
+    dict with keys:
+        method_id          : str — compact identifier for this route
+        method_label       : str — short human label
+        baseline_eq        : str — "Eq. 1" for biomass baseline, "Eq. 6" for fossil baseline
+        baseline_ec_eq     : str — "Eq. 2", "Eq. 3", or "Eq. 5"
+        project_eq         : str — "Eq. 7", "Eq. 8", "Eq. 9", or "Eq. 10"
+        leakage_eq         : str — always "Eq. 11 (0.95 factor)"
+        fnrb_on_baseline   : bool — True for biomass baseline
+        fnrb_on_project    : bool — True for biomass project device
+        requires_kpt       : bool
+        requires_cct       : bool
+        requires_tool07    : bool
+        requires_tool05    : bool
+        min_eta_threshold  : float | None
+        default_consumption: float | None — t/capita/yr if Option 2
+        warnings           : list[str]
+        reason             : str — one-line explanation
+        blocked            : bool
+        blocked_reason     : str
+    """
+    bl = (baseline_fuel or "wood").lower().strip()
+    dev = (project_device or "biomass_ee").lower().strip()
+    ec_opt = (baseline_ec_option or "option_2_default").lower().strip()
+    fnrb_src = (fnrb_source or "unfccc_national").lower().strip()
+
+    warnings_out: list[str] = []
+    blocked = False
+    blocked_reason = ""
+
+    # VM0050 baseline is always biomass for most projects
+    # (Eq. 1 for biomass baseline, Eq. 6 only when fossil baseline — very rare)
+    fnrb_on_baseline = (bl in ("wood", "charcoal"))
+    baseline_eq = "Eq. 1" if fnrb_on_baseline else "Eq. 6"
+
+    fuel_class = VM0050_DEVICE_FUEL_CLASS.get(dev, "biomass")
+    fnrb_on_project = (fuel_class == "biomass")
+    project_eq = VM0050_DEVICE_PROJECT_EQ.get(dev, "Eq. 7")
+
+    # Eq. 3 only valid when same fuel in baseline and project
+    same_fuel_project = (dev in ("biomass_ee",))  # EE = same fuel; fuel switch = different
+    if ec_opt == "eq3_efficiency" and not same_fuel_project:
+        warnings_out.append(
+            "Eq. 3 (efficiency back-calculation) is only valid when the project device uses the same fuel "
+            "as the baseline. Switching to Option 2 default."
+        )
+        ec_opt = "option_2_default"
+
+    # Eq. 5 only valid for electric pressure cookers
+    if ec_opt == "eq5_cct" and dev not in ("electric_grid", "electric_self"):
+        warnings_out.append(
+            "Eq. 5 (CCT ratio) is only applicable to electric pressure cooker project devices. "
+            "Switching to Option 2 default."
+        )
+        ec_opt = "option_2_default"
+
+    baseline_ec_eq = VM0050_EC_OPTION_EQ.get(ec_opt, "Eq. 2")
+
+    # Minimum efficiency thresholds by device type (§4)
+    min_eta_map = {
+        "biomass_ee":    VM0050_MIN_ETA_BIOMASS_EE_OR_FUEL_SWITCH,
+        "biomass_switch": VM0050_MIN_ETA_BIOMASS_EE_OR_FUEL_SWITCH,
+        "lpg":           VM0050_MIN_ETA_LPG_BIOETHANOL,
+        "bioethanol":    VM0050_MIN_ETA_LPG_BIOETHANOL,
+        "electric_grid": None,  # hot plate vs induction depends on sub-type; both noted in label
+        "electric_self": None,
+    }
+    min_eta = min_eta_map.get(dev)
+
+    # Default consumption for Option 2
+    default_consumption = None
+    if ec_opt == "option_2_default":
+        default_consumption = (
+            VM0050_DEFAULT_WOOD_CONSUMPTION_PER_CAPITA if bl == "wood"
+            else VM0050_DEFAULT_CHARCOAL_CONSUMPTION_PER_CAPITA
+        )
+
+    # Tool requirements
+    requires_kpt = ec_opt in ("option_1_kpt",)
+    requires_cct = ec_opt == "eq5_cct"
+    requires_tool07 = dev == "electric_grid"
+    requires_tool05 = dev == "electric_grid"
+
+    # LPG sunset warning (§4 cond. 11c)
+    if dev == "lpg":
+        warnings_out.append(
+            f"LPG project devices: credits cannot be issued for periods after "
+            f"{VM0050_LPG_CREDITING_SUNSET_YEAR}. Confirm crediting period end date."
+        )
+
+    # fNRB source note
+    fnrb_label = VM0050_FNRB_DISPLAY.get(fnrb_src, fnrb_src)
+    tool30_note = " (×0.74 applied)" if fnrb_src == "tool30" else ""
+
+    # Build method_id
+    method_id = f"{bl}_{dev}_{ec_opt}"
+
+    # Human label
+    dev_label = VM0050_DEVICE_DISPLAY.get(dev, dev)
+    ec_label_short = {
+        "option_2_default": "Option 2 (IPCC default)",
+        "option_1_kpt":     "Option 1 (KPT)",
+        "eq3_efficiency":   "Eq. 3 (η back-calc)",
+        "eq5_cct":          "Eq. 5 (CCT)",
+    }.get(ec_opt, ec_opt)
+
+    method_label = f"{bl.capitalize()} baseline — {dev_label} — ECi,y via {ec_label_short}"
+
+    reason = (
+        f"Baseline: {baseline_eq} ({bl}, fNRB={'applied' if fnrb_on_baseline else 'not applied'}). "
+        f"ECi,y: {baseline_ec_eq}. "
+        f"Project: {project_eq} (fNRB={'applied' if fnrb_on_project else 'not applied'}). "
+        f"fNRB source: {fnrb_label}{tool30_note}. "
+        f"Leakage: Eq. 11 — 0.95 × (BE − PE)."
+    )
+
+    return {
+        "method_id":           method_id,
+        "method_label":        method_label,
+        "baseline_eq":         baseline_eq,
+        "baseline_ec_eq":      baseline_ec_eq,
+        "project_eq":          project_eq,
+        "leakage_eq":          "Eq. 11 — (BE − PE) × 0.95 − LERB,y",
+        "fnrb_on_baseline":    fnrb_on_baseline,
+        "fnrb_on_project":     fnrb_on_project,
+        "requires_kpt":        requires_kpt,
+        "requires_cct":        requires_cct,
+        "requires_tool07":     requires_tool07,
+        "requires_tool05":     requires_tool05,
+        "min_eta_threshold":   min_eta,
+        "default_consumption": default_consumption,
+        "fnrb_source":         fnrb_src,
+        "fnrb_source_label":   fnrb_label,
+        "warnings":            warnings_out,
+        "reason":              reason,
+        "blocked":             blocked,
+        "blocked_reason":      blocked_reason,
+    }
+
+
+def vm0050_hierarchy_html(method: dict) -> str:
+    """
+    Generate an HTML decision-tree card for a VM0050 method result.
+
+    Renders four connected nodes — Baseline, ECi,y Route, Project Device,
+    and Net ER — as a horizontal flow diagram using inline CSS only.
+    Active nodes use colour-coded badges; requirement pills show what
+    tools or surveys are needed.
+
+    Parameters
+    ----------
+    method : dict returned by derive_vm0050_method()
+
+    Returns
+    -------
+    HTML string suitable for st.markdown(..., unsafe_allow_html=True)
+    """
+    TEAL   = "#0d9488"
+    BLUE   = "#2563eb"
+    PURPLE = "#7c3aed"
+    SLATE  = "#1e293b"
+    AMBER  = "#b45309"
+
+    fnrb_badge_colour = {"unfccc_national": TEAL, "tool30": BLUE, "tool33_v3": SLATE}.get(
+        method.get("fnrb_source", "unfccc_national"), TEAL
+    )
+    fnrb_short = {
+        "unfccc_national": "UNFCCC national",
+        "tool30":          "TOOL30 ×0.74",
+        "tool33_v3":       "TOOL33 v3",
+    }.get(method.get("fnrb_source", "unfccc_national"), "UNFCCC national")
+
+    dev_label_map = {
+        "biomass_ee":    "Biomass EE stove",
+        "biomass_switch": "Biomass fuel switch",
+        "lpg":           "LPG stove",
+        "bioethanol":    "Bioethanol stove",
+        "electric_grid": "Electric (grid)",
+        "electric_self": "Electric (self-gen)",
+    }
+    dev_key = method.get("method_id", "").split("_", 2)[-1].rsplit("_", 3)[0] if "_" in method.get("method_id", "") else ""
+    # Derive device key more robustly from method_id: "wood_biomass_ee_option_2_default"
+    mid = method.get("method_id", "")
+    dev_disp = "Unknown"
+    for dk, dl in dev_label_map.items():
+        if dk in mid:
+            dev_disp = dl
+            break
+
+    proj_eq = method.get("project_eq", "Eq. 7")
+    proj_eq_colour = {
+        "Eq. 7": TEAL, "Eq. 8": AMBER, "Eq. 9": BLUE, "Eq. 10": "#16a34a"
+    }.get(proj_eq, TEAL)
+
+    proj_eq_note_map = {
+        "Eq. 7": "fNRB applied",
+        "Eq. 8": "No fNRB (fossil fuel)",
+        "Eq. 9": "EFel × ECp × (1+TDL)",
+        "Eq. 10": "Zero / proportional",
+    }
+    proj_eq_note = proj_eq_note_map.get(proj_eq, "")
+
+    ec_eq = method.get("baseline_ec_eq", "Eq. 2")
+    ec_eq_note_map = {
+        "Eq. 2": "BCb × NCVb",
+        "Eq. 3": "ηnew/ηold × ECp",
+        "Eq. 5": "SCb/SCp × ECp (CCT)",
+    }
+    ec_eq_note = ec_eq_note_map.get(ec_eq, "")
+
+    bl_eq = method.get("baseline_eq", "Eq. 1")
+    bl_note = "fNRB applied to CO2" if method.get("fnrb_on_baseline") else "No fNRB"
+
+    # Requirement pills
+    pills_html = ""
+    pills = []
+    if method.get("requires_kpt"):
+        pills.append(("KPT required", "#dc2626"))
+    if method.get("requires_cct"):
+        pills.append(("CCT required", "#dc2626"))
+    if method.get("requires_tool07"):
+        pills.append(("CDM TOOL07", BLUE))
+    if method.get("requires_tool05"):
+        pills.append(("CDM TOOL05", BLUE))
+    if method.get("min_eta_threshold"):
+        pct = int(method["min_eta_threshold"] * 100)
+        pills.append((f"Min. efficiency: {pct}%", AMBER))
+    for txt, col in pills:
+        pills_html += (
+            f'<span style="background:{col};color:white;font-size:0.72em;'
+            f'padding:2px 8px;border-radius:12px;margin-right:4px;white-space:nowrap;">'
+            f'{txt}</span>'
+        )
+
+    # Warning pills
+    warn_html = ""
+    for w in method.get("warnings", []):
+        warn_html += (
+            f'<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;'
+            f'padding:4px 8px;font-size:0.78em;color:#92400e;margin-top:6px;">'
+            f'{w}</div>'
+        )
+
+    def node(step_label, badge_text, badge_colour, sub_note, eq_label):
+        return f"""
+        <div style="min-width:148px;max-width:180px;flex:1;">
+          <div style="font-size:0.68em;font-weight:700;color:#64748b;text-transform:uppercase;
+                      letter-spacing:0.06em;margin-bottom:5px;">{step_label}</div>
+          <div style="background:{badge_colour};color:white;padding:5px 10px;border-radius:5px;
+                      font-size:0.8em;font-weight:700;line-height:1.3;">{badge_text}</div>
+          <div style="font-size:0.75em;color:#374151;margin-top:4px;line-height:1.4;">{sub_note}</div>
+          <div style="font-size:0.72em;color:#64748b;margin-top:2px;font-style:italic;">{eq_label}</div>
+        </div>"""
+
+    arrow = '<div style="margin-top:26px;color:#94a3b8;font-size:1.3em;flex-shrink:0;">&#8594;</div>'
+
+    n1 = node("Baseline Emissions", f"{bl_eq} — Biomass ({method.get('method_id','').split('_')[0].capitalize()})", TEAL, bl_note, f"fNRB source: {fnrb_short}")
+    n2 = node("ECi,y Route", ec_eq, BLUE, ec_eq_note, VM0050_EC_OPTION_DISPLAY.get(
+        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
+    )[:48] + "…" if len(VM0050_EC_OPTION_DISPLAY.get(
+        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
+    )) > 48 else VM0050_EC_OPTION_DISPLAY.get(
+        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
+    ))
+    n3 = node("Project Emissions", f"{proj_eq} — {dev_disp}", proj_eq_colour, proj_eq_note, "")
+    n4 = node("Net ER", "Eq. 11", SLATE, "(BE − PE) × 0.95 − LERB,y", "Leakage: 5% standard deduction")
+
+    return f"""
+<div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-subtle,#e2e8f0);
+            border-radius:8px;padding:16px 18px 12px 18px;margin:8px 0;">
+  <div style="font-size:0.78em;font-weight:700;color:#0d9488;margin-bottom:10px;
+              text-transform:uppercase;letter-spacing:0.06em;">
+    VM0050 v1.0 — Calculation Route
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
+    {n1}{arrow}{n2}{arrow}{n3}{arrow}{n4}
+  </div>
+  <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+    <span style="font-size:0.72em;color:#64748b;margin-right:4px;">Requires:</span>
+    {pills_html if pills_html else '<span style="font-size:0.72em;color:#64748b;">No additional surveys beyond standard monitoring</span>'}
+  </div>
+  {warn_html}
+</div>"""
