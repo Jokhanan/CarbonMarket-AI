@@ -1,0 +1,146 @@
+I want to step back and rethink the top-level workflow of the application.
+
+Right now the entry point is:
+
+Create Project →
+Choose:
+- Standalone PDD
+- PoA-DD
+- VPA-DD
+- Monitoring Report
+
+But I am not sure this reflects how carbon project developers actually work.
+
+Before we change anything, I want your analysis and suggestions.
+
+Please analyze the current architecture and propose improvements.
+
+Here are several real-world scenarios to consider.
+
+--------------------------------------------------
+
+SCENARIO 1 — NEW PROJECT FROM SCRATCH
+
+A user arrives with nothing yet.
+
+They want to start a new project and eventually create:
+- a PDD / VCS-PD
+or
+- a PoA-DD
+
+In this case the current "Create Project → Create PDD" flow may make sense.
+
+But please evaluate if this is the best entry point.
+
+--------------------------------------------------
+
+SCENARIO 2 — USER ALREADY HAS A DOCUMENT
+
+Often users already have:
+
+- a PoA-DD
+- a PDD
+- a VCS-PD
+- a VPA-DD
+
+They may want to:
+
+- upload the document
+- extract key information
+- continue working on it
+
+Example:
+
+User wants to write a VPA-DD.
+But if they are writing a VPA-DD it is very likely that a PoA-DD already exists.
+
+So ideally the workflow would allow:
+
+Upload PoA-DD →
+System extracts methodology, parameters, structure →
+User creates VPA under that PoA.
+
+Please analyze how this could work logically.
+
+--------------------------------------------------
+
+SCENARIO 3 — USER ARRIVES WITH FINDINGS
+
+This is extremely common.
+
+The user already has:
+
+- a PDD / PoA-DD / VPA-DD
+- or a Monitoring Report
+
+And they receive:
+
+- DOE findings
+- Gold Standard review comments
+- Verra review comments
+
+In this situation the user may not want to "create a document".
+
+They may simply want to:
+
+Upload findings →
+Link them to the document →
+Start writing responses.
+
+Please analyze how this workflow should be integrated.
+
+For example:
+Should there be a "Respond to findings" workspace inside a project?
+
+--------------------------------------------------
+
+SCENARIO 4 — USER WANTS TO CREATE A MONITORING REPORT
+
+Usually a Monitoring Report implies that a project already exists.
+
+Often there are already:
+
+- PDD / PoA-DD
+- previous Monitoring Reports
+
+So the workflow could be:
+
+Open project →
+Add monitoring period →
+Create Monitoring Report.
+
+Please analyze if the current design supports this well.
+
+--------------------------------------------------
+
+NAMING ISSUE
+
+Currently the interface uses:
+
+- PDD (Gold Standard term)
+- VCS-PD (Verra term)
+
+We may want more neutral labels like:
+
+Project Description
+
+But I am not sure if this is better or if methodology-specific naming should remain.
+
+Please give your opinion.
+
+--------------------------------------------------
+
+YOUR TASK
+
+Based on the existing codebase and architecture, please analyze:
+
+1. Whether the current "Create document first" workflow is correct
+2. Whether the system should instead start from a "Project" object
+3. How existing documents should be uploaded and parsed
+4. How findings-response workflows should be integrated
+5. How Monitoring Reports should be handled
+6. What the best top-level UX structure would be
+
+Please focus on **improving the workflow**, not just coding changes.
+
+Explain your reasoning clearly before proposing implementation.
