@@ -48,72 +48,333 @@ def get_fuel_display_label(canonical_value):
 
 PARAMETER_DEFINITIONS = {
     "VM0050": [
-        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
-         "aliases": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y", "fNRB,i,y"],
-         "extraction_hint": "Only extract the fraction of non-renewable biomass for the project region. Default values sourced from CDM TOOL33 v3 Table 3 (national) or Table 2 (regional). Project-specific calculation uses CDM TOOL30.",
+        # ── fNRB ────────────────────────────────────────────────────────────────
+        # VM0050 §9.2 specifies three sources in priority order:
+        #   1) UNFCCC national default values (draft acceptable; update on approval)
+        #   2) CDM TOOL30, with a mandatory 26% uncertainty discount (Footnote 22):
+        #      applied_fNRB = TOOL30_fNRB × (1 − 0.26)
+        #   3) CDM TOOL33 v3 default values
+        {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass (fNRB,y)", "category": "baseline",
+         "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True,
+         "tool_reference": "UNFCCC national defaults / CDM TOOL30 (×0.74 discount) / CDM TOOL33 v3",
+         "depends_on": [],
+         "aliases": ["fraction of non-renewable biomass", "non-renewable biomass fraction", "f_NRB", "fNRB_y",
+                     "fNRB,y", "fNRB,i,y", "fraction non-renewable", "non-renewable fraction"],
+         "extraction_hint": (
+             "Extract the fraction of non-renewable biomass (fNRB) used in baseline emissions (Eq. 1) or project "
+             "emissions (Eq. 7). Sources in descending preference: (1) UNFCCC national default — note if draft; "
+             "(2) CDM TOOL30 result multiplied by 0.74 (26% uncertainty discount per VM0050 Footnote 22); "
+             "(3) CDM TOOL33 v3 Table 3 (national) or Table 2 (regional). "
+             "Do NOT apply fNRB to fossil fuel baselines — it is only for woody biomass fuels."
+         ),
          "noise_terms": []},
-        {"param_key": "NCV_baseline", "param_name": "Net calorific value (baseline fuel)", "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["NCV_b", "net calorific value baseline", "NCV of baseline fuel", "calorific value of wood", "calorific value of charcoal"],
-         "extraction_hint": "Extract the NCV for the BASELINE fuel type only.",
+
+        # ── Fuel NCV (§9.1 NCVb,i / NCVp,j) ────────────────────────────────────
+        # IPCC 2006 defaults: Wood = 0.0156 TJ/tonne (15.6 TJ/Gg), Charcoal = 0.0295 TJ/tonne (29.5 TJ/Gg)
+        {"param_key": "NCV_baseline", "param_name": "Net calorific value — baseline fuel (NCVb,i)",
+         "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["NCV_b", "NCVb,i", "net calorific value baseline", "NCV of baseline fuel",
+                     "calorific value of wood", "calorific value of charcoal", "heating value baseline"],
+         "extraction_hint": (
+             "Extract the NCV for the BASELINE fuel only. IPCC 2006 defaults: wood = 15.6 TJ/Gg (0.0156 TJ/tonne), "
+             "charcoal = 29.5 TJ/Gg (0.0295 TJ/tonne). Source preference: project-specific > national default > IPCC."
+         ),
          "noise_terms": []},
-        {"param_key": "NCV_project", "param_name": "Net calorific value (project fuel)", "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["NCV_p", "net calorific value project", "NCV of project fuel"],
-         "extraction_hint": "Extract the NCV for the PROJECT fuel type only.",
+        {"param_key": "NCV_project", "param_name": "Net calorific value — project fuel (NCVp,j)",
+         "category": "fuel_property", "unit": "TJ/Gg", "data_type": "number", "min_value": 5.0, "max_value": 55.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["NCV_p", "NCVp,j", "net calorific value project", "NCV of project fuel",
+                     "heating value project fuel"],
+         "extraction_hint": (
+             "Extract the NCV for the PROJECT fuel only. Do not confuse with baseline NCV. "
+             "IPCC 2006 defaults: wood = 15.6 TJ/Gg, charcoal = 29.5 TJ/Gg. "
+             "For LPG, bioethanol, or other fuels use national or IPCC source."
+         ),
          "noise_terms": []},
-        {"param_key": "EF_CO2_baseline", "param_name": "CO2 emission factor (baseline fuel)", "category": "emission_factor", "unit": "tCO2/TJ", "data_type": "number", "min_value": 0.0, "max_value": 200.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["EF_b,f,CO2", "baseline CO2 emission factor"],
+
+        # ── CO2 emission factors (§9.1 EFb,i,CO2 / EFp,j,CO2) ────────────────
+        # IPCC defaults: Wood = 112 tCO2/TJ
+        # Charcoal: 112 tCO2/TJ combustion-only (renewable charcoal project, fNRB=0) OR
+        #           165.22 tCO2/TJ incl. production (non-renewable biomass baseline)
+        {"param_key": "EF_CO2_baseline", "param_name": "CO2 emission factor — baseline fuel (EFb,i,CO2)",
+         "category": "emission_factor", "unit": "tCO2/TJ", "data_type": "number", "min_value": 0.0, "max_value": 250.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["EFb,i,CO2", "EF_b,f,CO2", "baseline CO2 emission factor", "CO2 EF baseline fuel",
+                     "combustion emission factor baseline"],
+         "extraction_hint": (
+             "Extract the CO2 EF for the BASELINE fuel. IPCC 2006 defaults: wood = 112 tCO2/TJ. "
+             "Charcoal (non-renewable baseline): 165.22 tCO2/TJ (combustion + production). "
+             "Charcoal combustion-only: 112 tCO2/TJ (use when CF method applies or renewable charcoal). "
+             "Source preference: project-specific > national > IPCC."
+         ),
          "noise_terms": []},
-        {"param_key": "EF_nonCO2_baseline", "param_name": "Non-CO2 emission factor (baseline fuel)", "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["EF_b,f,nonCO2", "baseline non-CO2 emission factor"],
+        {"param_key": "EF_nonCO2_baseline", "param_name": "Non-CO2 emission factor — baseline fuel (EFb,i,nonCO2)",
+         "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["EFb,i,nonCO2", "EF_b,f,nonCO2", "baseline non-CO2 emission factor",
+                     "non-CO2 EF baseline", "CH4 N2O emission factor baseline"],
+         "extraction_hint": (
+             "Extract the non-CO2 (CH4 + N2O) EF for the BASELINE fuel (AR5 GWP). "
+             "IPCC defaults: wood = 9.46 tCO2e/TJ, charcoal combustion-only = 5.865 tCO2e/TJ, "
+             "charcoal incl. production = 44.83 tCO2e/TJ."
+         ),
          "noise_terms": []},
-        {"param_key": "EF_CO2_project", "param_name": "CO2 emission factor (project fuel)", "category": "emission_factor", "unit": "tCO2/TJ", "data_type": "number", "min_value": 0.0, "max_value": 200.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["EF_p,f,CO2", "project CO2 emission factor"],
+        {"param_key": "EF_CO2_project", "param_name": "CO2 emission factor — project fuel (EFp,j,CO2)",
+         "category": "emission_factor", "unit": "tCO2/TJ", "data_type": "number", "min_value": 0.0, "max_value": 200.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["EFp,j,CO2", "EF_p,f,CO2", "project CO2 emission factor"],
+         "extraction_hint": (
+             "Extract the CO2 EF for the PROJECT fuel. Zero for 100% renewable biomass or renewable electricity. "
+             "Source preference: project-specific > national > IPCC."
+         ),
          "noise_terms": []},
-        {"param_key": "EF_nonCO2_project", "param_name": "Non-CO2 emission factor (project fuel)", "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["EF_p,f,nonCO2", "project non-CO2 emission factor"],
+        {"param_key": "EF_nonCO2_project", "param_name": "Non-CO2 emission factor — project fuel (EFp,j,nonCO2)",
+         "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["EFp,j,nonCO2", "EF_p,f,nonCO2", "project non-CO2 emission factor"],
+         "extraction_hint": "Extract the non-CO2 EF for the PROJECT fuel only, not the baseline fuel.",
          "noise_terms": []},
-        {"param_key": "baseline_fuel_consumption", "param_name": "Baseline fuel consumption per household", "category": "baseline", "unit": "tonnes/household/year", "data_type": "number", "min_value": 0.01, "max_value": 20.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["baseline fuel consumption per household", "fuel consumption in baseline scenario", "BC_b,i,y", "wood consumption baseline", "fuel use without project"],
-         "extraction_hint": "Only extract if text clearly refers to BASELINE fuel use, not project fuel use.",
+
+        # ── Baseline fuel consumption (§8.1.1 / §9.1 BCex-ante,b,i / §9.2 BCb,i,y) ─
+        # Ex-ante defaults (§8.1.1 Option 2): firewood = 0.5 t/capita/yr, charcoal = 0.13 t/capita/yr
+        # BCb,i,y (monitored): updated biennially from control household KPT
+        {"param_key": "BCex_ante_b_i", "param_name": "Ex-ante baseline fuel consumption per device (BCex-ante,b,i)",
+         "category": "baseline", "unit": "tonnes/device/year", "data_type": "number", "min_value": 0.01,
+         "max_value": 10.0, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["BCex-ante,b,i", "BC_ex_ante", "ex-ante baseline consumption", "baseline fuel use ex-ante",
+                     "pre-project fuel consumption"],
+         "extraction_hint": (
+             "Extract the ex-ante annual average fuel quantity per baseline device (BCex-ante,b,i). "
+             "VM0050 §8.1.1 Option 2 defaults (scaled by household size Hhi): "
+             "firewood = 0.5 t/capita/yr; charcoal = 0.13 t/capita/yr. "
+             "Option 1: from Kitchen Performance Test (KPT) at 90/10 confidence/precision."
+         ),
          "noise_terms": []},
-        {"param_key": "project_fuel_consumption", "param_name": "Project fuel consumption per household", "category": "project", "unit": "tonnes/household/year", "data_type": "number", "min_value": 0.0, "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
-         "aliases": ["project fuel consumption per household", "fuel consumption with project technology", "BC_p,i,y", "wood consumption project", "fuel use with improved stove"],
-         "extraction_hint": "Only extract if text clearly refers to PROJECT fuel use, not baseline fuel use.",
+        {"param_key": "baseline_fuel_consumption", "param_name": "Baseline fuel consumption per device (BCb,i,y)",
+         "category": "baseline", "unit": "tonnes/device/year", "data_type": "number", "min_value": 0.01,
+         "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["BCb,i,y", "BC_b,i,y", "baseline fuel consumption", "fuel consumption in baseline scenario",
+                     "wood consumption baseline", "fuel use without project", "biennial KPT result"],
+         "extraction_hint": (
+             "Extract BCb,i,y — the monitored (biennial KPT) baseline fuel use in control households. "
+             "Only extract if the document explicitly refers to monitored or follow-up baseline fuel consumption. "
+             "Do NOT extract this field from KPT results labelled as ex-ante."
+         ),
          "noise_terms": []},
-        {"param_key": "num_devices", "param_name": "Number of devices/technologies deployed", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["number of stoves", "number of devices distributed", "total devices deployed", "N_i,y", "N_j,k,y", "number of project technologies"],
-         "extraction_hint": "Only extract the TOTAL number of project devices deployed or distributed. Do NOT extract sample sizes, survey counts, job counts, or unit numbering.",
+
+        # ── Project fuel consumption (§8.2.1.1 BCp,j,k,y / §9.2) ──────────────
+        {"param_key": "project_fuel_consumption", "param_name": "Project fuel consumption per device (BCp,j,k,y)",
+         "category": "project", "unit": "tonnes/device/year", "data_type": "number", "min_value": 0.0,
+         "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["BCp,j,k,y", "BC_p,j,k,y", "project fuel consumption", "fuel use with improved stove",
+                     "stove fuel consumption monitored", "KPT project result"],
+         "extraction_hint": (
+             "Extract BCp,j,k,y — the average fuel per project device from KPT or direct measurement. "
+             "Only extract if text clearly refers to PROJECT stove fuel use, not baseline."
+         ),
+         "noise_terms": []},
+
+        # ── Device counts (§9.2 Nj,k,y) ─────────────────────────────────────────
+        {"param_key": "num_devices", "param_name": "Number of commissioned project devices (Nj,k,y)",
+         "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1,
+         "max_value": 10000000, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["number of stoves", "number of devices distributed", "total devices deployed",
+                     "N_i,y", "N_j,k,y", "Nj,k,y", "devices commissioned", "number of project technologies"],
+         "extraction_hint": (
+             "Only extract the TOTAL number of project devices commissioned or distributed. "
+             "Do NOT extract sample sizes, survey counts, or unit numbering."
+         ),
          "noise_terms": [r"\bsample\b", r"\bjob", r"\bunit\s+number", r"\bnumber of units\b"]},
-        {"param_key": "num_households", "param_name": "Number of households served", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["number of households", "total households", "number of families", "participating households", "n_i,y"],
-         "extraction_hint": "Only extract the TOTAL number of households served or targeted by the project. Do NOT extract survey sample sizes or administrative counts.",
+        {"param_key": "num_households", "param_name": "Number of households served",
+         "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1,
+         "max_value": 10000000, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["number of households", "total households", "number of families", "participating households"],
+         "extraction_hint": (
+             "Only extract the TOTAL number of households served or targeted by the project. "
+             "Do NOT extract survey sample sizes or administrative counts."
+         ),
          "noise_terms": [r"\bsample[sd]?\b", r"\bsurvey\b", r"\brespondent", r"\bsampling\b"]},
-        {"param_key": "devices_per_household", "param_name": "Devices per household", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10, "is_ex_ante": True, "depends_on": []},
-        {"param_key": "num_beneficiaries", "param_name": "Number of beneficiaries", "category": "activity_data", "unit": "persons", "data_type": "number", "min_value": 1, "max_value": 100000000, "is_ex_ante": True, "depends_on": ["num_households", "household_size"]},
-        {"param_key": "usage_rate", "param_name": "Usage rate (proportion of devices in use)", "category": "monitoring", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": False, "depends_on": [],
-         "aliases": ["adoption rate", "utilization rate", "active use rate", "proportion of devices in use", "usage survey rate", "n_i,y / N_i,y"],
-         "noise_terms": []},
-        {"param_key": "leakage_discount", "param_name": "Leakage discount factor", "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.8, "max_value": 1.0, "is_ex_ante": True, "depends_on": []},
-        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor", "category": "fuel_property", "unit": "kg wood/kg charcoal", "data_type": "number", "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],
-         "aliases": ["conversion factor", "charcoal conversion factor", "wood to charcoal ratio"],
-         "noise_terms": []},
-        {"param_key": "baseline_efficiency", "param_name": "Baseline device thermal efficiency", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.05, "max_value": 0.50, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["baseline thermal efficiency", "traditional stove efficiency", "eta_baseline"],
-         "extraction_hint": "Only extract the thermal efficiency for the BASELINE device, not the project device.",
-         "noise_terms": []},
-        {"param_key": "project_efficiency", "param_name": "Project device thermal efficiency", "category": "project", "unit": "fraction", "data_type": "number", "min_value": 0.10, "max_value": 0.80, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["project thermal efficiency", "improved stove efficiency", "eta_project"],
-         "extraction_hint": "Only extract the thermal efficiency for the PROJECT device, not the baseline device.",
-         "noise_terms": []},
-        {"param_key": "household_size", "param_name": "Average household size", "category": "activity_data", "unit": "persons/household", "data_type": "number", "min_value": 1, "max_value": 20, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["average household size", "persons per household", "family size", "members per household", "HH size"],
-         "extraction_hint": "Only extract values explicitly described as average household size or persons per household.",
+        {"param_key": "devices_per_household", "param_name": "Project devices per household",
+         "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1,
+         "max_value": 10, "is_ex_ante": True, "depends_on": []},
+        {"param_key": "num_beneficiaries", "param_name": "Number of beneficiaries",
+         "category": "activity_data", "unit": "persons", "data_type": "number", "min_value": 1,
+         "max_value": 100000000, "is_ex_ante": True, "depends_on": ["num_households", "household_size"]},
+
+        # ── Household size (§9.1 Hhi / Hhj,k) ────────────────────────────────────
+        # VM0050 uses "equivalent standard male adults" per Guidelines for Woodfuel Surveys (FAO)
+        {"param_key": "household_size", "param_name": "Average household size (Hhi / Hhj,k)",
+         "category": "activity_data", "unit": "persons/household", "data_type": "number",
+         "min_value": 1, "max_value": 20, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["average household size", "Hhi", "Hhj,k", "persons per household",
+                     "family size", "members per household", "HH size", "adult equivalents per household"],
+         "extraction_hint": (
+             "Extract the average household size from the baseline survey (90/10 confidence/precision required). "
+             "VM0050 uses 'equivalent standard male adults' per FAO woodfuel survey guidelines. "
+             "Used to scale per-capita fuel consumption to per-device values."
+         ),
          "noise_terms": [r"\bton\b", r"\btonne\b", r"\bcharcoal\b", r"\bfuel\b", r"\bkg\b"]},
-        {"param_key": "usage_rate_decay", "param_name": "Annual usage rate decay", "category": "monitoring", "unit": "fraction/year", "data_type": "number", "default": 0.02, "min_value": 0.0, "max_value": 0.10, "is_ex_ante": True, "depends_on": [],
-         "description": "Annual reduction in usage rate per year"},
-        {"param_key": "usage_rate_floor", "param_name": "Minimum usage rate", "category": "monitoring", "unit": "fraction", "data_type": "number", "default": 0.50, "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "depends_on": [],
-         "description": "Minimum usage rate floor (usage cannot decay below this)"},
-        {"param_key": "baseline_fuel", "param_name": "Baseline fuel type", "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
+
+        # ── Usage/adoption rate (§9.2 nj,k,y) ────────────────────────────────────
+        # Option 1: SUMs (continuous); Option 2: annual adoption survey (90/10 CI, lower bound used)
+        {"param_key": "usage_rate", "param_name": "Adoption/usage rate (nj,k,y)",
+         "category": "monitoring", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0,
+         "is_ex_ante": False, "depends_on": [],
+         "aliases": ["adoption rate", "utilization rate", "active use rate", "n_j,k,y", "nj,k,y",
+                     "proportion of devices in use", "proportion operating", "usage survey rate"],
+         "extraction_hint": (
+             "Extract the proportion of commissioned devices still in regular use (nj,k,y). "
+             "VM0050 Option 1: measured by Stove Use Monitors (SUMs). "
+             "Option 2: annual survey at 90/10 confidence/precision — use lower bound of confidence interval. "
+             "Do not confuse with overall project scale or sample size."
+         ),
+         "noise_terms": []},
+        {"param_key": "usage_rate_decay", "param_name": "Annual usage rate decay",
+         "category": "monitoring", "unit": "fraction/year", "data_type": "number", "default": 0.02,
+         "min_value": 0.0, "max_value": 0.10, "is_ex_ante": True, "depends_on": [],
+         "description": "Annual reduction in nj,k,y per year (applied when monitoring data are not available)"},
+        {"param_key": "usage_rate_floor", "param_name": "Minimum usage rate floor",
+         "category": "monitoring", "unit": "fraction", "data_type": "number", "default": 0.50,
+         "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "depends_on": [],
+         "description": "Usage rate cannot decay below this floor value"},
+
+        # ── Thermal efficiency — baseline (§9.1 ηold,avg) ─────────────────────────
+        # Default for three-stone fire: 15%. Other devices: WBT, manufacturer cert, or CDM TOOL33 v3.
+        {"param_key": "baseline_efficiency", "param_name": "Weighted average baseline device efficiency (ηold,avg)",
+         "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.05, "max_value": 0.50,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["baseline thermal efficiency", "ηold,avg", "eta_old,avg", "traditional stove efficiency",
+                     "weighted average efficiency baseline", "three-stone fire efficiency"],
+         "extraction_hint": (
+             "Extract the weighted average thermal efficiency of the BASELINE devices being replaced (ηold,avg). "
+             "VM0050 §9.1 default: 15% for three-stone fire or cookstove with no improved combustion or chimney. "
+             "Other baseline devices: WBT survey, manufacturer cert, national standards body, or CDM TOOL33 v3. "
+             "Do not extract project device efficiency here."
+         ),
+         "noise_terms": []},
+
+        # ── Thermal efficiency — project (§9.2 ηnew,avg,y) ───────────────────────
+        # Monitored annually. Aging must be accounted for:
+        #   - Biomass/fossil: WBT or linear decrease to 25% terminal efficiency over device lifespan
+        #   - Electric: annual measurement of heat absorbed / electrical energy input
+        # Minimum thresholds (§4): biomass 25%, LPG/bioethanol 30%, hot plate 40%, induction 70%
+        {"param_key": "project_efficiency", "param_name": "Weighted average project device efficiency (ηnew,avg,y)",
+         "category": "project", "unit": "fraction", "data_type": "number", "min_value": 0.10, "max_value": 0.90,
+         "is_ex_ante": True, "depends_on": [],
+         "aliases": ["project thermal efficiency", "ηnew,avg,y", "eta_new,avg,y", "improved stove efficiency",
+                     "weighted average efficiency project", "WBT result project device"],
+         "extraction_hint": (
+             "Extract the weighted average thermal efficiency of PROJECT devices (ηnew,avg,y). "
+             "VM0050 §4 minimum thresholds: biomass EE/fuel-switch >= 25%, LPG/bioethanol >= 30%, "
+             "hot plate/electric hob >= 40%, induction/other electric >= 70%. "
+             "Aging must be accounted for annually (linear decay to 25% terminal for biomass/fossil devices)."
+         ),
+         "noise_terms": []},
+
+        # ── Specific energy consumption for electric pressure cookers (§8.1.1.1, Eq. 5) ──
+        # SCb,i and SCp,j in TJ/test/person — from Controlled Cooking Test (CCT)
+        {"param_key": "SC_baseline", "param_name": "Specific energy consumption — baseline device (SCb,i)",
+         "category": "baseline", "unit": "TJ/test/person", "data_type": "number", "min_value": 0.0,
+         "max_value": 0.01, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["SCb,i", "SC_b,i", "specific energy consumption baseline", "CCT result baseline"],
+         "extraction_hint": (
+             "Extract SCb,i — specific energy consumption of the baseline device from a Controlled Cooking Test (CCT). "
+             "Only applicable to electric pressure cooker projects (VM0050 §8.1.1.1 Eq. 5). "
+             "Units: TJ/test/person. Must use same cooking tasks for baseline and project CCT."
+         ),
+         "noise_terms": []},
+        {"param_key": "SC_project", "param_name": "Specific energy consumption — project device (SCp,j)",
+         "category": "project", "unit": "TJ/test/person", "data_type": "number", "min_value": 0.0,
+         "max_value": 0.01, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["SCp,j", "SC_p,j", "specific energy consumption project", "CCT result project electric"],
+         "extraction_hint": (
+             "Extract SCp,j — specific energy consumption of the PROJECT electric pressure cooker from CCT. "
+             "Used in Eq. 5 to back-calculate baseline energy consumption. "
+             "Same cooking tasks must be used in both baseline and project CCT."
+         ),
+         "noise_terms": []},
+
+        # ── Electricity consumption — electric project devices (§9.2 ECp,j,k,y) ──
+        # Monitored by direct metering (continuous). Units: MWh/device/year.
+        {"param_key": "EC_electricity_project", "param_name": "Annual electricity consumption per device (ECp,j,k,y)",
+         "category": "project", "unit": "MWh/device/year", "data_type": "number", "min_value": 0.01,
+         "max_value": 50.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["ECp,j,k,y", "EC_p,j,k,y", "annual electricity consumption", "electricity use per device",
+                     "metered electricity", "kWh per stove"],
+         "extraction_hint": (
+             "Extract ECp,j,k,y — annual electricity consumption per electric project device (MWh). "
+             "VM0050 §9.2: measured by direct metering at 90/10 confidence/precision. "
+             "Used in Eq. 5 (electric pressure cooker back-calculation) and Eq. 8 (project emissions). "
+             "If given in kWh, divide by 1000."
+         ),
+         "noise_terms": []},
+
+        # ── Grid emission factor (§9.2 EFel,y) ────────────────────────────────────
+        # Source: CDM TOOL07. Zero for 100% renewable electricity sources.
+        {"param_key": "EF_electricity", "param_name": "Grid electricity emission factor (EFel,y)",
+         "category": "emission_factor", "unit": "tCO2e/MWh", "data_type": "number", "min_value": 0.0,
+         "max_value": 3.0, "is_ex_ante": False, "depends_on": [],
+         "tool_reference": "CDM TOOL07",
+         "aliases": ["EFel,y", "EF_el", "grid EF", "electricity emission factor", "combined margin EF",
+                     "electricity system EF", "tCO2e per MWh"],
+         "extraction_hint": (
+             "Extract EFel,y — the grid electricity emission factor in tCO2e/MWh (VM0050 Eq. 8). "
+             "Source: CDM TOOL07. Zero where electricity is from 100% renewable sources. "
+             "For mini-grid or decentralised systems: account for the non-renewable share only."
+         ),
+         "noise_terms": []},
+
+        # ── T&D losses (§9.2 TDLj,y) ─────────────────────────────────────────────
+        # Source: CDM TOOL05. Zero for self-generated renewable electricity.
+        {"param_key": "TDL", "param_name": "Transmission and distribution losses (TDLj,y)",
+         "category": "project", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 0.50,
+         "is_ex_ante": False, "depends_on": [],
+         "tool_reference": "CDM TOOL05",
+         "aliases": ["TDLj,y", "TDL_j,y", "T&D losses", "transmission losses", "distribution losses",
+                     "grid losses", "technical losses"],
+         "extraction_hint": (
+             "Extract TDLj,y — average technical T&D losses for the electricity grid serving project devices. "
+             "Source: CDM TOOL05. Monitored once per monitoring period. "
+             "Zero for self-generated on-site renewable electricity."
+         ),
+         "noise_terms": []},
+
+        # ── Leakage (§8.3, Eq. 11) ────────────────────────────────────────────────
+        # VM0050 applies a fixed 5% standard leakage deduction: ER = (BE - PE) × 0.95 − LERB,y
+        # Both biomass leakage and fossil-fuel leakage use the 0.95 retention factor.
+        # Renewable biomass leakage (LERB,y) calculated separately via CDM TOOL16.
+        {"param_key": "leakage_discount", "param_name": "Leakage retention factor (VM0050 Eq. 11)",
+         "category": "leakage", "unit": "fraction", "data_type": "number", "min_value": 0.90, "max_value": 1.0,
+         "default": 0.95, "is_ex_ante": True, "depends_on": [],
+         "aliases": ["leakage factor", "leakage deduction", "0.95 factor", "5% leakage deduction"],
+         "extraction_hint": (
+             "VM0050 §8.3 and Eq. 11 apply a fixed 0.95 retention factor (5% standard leakage deduction) "
+             "to (BEy − PEy) for both non-renewable biomass and fossil fuel leakage. "
+             "Renewable biomass leakage (LERB,y) is subtracted separately using CDM TOOL16."
+         ),
+         "noise_terms": []},
+
+        # ── Wood-to-charcoal conversion factor (§9.1 CF) ─────────────────────────
+        # CDM TOOL33 default: 4 t dry wood / t charcoal. Up to 6 with national substantiation.
+        {"param_key": "CF", "param_name": "Wood-to-charcoal conversion factor (CF)",
+         "category": "fuel_property", "unit": "t dry wood / t charcoal", "data_type": "number",
+         "min_value": 2.0, "max_value": 8.0, "is_ex_ante": True,
+         "tool_reference": "CDM TOOL33 v3", "depends_on": [],
+         "aliases": ["conversion factor", "CF", "charcoal conversion factor", "wood to charcoal ratio",
+                     "wood-to-charcoal factor"],
+         "extraction_hint": (
+             "Extract the wood-to-charcoal conversion factor (CF). CDM TOOL33 default: 4 t dry wood / t charcoal. "
+             "VM0050 §9.1 allows up to 6 where substantiated by government-approved national or regional values. "
+             "Only applicable when charcoal is used AND the CF method is chosen over direct charcoal EF method."
+         ),
+         "noise_terms": []},
+
+        # ── Crediting period / project metadata ────────────────────────────────────
+        {"param_key": "baseline_fuel", "param_name": "Baseline fuel type",
+         "category": "baseline", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
+        {"param_key": "project_fuel", "param_name": "Project fuel type",
+         "category": "project", "unit": "", "data_type": "text", "is_ex_ante": True, "depends_on": []},
     ],
     "TPDDTEC": [
         {"param_key": "fNRB", "param_name": "Fraction of non-renewable biomass", "category": "baseline", "unit": "fraction", "data_type": "number", "min_value": 0.0, "max_value": 1.0, "is_ex_ante": True, "tool_reference": "CDM TOOL33 v3", "depends_on": [],

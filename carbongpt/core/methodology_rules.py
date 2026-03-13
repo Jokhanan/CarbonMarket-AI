@@ -84,6 +84,66 @@ TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5 = 92.29
 TPDDTEC_NCV_CHARCOAL_TJ_PER_TON = 0.0295
 
 
+# ── VM0050-specific constants (VCS v1.0, 9 October 2024) ────────────────────
+#
+# Sources:
+#   §8.1.1 Option 2  — default fuel consumption per capita
+#   §9.1            — "Data and Parameters Available at Validation" parameter tables
+#   §4              — Applicability Conditions (efficiency thresholds)
+#   §8.3 / Eq. 11  — Leakage 0.95 factor
+#   Footnote 22     — TOOL30 uncertainty discount
+
+# Default baseline fuel consumption (§8.1.1, Option 2 — IPCC-derived)
+VM0050_DEFAULT_WOOD_CONSUMPTION_PER_CAPITA    = 0.50   # t/capita/yr, air-dried firewood
+VM0050_DEFAULT_CHARCOAL_CONSUMPTION_PER_CAPITA = 0.13  # t/capita/yr
+
+# Fuel NCV defaults — IPCC 2006 Guidelines (§9.1, NCVb,i / NCVp,j table)
+VM0050_NCV_WOOD_TJ_PER_TON      = 0.0156   # TJ/tonne (= 15.6 TJ/Gg)
+VM0050_NCV_CHARCOAL_TJ_PER_TON  = 0.0295   # TJ/tonne (= 29.5 TJ/Gg)
+
+# CO2 emission factors — IPCC 2006 (§9.1, EFb,i,CO2 table)
+VM0050_EF_CO2_WOOD                         = 112.0    # tCO2/TJ
+VM0050_EF_CO2_CHARCOAL_COMBUSTION_ONLY     = 112.0    # tCO2/TJ — renewable charcoal in project, fNRB=0
+VM0050_EF_CO2_CHARCOAL_WITH_PRODUCTION     = 165.22   # tCO2/TJ — non-renewable biomass baseline charcoal
+
+# Non-CO2 emission factors — AR5 GWP (§9.1, EFb,i,nonCO2 table)
+VM0050_EF_NONCO2_WOOD_AR5                           = 9.46    # tCO2e/TJ
+VM0050_EF_NONCO2_CHARCOAL_COMBUSTION_ONLY_AR5       = 5.865   # tCO2e/TJ — combustion only
+VM0050_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5       = 44.83   # tCO2e/TJ — combustion + production
+
+# Wood-to-charcoal conversion factor (§9.1, CF table, CDM TOOL33 default)
+VM0050_CF_DEFAULT                   = 4.0   # t dry wood / t charcoal
+VM0050_CF_MAX_WITH_JUSTIFICATION    = 6.0   # max allowed with national/regional substantiation
+
+# Baseline device efficiency defaults (§9.1, ηold,avg table)
+VM0050_ETA_THREE_STONE_FIRE = 0.15   # 15% — default for three-stone fire / no improved air supply or chimney
+
+# Minimum initial thermal efficiency thresholds (§4, Conditions 8–10)
+VM0050_MIN_ETA_BIOMASS_EE_OR_FUEL_SWITCH = 0.25   # §4 cond. 8 — biomass efficient or fuel-switch devices
+VM0050_MIN_ETA_LPG_BIOETHANOL            = 0.30   # §4 cond. 9 — LPG or bioethanol devices
+VM0050_MIN_ETA_HOT_PLATE_ELECTRIC        = 0.40   # §4 cond. 10a — hot plates and electric hobs
+VM0050_MIN_ETA_INDUCTION_ELECTRIC        = 0.70   # §4 cond. 10b — induction stoves and other electric
+
+# Leakage: standard 5% deduction applied as 0.95 factor to (BE - PE) (§8.3, Eq. 11)
+VM0050_LEAKAGE_RETENTION_FACTOR = 0.95
+
+# fNRB: uncertainty discount when using CDM TOOL30 (Footnote 22)
+# If fNRB from TOOL30 = 0.60, then applied fNRB = 0.60 × (1 − 0.26) = 0.444
+VM0050_FNRB_TOOL30_UNCERTAINTY_DISCOUNT = 0.26
+
+# LPG crediting sunset: credits cannot be issued for periods after 31 December 2045 (§4, cond. 11c)
+VM0050_LPG_CREDITING_SUNSET_YEAR = 2045
+
+# Confidence and precision requirement for all measurement campaigns (§6.2, §8.1.1, §8.2.1.1)
+VM0050_REQUIRED_CONFIDENCE_PRECISION = "90/10"
+
+# Backup generator threshold: if backup > 1% of annual electricity, must exclude that percentage of ERs
+VM0050_BACKUP_GENERATOR_THRESHOLD_PCT = 1.0   # percent
+
+# Self-generated renewable electricity: backup non-renewable cap
+VM0050_SELF_GEN_NONRENEWABLE_MAX_PCT = 20.0   # percent
+
+
 # ── MECD-specific constants ──────────────────────────────────────────────────
 
 MECD_DEVICE_OPTIONS = [
