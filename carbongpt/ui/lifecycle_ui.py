@@ -264,6 +264,121 @@ def render_monitoring_dashboard(project):
     </span>
     """, unsafe_allow_html=True)
 
+    # ── Monitoring Periods ────────────────────────────────────────────────
+    st.markdown("#### Monitoring Periods")
+    st.caption("Each monitoring period represents a distinct reporting cycle. Add a period, then generate a Monitoring Report project for it.")
+
+    from carbongpt.repository.store import list_monitoring_periods, create_monitoring_period, delete_monitoring_period
+
+    periods = list_monitoring_periods(project_id)
+
+    if not periods:
+        st.info("No monitoring periods yet. Add the first period below.")
+
+    PERIOD_STATUS_LABELS = {
+        "planned": "Planned",
+        "monitoring": "Monitoring",
+        "complete": "Data Complete",
+        "reported": "Reported",
+    }
+
+    for period in periods:
+        pid = period["id"]
+        p_num = period.get("period_number", "")
+        p_start = (period.get("period_start") or "")
+        p_start_str = str(p_start)[:10] if p_start else "—"
+        p_end = (period.get("period_end") or "")
+        p_end_str = str(p_end)[:10] if p_end else "—"
+        p_status = period.get("status", "planned")
+        p_status_label = PERIOD_STATUS_LABELS.get(p_status, p_status)
+        mr_pid = period.get("mr_project_id")
+
+        with st.container(border=True):
+            pc1, pc2, pc3, pc4 = st.columns([2, 2, 1, 1])
+            with pc1:
+                st.markdown(f"**Period {p_num}**  {p_start_str} to {p_end_str}")
+            with pc2:
+                status_opts = list(PERIOD_STATUS_LABELS.keys())
+                cur_idx = status_opts.index(p_status) if p_status in status_opts else 0
+                new_status = st.selectbox(
+                    "Status",
+                    status_opts,
+                    index=cur_idx,
+                    format_func=lambda x: PERIOD_STATUS_LABELS.get(x, x),
+                    key=f"mp_status_{pid}",
+                    label_visibility="collapsed",
+                )
+                if new_status != p_status:
+                    from carbongpt.repository.store import update_monitoring_period
+                    update_monitoring_period(pid, status=new_status)
+                    st.rerun()
+            with pc3:
+                if mr_pid:
+                    if st.button("Open MR", key=f"open_mr_{pid}", use_container_width=True):
+                        st.session_state.selected_project_id = mr_pid
+                        st.rerun()
+                else:
+                    if st.button("Generate MR", key=f"gen_mr_{pid}", use_container_width=True, type="primary"):
+                        try:
+                            import requests as _req, json as _json
+                            payload = {
+                                "name": f"{project['name']} — MR Period {p_num}",
+                                "standard": project.get("standard", "GoldStandard"),
+                                "methodology": project.get("methodology"),
+                                "country": project.get("country"),
+                                "project_type": "monitoring_report",
+                                "parent_project_id": project_id,
+                                "monitoring_period_start": p_start_str if p_start_str != "—" else None,
+                                "monitoring_period_end": p_end_str if p_end_str != "—" else None,
+                            }
+                            resp = _req.post(
+                                "http://localhost:3000/api/projects",
+                                json=payload,
+                                timeout=15,
+                            )
+                            if resp.status_code in (200, 201):
+                                new_mr = resp.json()
+                                from carbongpt.repository.store import update_monitoring_period
+                                update_monitoring_period(pid, mr_project_id=new_mr["id"])
+                                st.success(f"Monitoring Report project created.")
+                                st.rerun()
+                            else:
+                                st.error("Failed to create MR project.")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+            with pc4:
+                if st.button("Remove", key=f"del_mp_{pid}", use_container_width=True):
+                    delete_monitoring_period(pid)
+                    st.rerun()
+
+    # Add new period form
+    with st.expander("+ Add monitoring period", expanded=not periods):
+        ap1, ap2, ap3 = st.columns(3)
+        with ap1:
+            next_num = (max((p.get("period_number", 0) for p in periods), default=0) + 1) if periods else 1
+            new_p_num = st.number_input("Period number", min_value=1, value=next_num, step=1, key="mp_new_num")
+        with ap2:
+            new_p_start = st.date_input("Period start", value=None, key="mp_new_start", format="YYYY-MM-DD")
+        with ap3:
+            new_p_end = st.date_input("Period end", value=None, key="mp_new_end", format="YYYY-MM-DD")
+        new_p_notes = st.text_input("Notes (optional)", key="mp_new_notes", placeholder="e.g. First crediting period")
+        if st.button("Add Period", key="mp_add_btn", type="primary"):
+            if new_p_start and new_p_end and new_p_end <= new_p_start:
+                st.warning("End date must be after start date.")
+            else:
+                create_monitoring_period(
+                    project_id=project_id,
+                    period_number=int(new_p_num),
+                    period_start=new_p_start.isoformat() if new_p_start else None,
+                    period_end=new_p_end.isoformat() if new_p_end else None,
+                    notes=new_p_notes or None,
+                )
+                st.success("Monitoring period added.")
+                st.rerun()
+
+    st.divider()
+
+    # ── ER Benchmark ─────────────────────────────────────────────────────
     selected_scenario_id = project.get("selected_scenario_id")
     if selected_scenario_id:
         try:
@@ -282,35 +397,33 @@ def render_monitoring_dashboard(project):
                 annual_er = summary.get("average_annual_er", 0)
                 st.info(
                     f"Benchmark Scenario: {sc.get('name', 'Unknown')} "
-                    f"-- {total_er:,.0f} tCO2e total, {annual_er:,.0f} tCO2e/yr. "
-                    f"Monitoring targets are based on this scenario."
+                    f"— {total_er:,.0f} tCO2e total, {annual_er:,.0f} tCO2e/yr"
                 )
         except Exception:
             pass
 
+    # ── Monitoring Checklist (tasks) ──────────────────────────────────────
     tasks = get_monitoring_tasks(project_id)
-    if not tasks:
-        st.info("Monitoring tasks have not been set up yet.")
-        if st.button("Initialize Monitoring Tasks", key="init_monitoring"):
-            with st.spinner("Setting up monitoring tasks from methodology requirements..."):
-                tasks = initialize_monitoring_tasks(project_id, methodology)
-                st.success(f"Initialized {len(tasks)} monitoring tasks")
-                st.rerun()
-        return
-
-    active = [t for t in tasks if t["status"] not in ("completed",)]
-    completed = [t for t in tasks if t["status"] == "completed"]
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Tasks", len(tasks))
-    with col2:
-        st.metric("Active", len(active))
-    with col3:
-        st.metric("Completed", len(completed))
-
-    for task in tasks:
-        _render_monitoring_task(task)
+    with st.expander(f"Monitoring Checklist ({len(tasks)} tasks)", expanded=not periods):
+        if not tasks:
+            st.info("Monitoring tasks have not been set up yet.")
+            if st.button("Initialize Monitoring Tasks", key="init_monitoring"):
+                with st.spinner("Setting up monitoring tasks from methodology requirements..."):
+                    tasks = initialize_monitoring_tasks(project_id, methodology)
+                    st.success(f"Initialized {len(tasks)} monitoring tasks")
+                    st.rerun()
+        else:
+            active = [t for t in tasks if t["status"] not in ("completed",)]
+            completed_tasks = [t for t in tasks if t["status"] == "completed"]
+            tc1, tc2, tc3 = st.columns(3)
+            with tc1:
+                st.metric("Total Tasks", len(tasks))
+            with tc2:
+                st.metric("Active", len(active))
+            with tc3:
+                st.metric("Completed", len(completed_tasks))
+            for task in tasks:
+                _render_monitoring_task(task)
 
 
 def _render_monitoring_task(task):

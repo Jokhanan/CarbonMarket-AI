@@ -62,6 +62,23 @@ class ProjectUpdate(BaseModel):
     monitoring_period_end: str | None = None
 
 
+class MonitoringPeriodCreate(BaseModel):
+    period_number: int = 1
+    period_start: str | None = None
+    period_end: str | None = None
+    status: str = "planned"
+    notes: str | None = None
+
+
+class MonitoringPeriodUpdate(BaseModel):
+    period_number: int | None = None
+    period_start: str | None = None
+    period_end: str | None = None
+    status: str | None = None
+    notes: str | None = None
+    mr_project_id: int | None = None
+
+
 class WriteSectionRequest(BaseModel):
     section_id: str
     user_instructions: str | None = None
@@ -199,6 +216,115 @@ def delete_project(project_id: int):
 def get_child_projects_endpoint(project_id: int):
     from carbongpt.repository.store import get_child_projects
     return get_child_projects(project_id)
+
+
+@router.get("/{project_id}/monitoring-periods")
+def list_monitoring_periods_endpoint(project_id: int):
+    from carbongpt.repository.store import list_monitoring_periods
+    return list_monitoring_periods(project_id)
+
+
+@router.post("/{project_id}/monitoring-periods")
+def create_monitoring_period_endpoint(project_id: int, data: MonitoringPeriodCreate):
+    from carbongpt.repository.store import create_monitoring_period
+    period_id = create_monitoring_period(
+        project_id=project_id,
+        period_number=data.period_number,
+        period_start=data.period_start,
+        period_end=data.period_end,
+        status=data.status,
+        notes=data.notes,
+    )
+    return {"id": period_id, "message": "Monitoring period created."}
+
+
+@router.patch("/{project_id}/monitoring-periods/{period_id}")
+def update_monitoring_period_endpoint(project_id: int, period_id: int, data: MonitoringPeriodUpdate):
+    from carbongpt.repository.store import update_monitoring_period
+    update_monitoring_period(period_id, **{k: v for k, v in data.dict().items() if v is not None})
+    return {"message": "Monitoring period updated."}
+
+
+@router.delete("/{project_id}/monitoring-periods/{period_id}")
+def delete_monitoring_period_endpoint(project_id: int, period_id: int):
+    from carbongpt.repository.store import delete_monitoring_period
+    delete_monitoring_period(period_id)
+    return {"message": "Monitoring period deleted."}
+
+
+@router.post("/import-document")
+async def import_document_endpoint(file: UploadFile = File(...)):
+    import tempfile, json as _json
+    suffix = Path(file.filename).suffix.lower() if file.filename else ".pdf"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    parsed_text = ""
+    try:
+        if suffix in (".pdf",):
+            try:
+                import pdfplumber
+                parts = []
+                with pdfplumber.open(tmp_path) as pdf:
+                    for page in pdf.pages[:30]:
+                        t = page.extract_text()
+                        if t:
+                            parts.append(t)
+                parsed_text = "\n".join(parts)
+            except Exception as e:
+                logger.warning("pdfplumber failed: %s", e)
+        elif suffix in (".docx",):
+            try:
+                from docx import Document as DocxDoc
+                doc_obj = DocxDoc(tmp_path)
+                parsed_text = "\n".join(p.text.strip() for p in doc_obj.paragraphs if p.text.strip())
+            except Exception as e:
+                logger.warning("docx parse failed: %s", e)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    if not parsed_text:
+        return {"error": "Could not extract text from this file.", "extracted": {}}
+
+    excerpt = parsed_text[:8000]
+    prompt = (
+        "You are a carbon project expert. The following is text extracted from a carbon project document "
+        "(e.g. PDD, PoA-DD, Monitoring Report).\n\n"
+        "Extract the following fields and return ONLY valid JSON, no markdown:\n"
+        "{\n"
+        '  "project_name": "...",\n'
+        '  "standard": "GoldStandard" or "Verra" or null,\n'
+        '  "methodology": "exact methodology code e.g. TPDDTEC v4.0 or VM0050 or GS-MECD v1.2 or null",\n'
+        '  "country": "country name or null",\n'
+        '  "project_type": "standalone_pdd" or "poa_programme" or "monitoring_report" or null,\n'
+        '  "activity_type": "Cooking devices" or "Renewable electricity" or "Other" or null,\n'
+        '  "description": "one sentence summary or null",\n'
+        '  "monitoring_period_start": "YYYY-MM-DD or null",\n'
+        '  "monitoring_period_end": "YYYY-MM-DD or null"\n'
+        "}\n\n"
+        f"Document text:\n{excerpt}"
+    )
+
+    extracted = {}
+    try:
+        from carbongpt.core.ai_writer import _call_openai
+        system_prompt = "You are a carbon project expert. Return ONLY valid JSON, no markdown fences."
+        raw = _call_openai(system_prompt, prompt, max_tokens=600)
+        if raw:
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = "\n".join(raw.split("\n")[1:])
+            if raw.endswith("```"):
+                raw = raw.rsplit("```", 1)[0]
+            extracted = _json.loads(raw.strip())
+    except Exception as e:
+        logger.warning("AI extraction failed: %s", e)
+
+    return {"extracted": extracted, "text_length": len(parsed_text)}
 
 
 @router.patch("/{project_id}/documents/{doc_id}/ai-context")

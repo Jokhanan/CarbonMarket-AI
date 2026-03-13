@@ -1065,6 +1065,45 @@ def delete_user_project(project_id):
         cur.execute("DELETE FROM user_projects WHERE id = %s", (project_id,))
 
 
+def create_monitoring_period(project_id, period_number=1, period_start=None,
+                             period_end=None, status="planned", notes=None):
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO monitoring_periods "
+            "(project_id, period_number, period_start, period_end, status, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (project_id, period_number, period_start, period_end, status, notes),
+        )
+        return cur.fetchone()["id"]
+
+
+def list_monitoring_periods(project_id):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM monitoring_periods WHERE project_id = %s ORDER BY period_number ASC",
+            (project_id,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def update_monitoring_period(period_id, **kwargs):
+    allowed = {"period_number", "period_start", "period_end", "status", "notes", "mr_project_id"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    with get_cursor() as cur:
+        cur.execute(
+            f"UPDATE monitoring_periods SET {set_clause}, updated_at = NOW() WHERE id = %s",
+            list(updates.values()) + [period_id],
+        )
+
+
+def delete_monitoring_period(period_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM monitoring_periods WHERE id = %s", (period_id,))
+
+
 def add_project_document(project_id, doc_type, file_name, file_path, file_type, file_size_bytes=None, notes=None):
     with get_cursor() as cur:
         cur.execute(

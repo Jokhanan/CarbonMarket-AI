@@ -2803,13 +2803,20 @@ def _render_project_list():
 
     projects = _fetch("/projects") or []
 
-    col_left, col_right = st.columns([4, 1])
+    col_left, col_mid, col_right = st.columns([3, 1, 1])
     with col_left:
         if projects:
             st.markdown(f'<span class="stat-pill">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>', unsafe_allow_html=True)
+    with col_mid:
+        if st.button("Import Document", key="import_doc_btn", use_container_width=True):
+            st.session_state["show_new_project"] = True
+            st.session_state["wizard_path"] = "import"
+            st.session_state.pop("new_proj_step", None)
     with col_right:
         if st.button("New Project", key="new_proj_btn", type="primary", use_container_width=True):
             st.session_state["show_new_project"] = True
+            st.session_state.pop("wizard_path", None)
+            st.session_state.pop("new_proj_step", None)
 
     if st.session_state.get("show_new_project"):
         _render_new_project_wizard(projects)
@@ -2884,6 +2891,102 @@ def _render_project_card(proj, indent=False, child_count=0):
                 st.rerun()
 
 
+def _render_import_document_wizard(existing_projects, step_key):
+    st.markdown("**Import: Upload an existing document**")
+    st.caption("Upload a PDD, PoA-DD, Monitoring Report, or similar carbon project document. The system will extract the key project details and pre-fill the wizard for you.")
+
+    import_key = "import_extracted"
+    uploaded = st.file_uploader(
+        "Choose file (PDF or DOCX)",
+        type=["pdf", "docx"],
+        key="import_file_upload",
+    )
+
+    if uploaded is not None and import_key not in st.session_state:
+        with st.spinner("Extracting project details from document..."):
+            try:
+                import requests as _req
+                resp = _req.post(
+                    "http://localhost:3000/api/projects/import-document",
+                    files={"file": (uploaded.name, uploaded.getvalue(), uploaded.type)},
+                    timeout=60,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    st.session_state[import_key] = data.get("extracted", {})
+                    st.session_state["import_text_len"] = data.get("text_length", 0)
+                else:
+                    st.error("The document could not be parsed. Try a different file.")
+            except Exception as e:
+                st.error(f"Extraction failed: {e}")
+
+    extracted = st.session_state.get(import_key)
+
+    if extracted:
+        st.success(f"Document parsed ({st.session_state.get('import_text_len', 0):,} characters extracted). Review the detected fields below and edit any that are wrong.")
+        with st.container(border=True):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                imp_name = st.text_input("Project name", value=extracted.get("project_name") or "", key="imp_name")
+                imp_country = st.text_input("Country", value=extracted.get("country") or "", key="imp_country")
+                imp_std_raw = extracted.get("standard") or "GoldStandard"
+                imp_std_options = ["GoldStandard", "Verra"]
+                imp_std_idx = imp_std_options.index(imp_std_raw) if imp_std_raw in imp_std_options else 0
+                imp_standard = st.selectbox(
+                    "Standard",
+                    imp_std_options,
+                    index=imp_std_idx,
+                    format_func=lambda x: {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(x, x),
+                    key="imp_standard",
+                )
+            with col_b:
+                imp_methodology = st.text_input("Methodology", value=extracted.get("methodology") or "", key="imp_methodology")
+                imp_type_raw = extracted.get("project_type") or "standalone_pdd"
+                imp_type_options = list(PROJECT_TYPE_INFO.keys())
+                imp_type_labels = [PROJECT_TYPE_INFO[k]["label"] for k in imp_type_options]
+                imp_type_idx = imp_type_options.index(imp_type_raw) if imp_type_raw in imp_type_options else 0
+                imp_type_label = st.selectbox("Project type", imp_type_labels, index=imp_type_idx, key="imp_type_label")
+                imp_proj_type = imp_type_options[imp_type_labels.index(imp_type_label)]
+                imp_desc = st.text_area("Description", value=extracted.get("description") or "", key="imp_desc", height=68)
+
+        c_back, c_spacer, c_next = st.columns([1, 2, 1])
+        with c_back:
+            if st.button("Back", key="imp_back"):
+                st.session_state.pop("wizard_path", None)
+                st.session_state.pop(import_key, None)
+                st.session_state.pop("import_text_len", None)
+                st.rerun()
+        with c_next:
+            if st.button("Use these details", key="imp_continue", type="primary"):
+                if not imp_name:
+                    st.warning("Please provide a project name.")
+                else:
+                    st.session_state["new_proj_type"] = imp_proj_type
+                    st.session_state["wizard_name_saved"] = imp_name
+                    st.session_state["wizard_standard_saved"] = imp_standard
+                    st.session_state["wizard_country_saved"] = imp_country
+                    st.session_state["wizard_desc_saved"] = imp_desc
+                    st.session_state["wizard_methodology_step2"] = imp_methodology
+                    mon_start = extracted.get("monitoring_period_start")
+                    mon_end = extracted.get("monitoring_period_end")
+                    if mon_start:
+                        st.session_state["wizard_mon_start_saved"] = mon_start
+                    if mon_end:
+                        st.session_state["wizard_mon_end_saved"] = mon_end
+                    # Clear widget keys so seeds below take effect on first render
+                    for _wk in ["wizard_name", "wizard_desc", "wizard_standard"]:
+                        st.session_state.pop(_wk, None)
+                    st.session_state.pop(import_key, None)
+                    st.session_state.pop("import_text_len", None)
+                    st.session_state[step_key] = 2
+                    st.rerun()
+    else:
+        if st.button("Back", key="imp_back_empty"):
+            st.session_state.pop("wizard_path", None)
+            st.session_state.pop(import_key, None)
+            st.rerun()
+
+
 def _render_new_project_wizard(existing_projects):
     st.markdown("### Create New Project")
 
@@ -2891,6 +2994,11 @@ def _render_new_project_wizard(existing_projects):
         st.session_state["show_new_project"] = False
         st.session_state.pop("new_proj_step", None)
         st.session_state.pop("new_proj_type", None)
+        st.session_state.pop("wizard_path", None)
+        for _k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
+                   "wizard_desc_saved", "wizard_parent_saved", "wizard_loc_saved",
+                   "wizard_mon_start_saved", "wizard_mon_end_saved", "import_extracted"]:
+            st.session_state.pop(_k, None)
         st.rerun()
 
     step_key = "new_proj_step"
@@ -2900,39 +3008,139 @@ def _render_new_project_wizard(existing_projects):
     step = st.session_state[step_key]
 
     if step == 1:
-        st.markdown("**Step 1: What are you working on?**")
-        type_cols = st.columns(len(PROJECT_TYPE_INFO))
-        for i, (ptype, info) in enumerate(PROJECT_TYPE_INFO.items()):
-            with type_cols[i]:
+        wizard_path = st.session_state.get("wizard_path")
+
+        if wizard_path is None:
+            st.markdown("**Step 1: What would you like to do?**")
+            p1, p2, p3 = st.columns(3)
+            with p1:
                 with st.container(border=True):
-                    badge_class = info.get("badge_class", "badge-pdd")
-                    st.markdown(
-                        f"<span class='project-type-badge {badge_class}'>{info['short']}</span>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(f"**{info['label']}**")
-                    st.caption(info["description"])
-                    standards_str = ", ".join(
-                        {"GoldStandard": "GS", "Verra": "Verra"}.get(s, s) for s in info["standards"]
-                    )
-                    st.caption(f"Standards: {standards_str}")
-                    if st.button("Select", key=f"select_type_{ptype}", use_container_width=True):
-                        st.session_state["new_proj_type"] = ptype
+                    st.markdown("**Start a new project**")
+                    st.caption("Register a Standalone project or Programme of Activities from scratch.")
+                    if st.button("New project", key="path_new_proj", use_container_width=True, type="primary"):
+                        st.session_state["wizard_path"] = "new"
+                        st.rerun()
+            with p2:
+                with st.container(border=True):
+                    st.markdown("**Add to existing project**")
+                    st.caption("Add a Monitoring Report, VPA-DD, or Validation Report to a project you already have.")
+                    if st.button("Add to existing", key="path_add_existing", use_container_width=True):
+                        st.session_state["wizard_path"] = "add_existing"
+                        st.rerun()
+            with p3:
+                with st.container(border=True):
+                    st.markdown("**Import existing document**")
+                    st.caption("Upload a PDD, Monitoring Report, or PoA-DD — the system extracts the project details for you.")
+                    if st.button("Import document", key="path_import_doc", use_container_width=True):
+                        st.session_state["wizard_path"] = "import"
+                        st.rerun()
+
+        elif wizard_path == "new":
+            st.markdown("**Step 1: What type of project?**")
+            NEW_TYPES = {k: v for k, v in PROJECT_TYPE_INFO.items() if k in ("standalone_pdd", "poa_programme")}
+            type_cols = st.columns(len(NEW_TYPES))
+            for i, (ptype, info) in enumerate(NEW_TYPES.items()):
+                with type_cols[i]:
+                    with st.container(border=True):
+                        badge_class = info.get("badge_class", "badge-pdd")
+                        st.markdown(
+                            f"<span class='project-type-badge {badge_class}'>{info['short']}</span>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(f"**{info['label']}**")
+                        st.caption(info["description"])
+                        standards_str = ", ".join(
+                            {"GoldStandard": "GS", "Verra": "Verra"}.get(s, s) for s in info["standards"]
+                        )
+                        st.caption(f"Standards: {standards_str}")
+                        if st.button("Select", key=f"select_type_{ptype}", use_container_width=True):
+                            st.session_state["new_proj_type"] = ptype
+                            st.session_state[step_key] = 2
+                            st.rerun()
+            if st.button("Back", key="path_back_new"):
+                st.session_state.pop("wizard_path", None)
+                st.rerun()
+
+        elif wizard_path == "add_existing":
+            st.markdown("**Step 1: Add to existing project**")
+            parents = [p for p in existing_projects if p.get("project_type") in ("standalone_pdd", "poa_programme", "vpa_component")]
+            if not parents:
+                st.warning("No existing projects found. Create a project first.")
+                if st.button("Back", key="path_back_existing_empty"):
+                    st.session_state.pop("wizard_path", None)
+                    st.rerun()
+            else:
+                parent_opts = {
+                    p["id"]: f"{p['name']} ({PROJECT_TYPE_INFO.get(p.get('project_type', ''), {}).get('short', p.get('project_type', ''))})"
+                    for p in parents
+                }
+                chosen_parent_id = st.selectbox(
+                    "Select the parent project",
+                    list(parent_opts.keys()),
+                    format_func=lambda x: parent_opts.get(x, str(x)),
+                    key="wizard_add_parent_pick",
+                )
+                chosen_parent = next((p for p in parents if p["id"] == chosen_parent_id), None)
+
+                if chosen_parent and chosen_parent.get("project_type") == "poa_programme":
+                    avail_child_types = {"vpa_component": PROJECT_TYPE_INFO["vpa_component"]}
+                else:
+                    avail_child_types = {
+                        "monitoring_report": PROJECT_TYPE_INFO["monitoring_report"],
+                        "valver_report": PROJECT_TYPE_INFO["valver_report"],
+                    }
+
+                child_type_keys = list(avail_child_types.keys())
+                child_type_labels = [avail_child_types[k]["label"] for k in child_type_keys]
+                chosen_child_label = st.radio(
+                    "What do you want to add?",
+                    child_type_labels,
+                    key="wizard_add_child_type",
+                    horizontal=True,
+                )
+                chosen_child_type = child_type_keys[child_type_labels.index(chosen_child_label)]
+                st.caption(avail_child_types[chosen_child_type]["description"])
+
+                c_back, c_next = st.columns([1, 3])
+                with c_back:
+                    if st.button("Back", key="path_back_existing"):
+                        st.session_state.pop("wizard_path", None)
+                        st.rerun()
+                with c_next:
+                    if st.button("Continue", key="path_continue_existing", type="primary"):
+                        st.session_state["new_proj_type"] = chosen_child_type
+                        st.session_state["wizard_parent_saved"] = chosen_parent_id
+                        if chosen_parent:
+                            st.session_state["wizard_standard_saved"] = chosen_parent.get("standard", "GoldStandard")
+                            st.session_state["wizard_country_saved"] = chosen_parent.get("country", "")
                         st.session_state[step_key] = 2
                         st.rerun()
+
+        elif wizard_path == "import":
+            _render_import_document_wizard(existing_projects, step_key)
 
     elif step == 2:
         selected_type = st.session_state.get("new_proj_type", "standalone_pdd")
         type_info = PROJECT_TYPE_INFO[selected_type]
         badge_class = type_info.get("badge_class", "badge-pdd")
+        wizard_path = st.session_state.get("wizard_path")
         st.markdown(
             f"<span class='project-type-badge {badge_class}'>{type_info['short']}</span> "
             f"**{type_info['label']}**",
             unsafe_allow_html=True,
         )
 
+        # When coming from "add_existing" path, standard is pre-set from parent
+        prefilled_standard = st.session_state.get("wizard_standard_saved")
+        prefilled_parent_id = st.session_state.get("wizard_parent_saved")
+        parent_from_step1 = wizard_path == "add_existing" and prefilled_parent_id is not None
+
         available_standards = type_info.get("standards", STANDARD_OPTIONS)
-        if len(available_standards) == 1:
+        if parent_from_step1 and prefilled_standard:
+            new_standard = prefilled_standard
+            std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(new_standard, new_standard)
+            st.info(f"Standard: {std_display} (inherited from parent project)")
+        elif len(available_standards) == 1:
             new_standard = available_standards[0]
             std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(new_standard, new_standard)
             st.info(f"Standard: {std_display}")
@@ -2943,34 +3151,46 @@ def _render_new_project_wizard(existing_projects):
         needs_parent = type_info.get("needs_parent", False)
         parent_id = None
         if needs_parent:
-            parent_filter_type = type_info.get("parent_type")
-            if parent_filter_type:
-                linkable = [p for p in existing_projects
-                            if p.get("project_type") == parent_filter_type
-                            and p.get("standard") == new_standard]
-                parent_label = "Select parent PoA-DD programme"
+            if parent_from_step1:
+                # Parent was selected in step 1 — show as read-only info
+                parent_proj = next((p for p in existing_projects if p["id"] == prefilled_parent_id), None)
+                parent_display = parent_proj["name"] if parent_proj else f"Project #{prefilled_parent_id}"
+                st.info(f"Linked to: {parent_display}")
+                parent_id = prefilled_parent_id
             else:
-                linkable = [p for p in existing_projects
-                            if p.get("project_type") in ("standalone_pdd", "vpa_component", "poa_programme")
-                            and p.get("standard") == new_standard]
-                parent_label = "Link to existing project (optional)"
-
-            if linkable:
-                parent_options = {p["id"]: f"{p['name']} ({p.get('methodology', 'N/A')})" for p in linkable}
-                parent_id = st.selectbox(
-                    parent_label,
-                    [None] + list(parent_options.keys()),
-                    format_func=lambda x: parent_options[x] if x else "(none)",
-                    key="wizard_parent",
-                )
-            else:
-                if parent_filter_type == "poa_programme":
-                    st.warning("No PoA-DD programmes found. Create a PoA-DD first, or proceed without linking.")
+                parent_filter_type = type_info.get("parent_type")
+                if parent_filter_type:
+                    linkable = [p for p in existing_projects
+                                if p.get("project_type") == parent_filter_type
+                                and p.get("standard") == new_standard]
+                    parent_label = "Select parent PoA-DD programme"
                 else:
-                    st.info("No existing projects to link. You can proceed without linking.")
+                    linkable = [p for p in existing_projects
+                                if p.get("project_type") in ("standalone_pdd", "vpa_component", "poa_programme")
+                                and p.get("standard") == new_standard]
+                    parent_label = "Link to existing project (optional)"
 
+                if linkable:
+                    parent_options = {p["id"]: f"{p['name']} ({p.get('methodology', 'N/A')})" for p in linkable}
+                    parent_id = st.selectbox(
+                        parent_label,
+                        [None] + list(parent_options.keys()),
+                        format_func=lambda x: parent_options[x] if x else "(none)",
+                        key="wizard_parent",
+                    )
+                else:
+                    if parent_filter_type == "poa_programme":
+                        st.warning("No PoA-DD programmes found. Create a PoA-DD first, or proceed without linking.")
+                    else:
+                        st.info("No existing projects to link. You can proceed without linking.")
+
+        # Pre-fill name from import path (canonical pattern: seed session state before rendering widget)
+        if "wizard_name" not in st.session_state and st.session_state.get("wizard_name_saved"):
+            st.session_state["wizard_name"] = st.session_state["wizard_name_saved"]
         new_name = st.text_input("Project name", key="wizard_name",
                                   placeholder="e.g., Ghana Improved Cookstoves")
+        if "wizard_desc" not in st.session_state and st.session_state.get("wizard_desc_saved"):
+            st.session_state["wizard_desc"] = st.session_state["wizard_desc_saved"]
         new_desc = st.text_area("Description (optional)", key="wizard_desc",
                                  placeholder="Brief description...", height=68)
         st.markdown("---")

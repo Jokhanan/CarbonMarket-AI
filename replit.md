@@ -40,8 +40,18 @@ CarbonGPT leverages OpenAI's GPT models (gpt-4o, gpt-4o-mini) for language infer
 - **Audit Simulator:** (`carbongpt/core/audit_simulator.py`) Simulates VVB audits, performing parameter validation, evidence gap analysis, section consistency checks, and compliance verification with risk scoring.
 - **Project State Engine:** (`carbongpt/core/project_state.py`) Provides comprehensive project health assessments, including readiness scores, stage evaluation, and detailed breakdowns of project components.
 
+**Wizard (Project Creation Flow):**
+The New Project wizard in `_render_new_project_wizard` (streamlit_app.py) is project-first, not document-first. Step 1 presents 3 paths:
+- **New project** → shows only Standalone PDD and PoA-DD cards → existing step 2/3 methodology wizard
+- **Add to existing project** → parent project picker → doc type selection (MR, VPA-DD, ValVer) → step 2 pre-filled with parent's standard/country
+- **Import existing document** → file upload (PDF/DOCX) → AI extracts project name/standard/methodology/country → pre-fills step 2
+The "Import Document" button also appears on the home screen alongside "New Project". The import endpoint is `POST /api/projects/import-document`.
+
+**Monitoring Periods:**
+The `monitoring_periods` DB table (id, project_id, period_number, period_start, period_end, status, notes, mr_project_id) tracks discrete monitoring cycles as first-class records. The Monitoring tab in the project workspace shows these periods first, with an "Add Period" form and a "Generate MR" button per period that auto-creates a linked monitoring_report child project. Store functions: `create/list/update/delete_monitoring_period`. API routes: `GET/POST /projects/{id}/monitoring-periods`, `PATCH/DELETE /projects/{id}/monitoring-periods/{pid}`.
+
 **Database Schema:**
-The database includes tables for standards, documents, compliance rules, carbon projects, user projects, and methodology intelligence. New tables for the Carbon Operating System include `project_parameters`, `project_lifecycle`, `project_tasks`, `evidence_links`, `er_scenarios`, `er_scenario_years`, `issuance_records`, `monitoring_tasks`, and `audit_simulation_results`. These tables support centralized parameter storage, lifecycle management, evidence linking, scenario management, and audit reporting.
+The database includes tables for standards, documents, compliance rules, carbon projects, user projects, and methodology intelligence. New tables for the Carbon Operating System include `project_parameters`, `project_lifecycle`, `project_tasks`, `evidence_links`, `er_scenarios`, `er_scenario_years`, `issuance_records`, `monitoring_tasks`, `audit_simulation_results`, and `monitoring_periods`. These tables support centralized parameter storage, lifecycle management, evidence linking, scenario management, audit reporting, and monitoring period tracking.
 
 ## External Dependencies
 
