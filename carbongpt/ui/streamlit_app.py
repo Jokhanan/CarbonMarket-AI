@@ -7618,7 +7618,7 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
         loc_regions = loc.get("regions", "")
         loc_coords = loc.get("coordinates", "")
 
-    sdg_list = _render_sdg_section(project_id, sdgs_data)
+    sdg_list = _render_sdg_section(project_id, sdgs_data, methodology_settings=meth_settings)
 
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information the AI should use instead of generating.")
@@ -7771,7 +7771,8 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
             er_total = st.text_input("Total estimated ERs (tCO2e)", value=er.get("total_er_estimate", ""),
                                       key=f"setup_poa_er_total_{project_id}")
 
-    sdg_list = _render_sdg_section(project_id, sdgs_data)
+    _poa_meth = intake.get("programme", {}).get("methodology", "")
+    sdg_list = _render_sdg_section(project_id, sdgs_data, methodology_hint=_poa_meth)
 
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information.")
@@ -8072,34 +8073,218 @@ def _render_intake_valver(project_id, intake, standard="GoldStandard"):
     }
 
 
-def _render_sdg_section(project_id, sdgs_data):
+_SDG_GOALS = [
+    ("1", "No Poverty"),
+    ("2", "Zero Hunger"),
+    ("3", "Good Health and Well-being"),
+    ("4", "Quality Education"),
+    ("5", "Gender Equality"),
+    ("6", "Clean Water and Sanitation"),
+    ("7", "Affordable and Clean Energy"),
+    ("8", "Decent Work and Economic Growth"),
+    ("9", "Industry, Innovation and Infrastructure"),
+    ("10", "Reduced Inequalities"),
+    ("11", "Sustainable Cities and Communities"),
+    ("12", "Responsible Consumption and Production"),
+    ("13", "Climate Action"),
+    ("14", "Life Below Water"),
+    ("15", "Life on Land"),
+    ("16", "Peace, Justice and Strong Institutions"),
+    ("17", "Partnerships for the Goals"),
+]
+
+_SDG_INDICATORS = {
+    "1": [
+        "Reduction in household expenditure on fuel (USD/household/year)",
+        "Share of household income saved on fuel (%)",
+        "Number of households lifted above fuel poverty line",
+    ],
+    "3": [
+        "Reduction in annual mean PM2.5 exposure (μg/m³)",
+        "Reduction in carbon monoxide (CO) exposure (ppm)",
+        "Reduction in indoor air pollution-related DALYs averted (DALYs/year)",
+        "Number of premature deaths avoided from indoor air pollution (deaths/year)",
+    ],
+    "5": [
+        "Reduction in time spent collecting fuelwood (hours/week/household)",
+        "Reduction in time spent cooking (hours/day/household)",
+        "Share of female project employees (%)",
+    ],
+    "6": [
+        "Number of households with improved access to clean water",
+        "Reduction in waterborne disease incidence (%)",
+    ],
+    "7": [
+        "Number of households with access to clean cooking (households)",
+        "Annual clean energy delivered (GJ/year)",
+        "Cooking tier level achieved (WHO/World Bank Tier, scale 1-5)",
+        "Number of devices distributed / installed",
+    ],
+    "8": [
+        "Number of direct jobs created (FTE)",
+        "Number of indirect / supply chain jobs created (FTE)",
+        "Share of local sourcing for equipment / materials (%)",
+    ],
+    "13": [
+        "Annual greenhouse gas emission reductions (tCO2e/year)",
+        "Total emission reductions over crediting period (tCO2e)",
+        "Fraction of non-renewable biomass (fNRB) in baseline (%)",
+    ],
+    "15": [
+        "Annual reduction in wood fuel / charcoal consumption (tonnes/year)",
+        "Area of forest protected from deforestation / degradation (ha)",
+        "Fraction of non-renewable biomass (fNRB) reduction (%)",
+    ],
+}
+
+_EVIDENCE_TIERS = [
+    "Tier 1 — Directly monitored",
+    "Tier 2 — Default / conservative estimate",
+    "Tier 3 — Modelled / calculated",
+]
+
+_COOKSTOVE_CORE_SDGS = {"1", "3", "5", "7", "13"}
+_COOKSTOVE_WOOD_SDGS = {"1", "3", "5", "7", "13", "15"}
+
+
+def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, methodology_hint=""):
+    meth_s = methodology_settings or {}
+    baseline_fuel = meth_s.get("baseline_fuel", "").lower()
+    is_cookstove = bool(
+        meth_s.get("calculation_method")
+        or meth_s.get("baseline_fuel")
+        or "tpddtec" in str(methodology_hint).lower()
+        or "mecd" in str(methodology_hint).lower()
+        or "cookstove" in str(methodology_hint).lower()
+    )
+    suggested_sdgs = _COOKSTOVE_WOOD_SDGS if (is_cookstove and baseline_fuel in ("wood", "charcoal", "biomass", "crop residues")) else (
+        _COOKSTOVE_CORE_SDGS if is_cookstove else set()
+    )
+
+    existing_sdgs = sdgs_data.get("selected_sdgs", [])
+    existing_map = {}
+    for s in existing_sdgs:
+        gn = str(s.get("goal_number", ""))
+        existing_map[gn] = s
+
     with st.container(border=True):
         st.markdown("#### SDGs & Co-benefits")
-        st.caption("Select the Sustainable Development Goals this project contributes to.")
-        existing_sdgs = sdgs_data.get("selected_sdgs", [])
-        sdg_list = []
-        sdg_goals = [
-            "1 - No Poverty", "2 - Zero Hunger", "3 - Good Health and Well-being",
-            "4 - Quality Education", "5 - Gender Equality", "6 - Clean Water and Sanitation",
-            "7 - Affordable and Clean Energy", "8 - Decent Work and Economic Growth",
-            "9 - Industry, Innovation and Infrastructure", "10 - Reduced Inequalities",
-            "11 - Sustainable Cities and Communities", "12 - Responsible Consumption and Production",
-            "13 - Climate Action", "14 - Life Below Water", "15 - Life on Land",
-            "16 - Peace, Justice and Strong Institutions", "17 - Partnerships for the Goals",
-        ]
-        existing_map = {str(s.get("goal_number", "")): s.get("contribution_description", "") for s in existing_sdgs}
-        for goal in sdg_goals:
-            goal_num = goal.split(" - ")[0].strip()
-            is_selected = st.checkbox(goal, value=goal_num in existing_map,
-                                       key=f"setup_sdg_{project_id}_{goal_num}")
-            if is_selected:
-                contrib = st.text_input(
-                    f"SDG {goal_num} contribution",
-                    value=existing_map.get(goal_num, ""),
-                    key=f"setup_sdg_contrib_{project_id}_{goal_num}",
-                    placeholder=f"How does the project contribute to SDG {goal_num}?",
+
+        if suggested_sdgs:
+            _sugg_key = f"sdg_suggestion_applied_{project_id}"
+            _already_have = bool(existing_map)
+            if not _already_have and _sugg_key not in st.session_state:
+                st.info(
+                    f"Cookstove projects commonly report SDGs "
+                    f"{', '.join(sorted(suggested_sdgs, key=int))}. "
+                    f"Click below to pre-select them."
                 )
-                sdg_list.append({"goal_number": goal_num, "contribution_description": contrib})
+                if st.button("Pre-select suggested SDGs", key=f"sdg_apply_sugg_{project_id}"):
+                    st.session_state[_sugg_key] = True
+                    st.rerun()
+            elif not _already_have and _sugg_key in st.session_state:
+                st.caption(f"Suggested SDGs pre-selected: {', '.join(sorted(suggested_sdgs, key=int))}.")
+        else:
+            st.caption("Select the SDGs this project contributes to and fill in the indicator data for each.")
+
+        sdg_list = []
+
+        for goal_num, goal_name in _SDG_GOALS:
+            default_selected = (
+                goal_num in existing_map
+                or (not existing_map and goal_num in suggested_sdgs and f"sdg_suggestion_applied_{project_id}" in st.session_state)
+            )
+            is_selected = st.checkbox(
+                f"SDG {goal_num} — {goal_name}",
+                value=default_selected,
+                key=f"setup_sdg_{project_id}_{goal_num}",
+            )
+            if not is_selected:
+                continue
+
+            existing_entry = existing_map.get(goal_num, {})
+            existing_indicators = existing_entry.get("indicators", [])
+            old_contrib = existing_entry.get("contribution_description", "")
+
+            with st.container(border=True):
+                indicator_options = _SDG_INDICATORS.get(goal_num, [])
+                indicator_options_with_other = indicator_options + ["Other (specify)"]
+
+                existing_ind_name = existing_indicators[0].get("indicator_name", "") if existing_indicators else ""
+                if existing_ind_name and existing_ind_name not in indicator_options:
+                    ind_default_idx = len(indicator_options)
+                else:
+                    ind_default_idx = indicator_options.index(existing_ind_name) if existing_ind_name in indicator_options else 0
+
+                if indicator_options:
+                    ind_choice = st.selectbox(
+                        f"Key indicator for SDG {goal_num}",
+                        indicator_options_with_other,
+                        index=ind_default_idx,
+                        key=f"setup_sdg_ind_{project_id}_{goal_num}",
+                    )
+                    if ind_choice == "Other (specify)":
+                        ind_name = st.text_input(
+                            "Specify indicator name (include unit)",
+                            value=existing_ind_name if existing_ind_name not in indicator_options else "",
+                            key=f"setup_sdg_ind_custom_{project_id}_{goal_num}",
+                            placeholder="e.g. Number of women trained (count)",
+                        )
+                    else:
+                        ind_name = ind_choice
+                else:
+                    ind_name = st.text_input(
+                        "Indicator name (include unit)",
+                        value=existing_ind_name,
+                        key=f"setup_sdg_ind_name_{project_id}_{goal_num}",
+                        placeholder="e.g. Reduction in PM2.5 exposure (μg/m³)",
+                    )
+
+                val_c1, val_c2 = st.columns(2)
+                with val_c1:
+                    baseline_val = st.text_input(
+                        "Baseline value",
+                        value=existing_indicators[0].get("baseline_value", "") if existing_indicators else "",
+                        key=f"setup_sdg_bl_{project_id}_{goal_num}",
+                        placeholder="e.g. 245",
+                    )
+                with val_c2:
+                    project_val = st.text_input(
+                        "Project / target value",
+                        value=existing_indicators[0].get("project_value", "") if existing_indicators else "",
+                        key=f"setup_sdg_pv_{project_id}_{goal_num}",
+                        placeholder="e.g. 35",
+                    )
+
+                existing_tier = existing_indicators[0].get("evidence_tier", _EVIDENCE_TIERS[1]) if existing_indicators else _EVIDENCE_TIERS[1]
+                tier_idx = _EVIDENCE_TIERS.index(existing_tier) if existing_tier in _EVIDENCE_TIERS else 1
+                evidence_tier = st.selectbox(
+                    "Evidence tier",
+                    _EVIDENCE_TIERS,
+                    index=tier_idx,
+                    key=f"setup_sdg_tier_{project_id}_{goal_num}",
+                )
+
+                measurement = st.text_area(
+                    "Measurement / monitoring approach",
+                    value=existing_indicators[0].get("measurement_approach", "") if existing_indicators else old_contrib,
+                    key=f"setup_sdg_meas_{project_id}_{goal_num}",
+                    placeholder="How will this indicator be measured and monitored?",
+                    height=68,
+                )
+
+            sdg_list.append({
+                "goal_number": goal_num,
+                "contribution_description": measurement,
+                "indicators": [{
+                    "indicator_name": ind_name,
+                    "baseline_value": baseline_val,
+                    "project_value": project_val,
+                    "evidence_tier": evidence_tier,
+                    "measurement_approach": measurement,
+                }],
+            })
+
     return sdg_list
 
 

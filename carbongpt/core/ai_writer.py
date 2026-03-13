@@ -259,6 +259,38 @@ def _format_project_context(project_info):
         ]),
     }
 
+    _sdg_data = intake.get("sdgs", {})
+    if _sdg_data and isinstance(_sdg_data, dict):
+        _selected = _sdg_data.get("selected_sdgs", [])
+        if _selected:
+            _sdg_lines = []
+            for _s in _selected:
+                _gn = _s.get("goal_number", "")
+                _contrib = _s.get("contribution_description", "")
+                _inds = _s.get("indicators", [])
+                _line = f"  - SDG {_gn}"
+                if _inds and isinstance(_inds, list):
+                    _ind = _inds[0]
+                    _ind_name = _ind.get("indicator_name", "")
+                    _bl_val = _ind.get("baseline_value", "")
+                    _pj_val = _ind.get("project_value", "")
+                    _tier = _ind.get("evidence_tier", "")
+                    _meas = _ind.get("measurement_approach", "")
+                    if _ind_name:
+                        _line += f": {_ind_name}"
+                    if _bl_val or _pj_val:
+                        _line += f" | Baseline: {_bl_val or 'N/A'}, Project: {_pj_val or 'N/A'}"
+                    if _tier:
+                        _line += f" ({_tier})"
+                    if _meas and _meas != _contrib:
+                        _line += f"\n    Measurement: {_meas}"
+                elif _contrib:
+                    _line += f": {_contrib}"
+                _sdg_lines.append(_line)
+            if _sdg_lines:
+                parts.append("**SDGs & Co-benefits:**\n" + "\n".join(_sdg_lines))
+        intake.pop("sdgs", None)
+
     for card_key, (card_title, fields) in card_formatters.items():
         card_data = intake.get(card_key)
         if not card_data or not isinstance(card_data, dict):
