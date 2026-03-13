@@ -1,0 +1,137 @@
+I want you to perform a full UX and data-flow audit of the cookstove project workflow.
+
+Do NOT code yet.
+
+First analyze the entire wizard and parameter flow and identify all places where the system asks the user for the same information more than once.
+
+The goal is to eliminate duplicated inputs and ensure that each piece of information is entered only once and reused everywhere else.
+
+--------------------------------------------------
+1. LOCATION DUPLICATION ISSUE
+--------------------------------------------------
+
+Currently I see duplicated inputs related to location.
+
+Example:
+
+In the location section:
+The user enters a place name (for example: Bobo-Dioulasso).
+The system automatically resolves:
+- latitude
+- longitude
+- map position
+
+This works correctly.
+
+But later in the wizard, the system asks again for:
+- project location
+- latitude
+- longitude
+
+This is redundant.
+
+Once coordinates are resolved from the location lookup, they should become the canonical project location and should not be requested again.
+
+Please:
+
+1. Trace where location data is currently stored.
+2. Identify every place where the wizard asks for location again.
+3. Propose a clean single-source-of-truth approach.
+
+Example target design:
+
+Project location entered once →
+coordinates stored →
+all later modules reuse those values automatically.
+
+--------------------------------------------------
+2. DUPLICATED PROJECT PARAMETERS
+--------------------------------------------------
+
+I am also seeing multiple duplicated inputs related to:
+
+- baseline fuel
+- project fuel
+- project location
+- number of households / beneficiaries
+- device deployment numbers
+- other cookstove parameters
+
+These sometimes appear both in the wizard and again in parameter tabs.
+
+Please:
+
+1. Review the flows for the three cookstove methodologies currently supported:
+   - TPDDTEC
+   - Metered & Measured Cooking Devices (MECD)
+   - VM0050
+
+2. Identify every duplicated input across:
+   - project wizard
+   - parameter tab
+   - calculation modules
+
+3. Propose a clean parameter architecture where:
+   - each input is requested once
+   - stored centrally
+   - reused across modules.
+
+--------------------------------------------------
+3. SDG MODULE REVIEW
+--------------------------------------------------
+
+The current SDG section is not very useful.
+
+Right now the interface only allows the user to click on SDG icons (for example SDG1) but it does not guide the user or connect with methodology requirements.
+
+Please analyze how SDG reporting actually works in Gold Standard.
+
+Specifically check:
+
+- Gold Standard SDG Impact Tool
+- SDG impact indicators used in GS projects
+- Whether projects must define baseline vs project impacts
+- Whether there are predefined indicators per SDG
+- Whether there are recommended SDGs for cookstove projects.
+
+Questions:
+
+1. Should the system suggest SDGs automatically based on project type?
+2. Should SDG indicators come from the official GS SDG Impact Tool?
+3. Should the interface capture baseline vs project values for indicators?
+4. How should SDG evidence be structured in the system?
+
+Please propose a better SDG workflow.
+
+--------------------------------------------------
+4. CLEAN DATA FLOW
+--------------------------------------------------
+
+For the cookstove project workflow, please propose a clean data flow:
+
+Example:
+
+Step 1 – Project basics
+- standard
+- country
+- location
+- baseline fuel
+- project fuel
+
+Step 2 – methodology auto-detection
+
+Step 3 – methodology-specific parameters
+
+No duplicated inputs should appear later.
+
+--------------------------------------------------
+5. DELIVERABLE
+--------------------------------------------------
+
+Please provide:
+
+1. A list of all duplicated inputs you found
+2. The modules where they appear
+3. A proposed clean architecture for inputs
+4. A proposed improved SDG workflow
+5. Which files would need refactoring
