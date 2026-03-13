@@ -792,42 +792,29 @@ def vm0050_hierarchy_html(method: dict) -> str:
         )
 
     def node(step_label, badge_text, badge_colour, sub_note, eq_label):
-        return f"""
-        <div style="min-width:148px;max-width:180px;flex:1;">
-          <div style="font-size:0.68em;font-weight:700;color:#64748b;text-transform:uppercase;
-                      letter-spacing:0.06em;margin-bottom:5px;">{step_label}</div>
-          <div style="background:{badge_colour};color:white;padding:5px 10px;border-radius:5px;
-                      font-size:0.8em;font-weight:700;line-height:1.3;">{badge_text}</div>
-          <div style="font-size:0.75em;color:#374151;margin-top:4px;line-height:1.4;">{sub_note}</div>
-          <div style="font-size:0.72em;color:#64748b;margin-top:2px;font-style:italic;">{eq_label}</div>
-        </div>"""
+        # Compact single-line HTML — avoids Streamlit treating 4-space-indented
+        # lines as code blocks when rendered via st.markdown(unsafe_allow_html=True)
+        label_div = f'<div style="font-size:0.68em;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">{step_label}</div>'
+        badge_div = f'<div style="background:{badge_colour};color:white;padding:5px 10px;border-radius:5px;font-size:0.8em;font-weight:700;line-height:1.3;">{badge_text}</div>'
+        sub_div = f'<div style="font-size:0.75em;color:#374151;margin-top:4px;line-height:1.4;">{sub_note}</div>'
+        eq_div = f'<div style="font-size:0.72em;color:#64748b;margin-top:2px;font-style:italic;">{eq_label}</div>'
+        return f'<div style="min-width:148px;max-width:180px;flex:1;">{label_div}{badge_div}{sub_div}{eq_div}</div>'
 
     arrow = '<div style="margin-top:26px;color:#94a3b8;font-size:1.3em;flex-shrink:0;">&#8594;</div>'
 
-    n1 = node("Baseline Emissions", f"{bl_eq} — Biomass ({method.get('method_id','').split('_')[0].capitalize()})", TEAL, bl_note, f"fNRB source: {fnrb_short}")
-    n2 = node("ECi,y Route", ec_eq, BLUE, ec_eq_note, VM0050_EC_OPTION_DISPLAY.get(
-        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
-    )[:48] + "…" if len(VM0050_EC_OPTION_DISPLAY.get(
-        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
-    )) > 48 else VM0050_EC_OPTION_DISPLAY.get(
-        next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default"), ""
-    ))
-    n3 = node("Project Emissions", f"{proj_eq} — {dev_disp}", proj_eq_colour, proj_eq_note, "")
-    n4 = node("Net ER", "Eq. 11", SLATE, "(BE − PE) × 0.95 − LERB,y", "Leakage: 5% standard deduction")
+    _bl_fuel_cap = method.get("method_id", "").split("_")[0].capitalize() or "Biomass"
+    n1 = node("Baseline Emissions", f"{bl_eq} \u2014 Biomass ({_bl_fuel_cap})", TEAL, bl_note, f"fNRB source: {fnrb_short}")
 
-    return f"""
-<div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-subtle,#e2e8f0);
-            border-radius:8px;padding:16px 18px 12px 18px;margin:8px 0;">
-  <div style="font-size:0.78em;font-weight:700;color:#0d9488;margin-bottom:10px;
-              text-transform:uppercase;letter-spacing:0.06em;">
-    VM0050 v1.0 — Calculation Route
-  </div>
-  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
-    {n1}{arrow}{n2}{arrow}{n3}{arrow}{n4}
-  </div>
-  <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-    <span style="font-size:0.72em;color:#64748b;margin-right:4px;">Requires:</span>
-    {pills_html if pills_html else '<span style="font-size:0.72em;color:#64748b;">No additional surveys beyond standard monitoring</span>'}
-  </div>
-  {warn_html}
-</div>"""
+    _ec_key = next((k for k in VM0050_EC_OPTION_EQ if VM0050_EC_OPTION_EQ[k] == ec_eq), "option_2_default")
+    _ec_label_full = VM0050_EC_OPTION_DISPLAY.get(_ec_key, "")
+    _ec_label = _ec_label_full[:48] + "\u2026" if len(_ec_label_full) > 48 else _ec_label_full
+    n2 = node("ECi,y Route", ec_eq, BLUE, ec_eq_note, _ec_label)
+
+    n3 = node("Project Emissions", f"{proj_eq} \u2014 {dev_disp}", proj_eq_colour, proj_eq_note, "")
+    n4 = node("Net ER", "Eq. 11", SLATE, "(BE \u2212 PE) \u00d7 0.95 \u2212 LERB,y", "Leakage: 5% standard deduction")
+
+    _pills_fallback = '<span style="font-size:0.72em;color:#64748b;">No additional surveys beyond standard monitoring</span>'
+    _inner = f'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">{n1}{arrow}{n2}{arrow}{n3}{arrow}{n4}</div>'
+    _req_row = f'<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;"><span style="font-size:0.72em;color:#64748b;margin-right:4px;">Requires:</span>{pills_html if pills_html else _pills_fallback}</div>'
+    _header = '<div style="font-size:0.78em;font-weight:700;color:#0d9488;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">VM0050 v1.0 \u2014 Calculation Route</div>'
+    return f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px 12px 18px;margin:8px 0;">{_header}{_inner}{_req_row}{warn_html}</div>'

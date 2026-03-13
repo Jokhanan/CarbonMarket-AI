@@ -3114,50 +3114,55 @@ def _render_new_project_wizard(existing_projects):
         bl_fuel_top = None
         pj_fuel_top = None
         if activity_category == "Cooking devices":
-            st.markdown("---")
-            st.markdown("**Fuel selection**")
-            st.caption("Select baseline and project fuels. The applicable methodology is determined automatically from your selection.")
-            _BL_FUELS = ["wood", "charcoal", "lpg", "kerosene", "mixed_biomass", "other"]
-            _BL_FUEL_DISP = {
-                "wood": "Wood / Firewood", "charcoal": "Charcoal", "lpg": "LPG",
-                "kerosene": "Kerosene", "mixed_biomass": "Mixed biomass", "other": "Other",
-            }
-            _PJ_FUELS = ["wood", "charcoal", "lpg", "electricity", "biogas", "bioethanol", "other"]
-            _PJ_FUEL_DISP = {
-                "wood": "Wood / Firewood (improved)", "charcoal": "Charcoal (improved)",
-                "lpg": "LPG", "electricity": "Electricity (grid)",
-                "biogas": "Biogas", "bioethanol": "Bio-ethanol", "other": "Other",
-            }
-            fuel_col1, fuel_col2 = st.columns(2)
-            with fuel_col1:
-                bl_fuel_top = st.radio(
-                    "Baseline fuel (what households currently use)",
-                    _BL_FUELS,
-                    key="wizard_cookstove_bl_fuel",
-                    format_func=lambda x: _BL_FUEL_DISP.get(x, x),
-                )
-            with fuel_col2:
-                pj_fuel_top = st.radio(
-                    "Project fuel (what the project device will use)",
-                    _PJ_FUELS,
-                    key="wizard_cookstove_pj_fuel",
-                    format_func=lambda x: _PJ_FUEL_DISP.get(x, x),
-                )
+            # Verra always uses VM0050 — skip generic fuel selector to avoid duplication
+            # (VM0050 branch has its own biomass-only baseline fuel + device selectors)
             if saved_standard == "Verra":
                 _detected = "VM0050"
-            elif pj_fuel_top in ("electricity", "lpg", "biogas", "bioethanol"):
-                _detected = "GS-MECD"
-            elif pj_fuel_top in ("wood", "charcoal"):
-                _detected = "TPDDTEC"
+                bl_fuel_top = "wood"
+                pj_fuel_top = "wood"
+                st.info("Methodology auto-detected: **VM0050 v1.0** – Energy Efficiency and Fuel-Switch Measures in Cookstoves")
             else:
-                _detected = None
-            if _detected is None:
-                st.warning("Project fuel 'Other' requires manual methodology confirmation. Please contact your standard body.")
-            elif _detected == "GS-MECD":
-                st.info("Methodology auto-detected: **GS-MECD v1.2** – Metered & Measured Energy Cooking Devices")
-            else:
-                _meth_disp = "TPDDTEC v4.0" if _detected == "TPDDTEC" else "VM0050"
-                st.info(f"Methodology auto-detected: **{_meth_disp}**")
+                st.markdown("---")
+                st.markdown("**Fuel selection**")
+                st.caption("Select baseline and project fuels. The applicable methodology is determined automatically from your selection.")
+                _BL_FUELS = ["wood", "charcoal", "lpg", "kerosene", "mixed_biomass", "other"]
+                _BL_FUEL_DISP = {
+                    "wood": "Wood / Firewood", "charcoal": "Charcoal", "lpg": "LPG",
+                    "kerosene": "Kerosene", "mixed_biomass": "Mixed biomass", "other": "Other",
+                }
+                _PJ_FUELS = ["wood", "charcoal", "lpg", "electricity", "biogas", "bioethanol", "other"]
+                _PJ_FUEL_DISP = {
+                    "wood": "Wood / Firewood (improved)", "charcoal": "Charcoal (improved)",
+                    "lpg": "LPG", "electricity": "Electricity (grid)",
+                    "biogas": "Biogas", "bioethanol": "Bio-ethanol", "other": "Other",
+                }
+                fuel_col1, fuel_col2 = st.columns(2)
+                with fuel_col1:
+                    bl_fuel_top = st.radio(
+                        "Baseline fuel (what households currently use)",
+                        _BL_FUELS,
+                        key="wizard_cookstove_bl_fuel",
+                        format_func=lambda x: _BL_FUEL_DISP.get(x, x),
+                    )
+                with fuel_col2:
+                    pj_fuel_top = st.radio(
+                        "Project fuel (what the project device will use)",
+                        _PJ_FUELS,
+                        key="wizard_cookstove_pj_fuel",
+                        format_func=lambda x: _PJ_FUEL_DISP.get(x, x),
+                    )
+                if pj_fuel_top in ("electricity", "lpg", "biogas", "bioethanol"):
+                    _detected = "GS-MECD"
+                elif pj_fuel_top in ("wood", "charcoal"):
+                    _detected = "TPDDTEC"
+                else:
+                    _detected = None
+                if _detected is None:
+                    st.warning("Project fuel 'Other' requires manual methodology confirmation. Please contact your standard body.")
+                elif _detected == "GS-MECD":
+                    st.info("Methodology auto-detected: **GS-MECD v1.2** – Metered & Measured Energy Cooking Devices")
+                else:
+                    st.info("Methodology auto-detected: **TPDDTEC v4.0**")
 
         if activity_category == "Cooking devices" and _detected == "VM0050":
             _compat_activity = "VM0050"
