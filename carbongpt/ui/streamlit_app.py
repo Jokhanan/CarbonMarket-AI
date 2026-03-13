@@ -2907,7 +2907,7 @@ def _render_import_document_wizard(existing_projects, step_key):
             try:
                 import requests as _req
                 resp = _req.post(
-                    "http://localhost:3000/api/projects/import-document",
+                    "http://localhost:3000/projects/import-document",
                     files={"file": (uploaded.name, uploaded.getvalue(), uploaded.type)},
                     timeout=60,
                 )
