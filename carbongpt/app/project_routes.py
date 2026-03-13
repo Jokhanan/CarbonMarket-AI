@@ -35,6 +35,7 @@ class ProjectCreate(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     boundary_geojson: str | None = None
+    project_intake: dict | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -180,6 +181,7 @@ def create_project(data: ProjectCreate):
         latitude=data.latitude,
         longitude=data.longitude,
         boundary_geojson=data.boundary_geojson,
+        project_intake=data.project_intake,
     )
     project_dir = PROJECT_FILES_DIR / str(project_id)
     project_dir.mkdir(parents=True, exist_ok=True)

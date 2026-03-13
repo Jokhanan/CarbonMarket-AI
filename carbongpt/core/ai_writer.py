@@ -57,6 +57,51 @@ def _format_project_context(project_info):
     if not intake:
         return ""
 
+    import copy as _copy
+    intake = _copy.deepcopy(intake)
+
+    _meth_settings = project_info.get("methodology_settings") or {}
+    if isinstance(_meth_settings, str):
+        try:
+            import json as _j
+            _meth_settings = _j.loads(_meth_settings)
+        except Exception:
+            _meth_settings = {}
+
+    _po = intake.setdefault("project_overview", {})
+    _tech = intake.setdefault("technology", {})
+    _loc = intake.setdefault("location", {})
+
+    if not _tech.get("fuel_baseline") and _meth_settings.get("baseline_fuel"):
+        _tech["fuel_baseline"] = _meth_settings["baseline_fuel"]
+    if not _tech.get("fuel_project") and _meth_settings.get("project_fuel"):
+        _tech["fuel_project"] = _meth_settings["project_fuel"]
+
+    if not _tech.get("baseline_scenario") and _tech.get("fuel_baseline"):
+        _tech["baseline_scenario"] = _tech["fuel_baseline"]
+    if not _tech.get("project_scenario") and _tech.get("fuel_project"):
+        _tech["project_scenario"] = _tech["fuel_project"]
+
+    if not _loc.get("regions") and project_info.get("region"):
+        _loc["regions"] = project_info["region"]
+    _lat = project_info.get("latitude")
+    _lon = project_info.get("longitude")
+    if not _loc.get("coordinates") and _lat is not None and _lon is not None:
+        try:
+            _loc["coordinates"] = f"{float(_lat):.4f}, {float(_lon):.4f}"
+        except (TypeError, ValueError):
+            pass
+
+    if not _po.get("scale") and _meth_settings.get("scale_classification"):
+        _po["scale"] = _meth_settings["scale_classification"]
+
+    _num_dev = _po.get("num_devices")
+    if _num_dev is not None and not _po.get("num_units"):
+        try:
+            _po["num_units"] = f"{int(_num_dev):,} devices"
+        except (TypeError, ValueError):
+            pass
+
     parts = []
 
     card_formatters = {

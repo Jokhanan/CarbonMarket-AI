@@ -399,17 +399,16 @@ def derive_methodology_from_fuels(standard, baseline_fuel, project_fuel):
                 "blocked": False,
             }
 
-        if pj in ("lpg", "electric", "electricity", "biogas", "natural_gas"):
+        if pj in ("lpg", "electric", "electricity", "biogas", "bioethanol", "natural_gas"):
             return {
-                "methodology": None,
-                "methodology_display": "Metered & Measured",
+                "methodology": "GS-MECD",
+                "methodology_display": "GS-MECD v1.2",
                 "note": (
-                    "Projects introducing LPG or electricity as project fuel use the "
-                    "'Methodology for Metered & Measured Energy Cooking Devices'. "
-                    "TPDDTEC v4.0 does not cover new projects with fossil fuel project fuels "
-                    "(Footnote 1, Table 1)."
+                    "Projects introducing LPG, electricity, biogas, or bio-ethanol as project fuel "
+                    "use the GS Methodology for Metered & Measured Energy Cooking Devices (GS-MECD v1.2). "
+                    "TPDDTEC v4.0 does not cover fuel-switch projects with fossil/modern fuel project fuel."
                 ),
-                "blocked": True,
+                "blocked": False,
             }
 
     return {

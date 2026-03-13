@@ -974,19 +974,22 @@ def create_user_project(name, standard, doc_type=None, methodology=None, country
                         monitoring_period_start=None, monitoring_period_end=None,
                         methodology_settings=None,
                         location_name=None, region=None, district=None,
-                        latitude=None, longitude=None, boundary_geojson=None):
+                        latitude=None, longitude=None, boundary_geojson=None,
+                        project_intake=None):
     import json as _json
     with get_cursor() as cur:
         cur.execute(
             "INSERT INTO user_projects (name, standard, doc_type, methodology, country, description, "
             "project_type, parent_project_id, monitoring_period_start, monitoring_period_end, "
-            "methodology_settings, location_name, region, district, latitude, longitude, boundary_geojson) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "methodology_settings, location_name, region, district, latitude, longitude, boundary_geojson, "
+            "project_intake) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (name, standard, doc_type, methodology, country, description,
              project_type or "standalone_pdd", parent_project_id,
              monitoring_period_start, monitoring_period_end,
              _json.dumps(methodology_settings) if methodology_settings else None,
-             location_name, region, district, latitude, longitude, boundary_geojson)
+             location_name, region, district, latitude, longitude, boundary_geojson,
+             _json.dumps(project_intake) if project_intake else None)
         )
         row = cur.fetchone()
         return row["id"]

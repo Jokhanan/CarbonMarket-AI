@@ -3480,6 +3480,15 @@ def _render_new_project_wizard(existing_projects):
                         leakage_label = "5% standard deduction" if leakage_option == "option_1" else "Project-specific"
                         st.caption(f"Leakage: {leakage_label}")
 
+            wizard_num_devices = st.number_input(
+                "Number of cookstoves / devices to be deployed",
+                min_value=0, max_value=10_000_000,
+                value=int(st.session_state.get("wizard_num_devices", 0)),
+                step=1,
+                key="wizard_num_devices",
+                help="Structured activity data — used by the calculation engine. Enter 0 to set later in the Parameters tab.",
+            )
+
             bk1, cr2 = st.columns([1, 3])
             with bk1:
                 if st.button("Back", key="wizard_back_step3"):
@@ -3505,6 +3514,7 @@ def _render_new_project_wizard(existing_projects):
                     }
 
                     saved_loc = st.session_state.get("wizard_loc_saved") or {}
+                    _wiz_devices = int(st.session_state.get("wizard_num_devices", 0)) or None
                     payload = {
                         "name": saved_name,
                         "standard": saved_standard,
@@ -3520,6 +3530,7 @@ def _render_new_project_wizard(existing_projects):
                         "latitude": saved_loc.get("latitude"),
                         "longitude": saved_loc.get("longitude"),
                         "boundary_geojson": saved_loc.get("boundary_geojson"),
+                        "project_intake": {"project_overview": {"num_devices": _wiz_devices}} if _wiz_devices else None,
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -7511,27 +7522,42 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                                            placeholder="YYYY-MM-DD")
             _intel_source_label(intake, "project_overview", "start_date")
         with pc2:
-            available_scales = SCALE_OPTIONS
-            if meth_meta and meth_meta.get("scale_options"):
-                available_scales = [""] + meth_meta["scale_options"]
-            current_scale = po.get("scale", "")
-            scale_idx = available_scales.index(current_scale) if current_scale in available_scales else 0
-            po_scale = st.selectbox("Project scale", available_scales,
-                                     index=scale_idx,
-                                     key=f"setup_po_scale_{project_id}",
-                                     format_func=lambda x: x if x else "Select scale...")
-            _intel_source_label(intake, "project_overview", "scale")
+            _meth_scale = (methodology_settings or {}).get("scale_classification", "")
+            _po_scale_raw = po.get("scale", "")
+            _effective_scale = _meth_scale or _po_scale_raw
+            if _meth_scale:
+                st.markdown(f"**Project scale:** {_meth_scale}")
+                st.caption("Read-only — change in Methodology Choices below.")
+                po_scale = _meth_scale
+            else:
+                available_scales = SCALE_OPTIONS
+                if meth_meta and meth_meta.get("scale_options"):
+                    available_scales = [""] + meth_meta["scale_options"]
+                scale_idx = available_scales.index(_po_scale_raw) if _po_scale_raw in available_scales else 0
+                po_scale = st.selectbox("Project scale", available_scales,
+                                         index=scale_idx,
+                                         key=f"setup_po_scale_{project_id}",
+                                         format_func=lambda x: x if x else "Select scale...")
+                _intel_source_label(intake, "project_overview", "scale")
         with pc3:
-            po_num_units = st.text_input("Number of units", value=po.get("num_units", ""),
-                                          key=f"setup_po_num_units_{project_id}",
-                                          placeholder="e.g., 50,000 stoves")
-            _intel_source_label(intake, "project_overview", "num_units")
+            _num_devices = po.get("num_devices")
+            _num_units_legacy = po.get("num_units", "")
+            if _num_devices is not None:
+                st.markdown(f"**Devices deployed:** {int(_num_devices):,}")
+                st.caption("Read-only — change in the Parameters tab.")
+                po_num_units = str(int(_num_devices))
+            else:
+                po_num_units = st.text_input("Number of units", value=_num_units_legacy,
+                                              key=f"setup_po_num_units_{project_id}",
+                                              placeholder="e.g., 50,000 stoves")
+                _intel_source_label(intake, "project_overview", "num_units")
 
     po_activity_type = meth_meta["activity_type"] if meth_meta and meth_meta.get("activity_type") else po.get("activity_type", "")
     po_sector = meth_meta["sectoral_scope"] if meth_meta and meth_meta.get("sectoral_scope") else po.get("sectoral_scope", "")
 
     with st.container(border=True):
         st.markdown("#### Technology & Approach")
+        st.caption("AI document context only — these narrative fields guide the AI writing assistant. They do not affect calculations.")
         tech_desc = st.text_area("What is the project technology or intervention?", value=tech.get("description", ""),
                                   key=f"setup_tech_desc_{project_id}",
                                   placeholder="e.g., Distribution of improved biomass cookstoves to replace traditional three-stone fires...",
@@ -7544,11 +7570,14 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                                                placeholder="e.g., BioLite, Tesla, Vestas")
             _intel_source_label(intake, "technology", "manufacturer")
             if fuel_from_methodology:
-                tech_baseline_scenario = tech.get("fuel_baseline", tech.get("baseline_scenario", ""))
-                if tech_baseline_scenario:
-                    st.caption(f"Baseline fuel: **{tech_baseline_scenario}** (set in Methodology Choices below)")
+                _bl_from_meth = (methodology_settings or {}).get("baseline_fuel", "")
+                _bl_display = _bl_from_meth or tech.get("fuel_baseline", tech.get("baseline_scenario", ""))
+                tech_baseline_scenario = _bl_display
+                if _bl_display:
+                    st.markdown(f"**Baseline fuel:** {_bl_display}")
+                    st.caption("Read-only — change in Methodology Choices below.")
                 else:
-                    st.caption("Baseline fuel: set in Methodology Choices below")
+                    st.caption("Baseline fuel: set in Methodology Choices below.")
             else:
                 tech_baseline_scenario = st.text_input("Baseline practice / fuel", value=tech.get("fuel_baseline", tech.get("baseline_scenario", "")),
                                                     key=f"setup_tech_fuel_bl_{project_id}",
@@ -7560,11 +7589,14 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                                         placeholder="e.g., HomeStove 2, V150-4.2MW")
             _intel_source_label(intake, "technology", "model")
             if fuel_from_methodology:
-                tech_project_scenario = tech.get("fuel_project", tech.get("project_scenario", ""))
-                if tech_project_scenario:
-                    st.caption(f"Project fuel: **{tech_project_scenario}** (set in Methodology Choices below)")
+                _pj_from_meth = (methodology_settings or {}).get("project_fuel", "")
+                _pj_display = _pj_from_meth or tech.get("fuel_project", tech.get("project_scenario", ""))
+                tech_project_scenario = _pj_display
+                if _pj_display:
+                    st.markdown(f"**Project fuel:** {_pj_display}")
+                    st.caption("Read-only — change in Methodology Choices below.")
                 else:
-                    st.caption("Project fuel: set in Methodology Choices below")
+                    st.caption("Project fuel: set in Methodology Choices below.")
             else:
                 tech_project_scenario = st.text_input("Project practice / fuel", value=tech.get("fuel_project", tech.get("project_scenario", "")),
                                                    key=f"setup_tech_fuel_pj_{project_id}",
@@ -7577,21 +7609,14 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
 
     with st.container(border=True):
         st.markdown("#### Location & Beneficiaries")
-        lc1, lc2 = st.columns(2)
-        with lc1:
-            loc_regions = st.text_input("Regions / provinces", value=loc.get("regions", ""),
-                                         key=f"setup_loc_regions_{project_id}",
-                                         placeholder="e.g., Northern Region, Ashanti Region")
-            _intel_source_label(intake, "location", "regions")
-            loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
-                                        key=f"setup_loc_target_{project_id}",
-                                        placeholder="e.g., Rural households")
-            _intel_source_label(intake, "location", "target_population")
-        with lc2:
-            loc_coords = st.text_input("Coordinates (lat, lon)", value=loc.get("coordinates", ""),
-                                        key=f"setup_loc_coords_{project_id}",
-                                        placeholder="e.g., 7.9465, -1.0232")
-            _intel_source_label(intake, "location", "coordinates")
+        st.caption("Region, coordinates, and country are set in the location section above.")
+        loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
+                                    key=f"setup_loc_target_{project_id}",
+                                    placeholder="e.g., Rural households in Northern Region")
+        st.caption("AI document context only — used to describe the project beneficiary population.")
+        _intel_source_label(intake, "location", "target_population")
+        loc_regions = loc.get("regions", "")
+        loc_coords = loc.get("coordinates", "")
 
     sdg_list = _render_sdg_section(project_id, sdgs_data)
 
@@ -8228,6 +8253,85 @@ def _render_project_settings(project):
         st.divider()
         st.info("Methodology data is not yet available for this methodology. AI-trained methodologies will show their specific parameters, equations, and default values here.")
 
+    _mecd_basket_data = None
+    _project_methodology = new_methodology or project.get("methodology", "")
+    if _project_methodology and "MECD" in _project_methodology.upper():
+        st.divider()
+        st.subheader("Baseline Fuel Basket (MECD)")
+        with st.container(border=True):
+            st.caption(
+                "Authoritative editable — define the mix of fuels currently used by target households. "
+                "Shares must sum to 100%. This data feeds the baseline emission factor calculation."
+            )
+            _MECD_FUEL_OPTIONS = [
+                ("wood", "Wood / Firewood"),
+                ("charcoal", "Charcoal"),
+                ("kerosene", "Kerosene"),
+                ("lpg", "LPG"),
+                ("crop_residues", "Crop residues"),
+                ("dung", "Animal dung"),
+                ("coal", "Coal"),
+                ("other", "Other"),
+            ]
+            _existing_basket = intake.get("baseline_fuels") or []
+            _basket_rows = []
+            st.caption("Add each fuel currently used by target households and its percentage share.")
+            _num_basket = st.number_input(
+                "Number of baseline fuels",
+                min_value=1, max_value=8, value=max(1, len(_existing_basket)),
+                key=f"mecd_num_fuels_{project_id}",
+                step=1,
+            )
+            _basket_total = 0.0
+            for _bi in range(int(_num_basket)):
+                _brow = _existing_basket[_bi] if _bi < len(_existing_basket) else {}
+                _bc1, _bc2 = st.columns([2, 1])
+                with _bc1:
+                    _bfuel_opts = [f[0] for f in _MECD_FUEL_OPTIONS]
+                    _bfuel_labels = {f[0]: f[1] for f in _MECD_FUEL_OPTIONS}
+                    _cur_fuel = _brow.get("fuel_key", _bfuel_opts[_bi % len(_bfuel_opts)])
+                    _bfuel_idx = _bfuel_opts.index(_cur_fuel) if _cur_fuel in _bfuel_opts else 0
+                    _bfuel = st.selectbox(
+                        f"Fuel {_bi + 1}",
+                        _bfuel_opts,
+                        index=_bfuel_idx,
+                        format_func=lambda x: _bfuel_labels.get(x, x),
+                        key=f"mecd_fuel_{project_id}_{_bi}",
+                    )
+                with _bc2:
+                    _bshare = st.number_input(
+                        f"Share % (fuel {_bi + 1})",
+                        min_value=0.0, max_value=100.0,
+                        value=float(_brow.get("share_pct", 0.0)),
+                        step=1.0, format="%.1f",
+                        key=f"mecd_share_{project_id}_{_bi}",
+                    )
+                _basket_rows.append({"fuel_key": _bfuel, "share_pct": _bshare})
+                _basket_total += _bshare
+
+            if abs(_basket_total - 100.0) < 0.5:
+                st.success(f"Total: {_basket_total:.1f}% — basket is valid.")
+            else:
+                st.warning(f"Total: {_basket_total:.1f}% — shares must sum to 100%.")
+
+            try:
+                from carbongpt.core.mecd_simulator import compute_mecd_baseline_ef
+                _dom = max(_basket_rows, key=lambda r: r["share_pct"]) if _basket_rows else None
+                if _dom and abs(_basket_total - 100.0) < 0.5:
+                    _mecd_case = "2" if _dom["fuel_key"] == "charcoal" else "1"
+                    _bf_result = compute_mecd_baseline_ef(_mecd_case, _basket_rows)
+                    if isinstance(_bf_result, dict):
+                        _ef_val = _bf_result.get("EF_b_useful") or _bf_result.get("EF_b_input") or _bf_result.get("value")
+                        if _ef_val is not None:
+                            st.caption(
+                                f"Derived baseline EF: ~{float(_ef_val):.4f} tCO2e/TJ "
+                                f"(dominant fuel: {_dom['fuel_key']}, Eq. {_mecd_case})"
+                            )
+            except Exception:
+                pass
+
+            _mecd_basket_data = _basket_rows if abs(_basket_total - 100.0) < 0.5 else None
+
     st.divider()
 
     if st.button("Save All Changes", key=f"save_setup_{project_id}", type="primary"):
@@ -8264,6 +8368,9 @@ def _render_project_settings(project):
                         intake_data["technology"] = {}
                     for field in fields:
                         intake_data["technology"][field] = new_settings[dk]
+
+        if _mecd_basket_data is not None:
+            intake_data["baseline_fuels"] = _mecd_basket_data
 
         update_payload = {
             "name": new_name,
