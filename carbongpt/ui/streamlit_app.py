@@ -2510,6 +2510,18 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
         placeholder="e.g., Ashanti Region, Northern Region",
     )
 
+    # Seed geojson from the project's database record on first load (so polygon
+    # survives app restarts without needing a fresh "Look up" click each session)
+    _geojson_key = f"{key_prefix}_geojson"
+    if _geojson_key not in st.session_state:
+        _saved_bj = project.get("boundary_geojson")
+        if _saved_bj:
+            import json as _bj_json
+            try:
+                st.session_state[_geojson_key] = _bj_json.loads(_saved_bj) if isinstance(_saved_bj, str) else _saved_bj
+            except Exception:
+                pass
+
     # Consume any pending geocoded values BEFORE rendering coordinate widgets
     _pending_lat = f"{key_prefix}_pending_lat"
     _pending_lon = f"{key_prefix}_pending_lon"
@@ -2602,6 +2614,9 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
         except Exception:
             st.caption(f"Map preview unavailable. Coordinates: {lat:.4f}, {lon:.4f}")
 
+    import json as _ret_json
+    _current_geojson = st.session_state.get(f"{key_prefix}_geojson")
+    _geojson_str = _ret_json.dumps(_current_geojson) if _current_geojson and not isinstance(_current_geojson, str) else _current_geojson
     return {
         "country": country,
         "location_name": None,
@@ -2609,6 +2624,8 @@ def _render_location_section(key_prefix: str, project: dict = None) -> dict:
         "district": None,
         "latitude": lat,
         "longitude": lon,
+        "geojson": _current_geojson,
+        "boundary_geojson": _geojson_str,
     }
 
 
@@ -3282,6 +3299,7 @@ def _render_new_project_wizard(existing_projects):
                         "district": saved_loc.get("district"),
                         "latitude": saved_loc.get("latitude"),
                         "longitude": saved_loc.get("longitude"),
+                        "boundary_geojson": saved_loc.get("boundary_geojson"),
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -3456,6 +3474,7 @@ def _render_new_project_wizard(existing_projects):
                         "district": saved_loc.get("district"),
                         "latitude": saved_loc.get("latitude"),
                         "longitude": saved_loc.get("longitude"),
+                        "boundary_geojson": saved_loc.get("boundary_geojson"),
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -3805,6 +3824,7 @@ def _render_new_project_wizard(existing_projects):
                         "district": saved_loc.get("district"),
                         "latitude": saved_loc.get("latitude"),
                         "longitude": saved_loc.get("longitude"),
+                        "boundary_geojson": saved_loc.get("boundary_geojson"),
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -8040,6 +8060,7 @@ def _render_project_settings(project):
             "district": setup_loc.get("district"),
             "latitude": setup_loc.get("latitude"),
             "longitude": setup_loc.get("longitude"),
+            "boundary_geojson": setup_loc.get("boundary_geojson"),
         }
         if cp_start:
             update_payload["crediting_period_start"] = cp_start.isoformat()
@@ -8223,6 +8244,7 @@ def _render_project_settings_legacy(project):
             "district": settings_loc.get("district"),
             "latitude": settings_loc.get("latitude"),
             "longitude": settings_loc.get("longitude"),
+            "boundary_geojson": settings_loc.get("boundary_geojson"),
         }
         if cp_start:
             update_payload["crediting_period_start"] = cp_start.isoformat()
