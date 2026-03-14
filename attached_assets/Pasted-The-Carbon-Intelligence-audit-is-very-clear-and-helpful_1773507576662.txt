@@ -1,0 +1,182 @@
+The Carbon Intelligence audit is very clear and helpful.
+
+Now we want to evolve the module from a raw registry snapshot into a reliable Carbon Market Intelligence layer.
+
+Important constraints:
+- keep the current architecture
+- do not remove existing tables
+- do not break the current dashboard
+- build improvements incrementally
+
+The focus now is on data quality, normalization, and intelligence.
+
+-----------------------------------------
+
+STEP 1 — Methodology Normalization
+
+Currently methodology values are stored as raw strings.
+
+Example problems:
+
+ACM0002
+ACM0002 Grid-connected
+ACM0002 - grid electricity
+
+TPDDTEC v4.0
+TPDDTEC v3.1
+
+These appear as separate rows in analytics.
+
+Design a normalization approach.
+
+Create a methodology library table:
+
+methodology_library
+- methodology_code
+- methodology_family
+- registry
+- sector
+- technology
+
+Examples:
+
+ACM0002 → Grid Electricity
+AMS-I.D → Grid Electricity
+TPDDTEC → Clean Cooking
+VM0006 → Clean Cooking
+
+Explain how to extract the methodology code from raw registry strings.
+
+-----------------------------------------
+
+STEP 2 — Country Normalization
+
+Country names currently come raw from each registry.
+
+Examples:
+
+Democratic Republic of Congo
+Congo, Democratic Republic
+DR Congo
+
+Design a country normalization approach.
+
+Introduce a countries table:
+
+countries
+- country_iso
+- country_name
+- region
+- subregion
+
+Then map raw values to normalized country_iso.
+
+-----------------------------------------
+
+STEP 3 — CDM / UNFCCC Ingestion
+
+Extend Carbon Intelligence to include CDM projects.
+
+Investigate the best way to ingest CDM project data.
+
+Possible sources:
+
+UNFCCC CDM API
+UNFCCC CDM CSV datasets
+
+Explain:
+
+- which dataset should be used
+- what fields are available
+- how to ingest them
+- how to map them into carbon_projects
+
+-----------------------------------------
+
+STEP 4 — Issuance Data
+
+Currently we only store estimated_annual_credits.
+
+Investigate how to ingest actual issuance data.
+
+For each registry determine:
+
+Verra:
+- issuance API?
+- retirement data?
+
+Gold Standard:
+- issuance dataset?
+- credit transactions?
+
+CDM:
+- CER issuance records?
+
+Explain what data can realistically be obtained.
+
+-----------------------------------------
+
+STEP 5 — Scheduled Updates
+
+The current sync is manual.
+
+Design a safe update mechanism.
+
+Options:
+
+daily scheduled job
+or periodic background worker
+
+Explain the safest approach for this architecture.
+
+-----------------------------------------
+
+STEP 6 — Visualizations
+
+The current dashboard only uses bar charts.
+
+Propose better visualizations for Carbon Intelligence:
+
+- projects by country (map)
+- credits issued per year (time series)
+- methodology distribution
+- registry comparison
+- developer ranking
+
+Explain which charts and which libraries should be used.
+
+-----------------------------------------
+
+STEP 7 — AI Integration
+
+Explain how Carbon Intelligence data could support the AI copilot.
+
+Example:
+
+User asks:
+"I want to build a cookstove project in Uganda."
+
+AI can query:
+
+projects_unified
+WHERE country = Uganda
+AND methodology_family = cookstoves
+
+And return intelligence about:
+
+- existing projects
+- typical ER
+- common methodologies
+- active developers
+
+Explain how to expose this data to the AI layer.
+
+-----------------------------------------
+
+IMPORTANT
+
+Before writing code, propose the architecture changes.
+
+Do not implement yet.
+
+We want a clear plan for building a reliable Carbon Intelligence layer.
