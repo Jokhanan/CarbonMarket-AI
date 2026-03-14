@@ -129,6 +129,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     calculation_steps = [
         {
             "step": 1,
+            "canonical_key": "baseline_fuel_consumption",
             "name": "Baseline fuel consumption per device",
             "formula": consumption_label,
             "value": round(bl_consumption, 6),
@@ -136,6 +137,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 2,
+            "canonical_key": "project_fuel_consumption",
             "name": "Project fuel consumption per device",
             "formula": consumption_pj_label,
             "value": round(pj_consumption, 6),
@@ -143,6 +145,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 3,
+            "canonical_key": "cf_adjustment",
             "name": "CF adjustment (charcoal native vs wood-equivalent)",
             "formula": cf_note,
             "value_baseline": round(bl_consumption_wood_equiv, 6),
@@ -151,6 +154,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 4,
+            "canonical_key": "baseline_energy_tj",
             "name": "Baseline energy content per device",
             "formula": f"bl_cons_wood_equiv × NCV_b / 1000 = {bl_consumption_wood_equiv:.6f} × {NCV_b} / 1000",
             "value": round(ec_b, 6),
@@ -158,6 +162,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 5,
+            "canonical_key": "baseline_emissions_per_device",
             "name": "Baseline emissions per device (fNRB on CO2 term only)",
             "formula": f"EC_b × (fNRB × EF_CO2_b + EF_nonCO2_b) = {ec_b:.6f} × ({fNRB} × {EF_CO2_b} + {EF_nonCO2_b})",
             "value": round(be_per_hh, 6),
@@ -165,6 +170,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 6,
+            "canonical_key": "project_energy_tj",
             "name": "Project energy content per device",
             "formula": f"pj_cons_wood_equiv × NCV_p / 1000 = {pj_consumption_wood_equiv:.6f} × {NCV_p} / 1000",
             "value": round(ec_p, 6),
@@ -172,6 +178,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 7,
+            "canonical_key": "project_emissions_per_device",
             "name": "Project emissions per device",
             "formula": pe_formula_str,
             "value": round(pe_per_hh, 6),
@@ -179,6 +186,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         },
         {
             "step": 8,
+            "canonical_key": "er_per_device_before_leakage",
             "name": "ER per device per year (before leakage)",
             "formula": f"BE_per_device - PE_per_device = {be_per_hh:.6f} - {pe_per_hh:.6f}",
             "value": round(be_per_hh - pe_per_hh, 6),

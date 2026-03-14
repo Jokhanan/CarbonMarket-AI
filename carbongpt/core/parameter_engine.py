@@ -139,27 +139,30 @@ PARAMETER_DEFINITIONS = {
         # ── Baseline fuel consumption (§8.1.1 / §9.1 BCex-ante,b,i / §9.2 BCb,i,y) ─
         # Ex-ante defaults (§8.1.1 Option 2): firewood = 0.5 t/capita/yr, charcoal = 0.13 t/capita/yr
         # BCb,i,y (monitored): updated biennially from control household KPT
-        {"param_key": "BCex_ante_b_i", "param_name": "Ex-ante baseline fuel consumption per device (BCex-ante,b,i)",
-         "category": "baseline", "unit": "tonnes/device/year", "data_type": "number", "min_value": 0.01,
-         "max_value": 10.0, "is_ex_ante": True, "depends_on": [],
-         "aliases": ["BCex-ante,b,i", "BC_ex_ante", "ex-ante baseline consumption", "baseline fuel use ex-ante",
-                     "pre-project fuel consumption"],
-         "extraction_hint": (
-             "Extract the ex-ante annual average fuel quantity per baseline device (BCex-ante,b,i). "
-             "VM0050 §8.1.1 Option 2 defaults (scaled by household size Hhi): "
-             "firewood = 0.5 t/capita/yr; charcoal = 0.13 t/capita/yr. "
-             "Option 1: from Kitchen Performance Test (KPT) at 90/10 confidence/precision."
-         ),
-         "noise_terms": []},
-        {"param_key": "baseline_fuel_consumption", "param_name": "Baseline fuel consumption per device (BCb,i,y)",
+        # NOTE: BCex_ante_b_i has been retired as an active parameter.
+        # It is aliased to baseline_fuel_consumption below so that extraction documents
+        # referencing BCex-ante,b,i still map to the correct canonical field.
+        # Existing DB rows with param_key='BCex_ante_b_i' are preserved for backward compatibility.
+        {"param_key": "baseline_fuel_consumption", "param_name": "Baseline fuel consumption per device (BCb,i,y / BCex-ante,b,i)",
          "category": "baseline", "unit": "tonnes/device/year", "data_type": "number", "min_value": 0.01,
          "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
-         "aliases": ["BCb,i,y", "BC_b,i,y", "baseline fuel consumption", "fuel consumption in baseline scenario",
-                     "wood consumption baseline", "fuel use without project", "biennial KPT result"],
+         "aliases": [
+             # BCb,i,y — monitored (biennial KPT) form
+             "BCb,i,y", "BC_b,i,y", "baseline fuel consumption",
+             "fuel consumption in baseline scenario", "wood consumption baseline",
+             "fuel use without project", "biennial KPT result",
+             # BCex-ante,b,i — ex-ante form (retired param, aliased here for backward compat)
+             "BCex_ante_b_i", "BCex-ante,b,i", "BC_ex_ante",
+             "ex-ante baseline consumption", "baseline fuel use ex-ante",
+             "pre-project fuel consumption",
+         ],
          "extraction_hint": (
-             "Extract BCb,i,y — the monitored (biennial KPT) baseline fuel use in control households. "
-             "Only extract if the document explicitly refers to monitored or follow-up baseline fuel consumption. "
-             "Do NOT extract this field from KPT results labelled as ex-ante."
+             "Canonical per-device annual baseline fuel consumption in t/device/year. "
+             "Covers both the ex-ante estimate (BCex-ante,b,i — VM0050 §8.1.1 Option 2 default: "
+             "0.5 t/capita/yr wood; 0.13 t/capita/yr charcoal, scaled by household size) "
+             "and the monitored value (BCb,i,y — biennial control-household KPT). "
+             "For TPDDTEC Method 2 this is computed from the locked default (0.5 t/capita/yr). "
+             "For Methods 1 and 3 it is derived from SFC_baseline × 365 ÷ 1000 when SFC is measured."
          ),
          "noise_terms": []},
 

@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 # ── Baseline fuel default library (MECD 1, 2, 3, 4, 5) ──────────────────────
 # P_b_default: tonnes/capita/year (MECD 1 suppressed-demand defaults)
 # eta_b: fraction (MECD 5 defaults)
-# NCV: TJ/tonne (MECD 2 – IPCC defaults)
+# NCV_default: TJ/Gg  (= GJ/t = MJ/kg — canonical unit, consistent with er_simulator)
+#   IPCC source values are published as TJ/Gg.  Old TJ/tonne notation was numerically
+#   identical but labelled differently; all formulas now use NCV / 1000 (Gg per tonne).
 # EF_CO2: tCO2/TJ (MECD 3)
 # EF_nonCO2: tCO2e/TJ AR5 GWP (MECD 4)
 # uses_fnrb: True for woody biomass (MECD 13)
@@ -27,7 +29,7 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "wood",
         "P_b_default": 0.5,
         "eta_b_default": 0.10,
-        "NCV_default": 0.0156,
+        "NCV_default": 15.6,           # TJ/Gg  (IPCC 2006 default for wood)
         "EF_CO2_default": 112.0,
         "EF_nonCO2_default": 9.46,
         "uses_fnrb": True,
@@ -37,7 +39,7 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "wood",
         "P_b_default": 0.5,
         "eta_b_default": 0.20,
-        "NCV_default": 0.0156,
+        "NCV_default": 15.6,           # TJ/Gg
         "EF_CO2_default": 112.0,
         "EF_nonCO2_default": 9.46,
         "uses_fnrb": True,
@@ -47,7 +49,7 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "charcoal",
         "P_b_default": 0.13,
         "eta_b_default": 0.20,
-        "NCV_default": 0.0295,
+        "NCV_default": 29.5,           # TJ/Gg  (IPCC 2006 default for charcoal)
         "EF_CO2_default": 165.22,      # includes production (MECD 3)
         "EF_nonCO2_default": 44.83,    # AR5, includes production (MECD 4)
         "uses_fnrb": True,
@@ -57,7 +59,7 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "lpg",
         "P_b_default": None,           # no suppressed-demand default for LPG
         "eta_b_default": None,         # from manufacturer spec
-        "NCV_default": 0.04713,        # IPCC default (TJ/tonne)
+        "NCV_default": 47.13,          # TJ/Gg  (IPCC 2006 LPG default)
         "EF_CO2_default": 63.1,        # IPCC default (tCO2/TJ)
         "EF_nonCO2_default": 0.0,
         "uses_fnrb": False,
@@ -67,7 +69,7 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "kerosene",
         "P_b_default": None,
         "eta_b_default": None,
-        "NCV_default": 0.0434,
+        "NCV_default": 43.4,           # TJ/Gg  (IPCC 2006 kerosene default)
         "EF_CO2_default": 71.9,
         "EF_nonCO2_default": 0.0,
         "uses_fnrb": False,
@@ -77,12 +79,20 @@ MECD_BASELINE_FUEL_LIBRARY = {
         "fuel_family": "biogas",
         "P_b_default": None,
         "eta_b_default": 0.35,
-        "NCV_default": 0.0224,         # approx IPCC default for biogas (TJ/Gg)
+        "NCV_default": 22.4,           # TJ/Gg  (approx IPCC default for biogas)
         "EF_CO2_default": 0.0,         # biogenic – typically 0 in GS
         "EF_nonCO2_default": 0.0,
         "uses_fnrb": False,
     },
 }
+
+# Sanity assertion: NCV values must be in TJ/Gg (order-of-magnitude 10–50 for biomass/fossil)
+assert 10.0 < MECD_BASELINE_FUEL_LIBRARY["wood_three_stone"]["NCV_default"] < 25.0, \
+    "wood NCV out of TJ/Gg range — check unit"
+assert 20.0 < MECD_BASELINE_FUEL_LIBRARY["charcoal"]["NCV_default"] < 40.0, \
+    "charcoal NCV out of TJ/Gg range — check unit"
+assert 30.0 < MECD_BASELINE_FUEL_LIBRARY["lpg"]["NCV_default"] < 60.0, \
+    "LPG NCV out of TJ/Gg range — check unit"
 
 # EF caps for charcoal (MECD 3 / 4)
 MECD_EF_CO2_CHARCOAL_CAP = 197.15         # tCO2/TJ
@@ -167,13 +177,16 @@ def compute_mecd_baseline_ef(case: str, baseline_fuels: list) -> dict:
             EF_nonCO2 = min(EF_nonCO2, MECD_EF_NONCO2_CHARCOAL_CAP_AR5)
 
         # Numerator component (same for both cases)
-        num_component = P_b * share * (EF_CO2 * fnrb + EF_nonCO2) * NCV
+        # NCV is in TJ/Gg; dividing by 1000 converts to TJ/t for mass-energy product.
+        # NCV appears in both numerator and denominator so ef_b is scale-invariant
+        # for single-fuel cases, but the /1000 keeps intermediate units correct (TJ/yr).
+        num_component = P_b * share * (EF_CO2 * fnrb + EF_nonCO2) * NCV / 1000.0
 
         # Denominator component
         if case == "1":
-            den_component = P_b * share * NCV * eta_b
+            den_component = P_b * share * NCV / 1000.0 * eta_b
         else:
-            den_component = P_b * share * NCV
+            den_component = P_b * share * NCV / 1000.0
 
         numerator += num_component
         denominator += den_component
@@ -222,13 +235,17 @@ def _apply_electricity_cap(eg_mwh: float, n_persons: float) -> tuple:
     return eg_mwh, None
 
 
-def _apply_fuel_cap(p_kg: float, ncv_tj_per_t: float, n_persons: float) -> tuple:
-    """Apply 0.0045 GJ/capita/day cap to fuel for Eq. 6/7. Returns (capped_kg, note)."""
-    if n_persons <= 0 or ncv_tj_per_t <= 0:
+def _apply_fuel_cap(p_kg: float, ncv_tj_per_gg: float, n_persons: float) -> tuple:
+    """Apply 0.0045 GJ/capita/day cap to fuel for Eq. 6/7. Returns (capped_kg, note).
+
+    ncv_tj_per_gg : NCV in TJ/Gg  (canonical unit — divide by 1000 to get TJ/t).
+    """
+    if n_persons <= 0 or ncv_tj_per_gg <= 0:
         return p_kg, None
     max_gj = n_persons * MECD_CAP_FUEL_GJ_CAPITA_DAY * 365.0
     max_tj = max_gj / 1000.0
-    max_t = max_tj / ncv_tj_per_t
+    # NCV [TJ/Gg] → NCV [TJ/t] = NCV / 1000; max_t = max_tj / (NCV/1000) = max_tj * 1000 / NCV
+    max_t = max_tj * 1000.0 / ncv_tj_per_gg
     max_kg = max_t * 1000.0
     if p_kg > max_kg:
         return max_kg, f"Capped at {max_kg:.1f} kg (0.0045 GJ/capita/day × {n_persons:.0f} persons × 365)"
@@ -250,17 +267,24 @@ def compute_useful_energy_electric(eg_p_mwh: float, eta_p: float, n_persons: flo
 
 
 def compute_useful_energy_fuel(p_p_kg: float, ncv_p: float, eta_p: float, n_persons: float = 0) -> dict:
-    """Eq. 7: EG_p,useful = Σ(P_p,d × NCV_p × η_p)"""
+    """Eq. 7: EG_p,useful = Σ(P_p,d × NCV_p × η_p)
+
+    ncv_p : NCV in TJ/Gg  (canonical unit).  Divide by 1000 to convert to TJ/t
+    before multiplying fuel mass in tonnes so the product is in TJ.
+    """
     p_capped, cap_note = _apply_fuel_cap(p_p_kg, ncv_p, n_persons)
     p_capped_t = p_capped / 1000.0
-    eg_useful_tj = p_capped_t * ncv_p * eta_p
+    eg_useful_tj = p_capped_t * (ncv_p / 1000.0) * eta_p
     return {
         "EG_p_useful_TJ": eg_useful_tj,
         "p_p_kg_input": p_p_kg,
         "p_p_kg_used": p_capped,
         "cap_applied": cap_note is not None,
         "cap_note": cap_note,
-        "formula": f"P_p ({p_capped_t:.4f} t) × NCV_p ({ncv_p:.5f} TJ/t) × η_p ({eta_p:.3f}) = {eg_useful_tj:.4f} TJ",
+        "formula": (
+            f"P_p ({p_capped_t:.4f} t) × NCV_p ({ncv_p:.4f} TJ/Gg ÷ 1000)"
+            f" × η_p ({eta_p:.3f}) = {eg_useful_tj:.6f} TJ"
+        ),
     }
 
 
@@ -325,13 +349,16 @@ def compute_project_emissions_fuel(p_p_kg: float, ncv_p: float, ef_p: float) -> 
     """
     Eq. 9: PE = Σ(P_p,d × NCV_p × EF_p)
     NOTE: always uses real metered value – no cap.
+
+    ncv_p : NCV in TJ/Gg  (canonical unit).  Divide by 1000 to convert to TJ/t
+    before multiplying fuel mass in tonnes.
     """
     p_p_t = p_p_kg / 1000.0
-    pe_y = p_p_t * ncv_p * ef_p
+    pe_y = p_p_t * (ncv_p / 1000.0) * ef_p
     return {
         "PE_y": pe_y,
         "formula": (
-            f"P_p ({p_p_t:.4f} t) × NCV_p ({ncv_p:.5f} TJ/t)"
+            f"P_p ({p_p_t:.4f} t) × NCV_p ({ncv_p:.4f} TJ/Gg ÷ 1000)"
             f" × EF_p ({ef_p:.2f} tCO2e/TJ) = {pe_y:.2f} tCO2e"
         ),
     }
@@ -359,7 +386,7 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
 
     Case 1 – fuel
         p_p_kg_annual   : float  monitored fuel (kg/yr)
-        ncv_p           : float  project fuel NCV (TJ/tonne)
+        ncv_p           : float  project fuel NCV (TJ/Gg — canonical unit; divide by 1000 to get TJ/t)
         eta_p           : float  project device efficiency (fraction)
         ef_p            : float  project fuel EF (tCO2e/TJ)
 
@@ -407,7 +434,7 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
                 be_res = compute_baseline_emissions("1", ef_b, eg_p_useful_tj=ue["EG_p_useful_TJ"])
             else:
                 p_kg = float(params.get("p_p_kg_annual", 0.0))
-                ncv_p = float(params.get("ncv_p", 0.04713))
+                ncv_p = float(params.get("ncv_p", 47.13))   # TJ/Gg (LPG default)
                 eta_p = float(params.get("eta_p", 0.55))
                 ue = compute_useful_energy_fuel(p_kg, ncv_p, eta_p, n_persons)
                 be_res = compute_baseline_emissions("1", ef_b, eg_p_useful_tj=ue["EG_p_useful_TJ"])
@@ -431,7 +458,7 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
             pe_res = compute_project_emissions_electric(eg_raw, ef_el, tdl)
         else:
             p_kg_raw = float(params.get("p_p_kg_annual", 0.0))
-            ncv_p = float(params.get("ncv_p", 0.04713))
+            ncv_p = float(params.get("ncv_p", 47.13))   # TJ/Gg (LPG default)
             ef_p = float(params.get("ef_p", 63.1))
             pe_res = compute_project_emissions_fuel(p_kg_raw, ncv_p, ef_p)
 
