@@ -706,28 +706,14 @@ def _select_model_for_section(section_id, content_format="prose", section_title=
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=4000, model_override=None):
-    api_key = _get_api_key()
-    use_model = model_override or MODEL
-    payload = {
-        "model": use_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.4,
-    }
-    if response_format:
-        payload["response_format"] = response_format
-    resp = http_client.post(
-        OPENAI_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=120,
+    from carbongpt.core.openai_client import call_openai
+    return call_openai(
+        system_prompt, user_prompt,
+        response_format=response_format,
+        max_tokens=max_tokens,
+        temperature=0.4,
+        model_override=model_override or MODEL,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
 
 
 FORMAT_SYSTEM_GUIDANCE = {

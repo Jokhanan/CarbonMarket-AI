@@ -71,8 +71,10 @@ TPDDTEC_METHOD2_DEFAULT_CONSUMPTION = 0.5    # tonnes/capita/year fuelwood
 TPDDTEC_METHOD2_THRESHOLD_CONSUMPTION = 0.75  # t/capita/yr — above this needs justification
 TPDDTEC_METHOD2_CAP_CONSUMPTION = 0.95        # t/capita/yr — hard cap, never exceeded
 
-# NCV in TJ/ton (TPDDTEC methodology unit — same as 15.6 TJ/Gg or 15.6 GJ/t)
-TPDDTEC_NCV_WOOD_TJ_PER_TON = 0.0156
+# NCV in TJ/Gg (IPCC 2006 / TPDDTEC methodology unit)
+# 1 Gg = 1000 t; 15.6 TJ/Gg = 0.0156 TJ/t. Formula: EC (t/yr) × NCV (TJ/Gg) / 1000 = TJ/yr
+TPDDTEC_NCV_WOOD_TJ_PER_GG = 15.6
+TPDDTEC_NCV_WOOD_TJ_PER_TON = 0.0156   # kept as alias — use _TJ_PER_GG form in new code
 TPDDTEC_EF_CO2_WOOD = 112.0       # tCO2/TJ — locked in Method 2
 TPDDTEC_EF_NONCO2_WOOD_AR5 = 9.46 # tCO2e/TJ — locked in Method 2
 
@@ -81,7 +83,8 @@ TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION = 165.22
 TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5 = 44.83
 TPDDTEC_EF_CO2_CHARCOAL_CAP = 197.15
 TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5 = 92.29
-TPDDTEC_NCV_CHARCOAL_TJ_PER_TON = 0.0295
+TPDDTEC_NCV_CHARCOAL_TJ_PER_GG = 29.5
+TPDDTEC_NCV_CHARCOAL_TJ_PER_TON = 0.0295   # kept as alias — use _TJ_PER_GG form in new code
 
 
 # ── VM0050-specific constants (VCS v1.0, 9 October 2024) ────────────────────
@@ -98,8 +101,10 @@ VM0050_DEFAULT_WOOD_CONSUMPTION_PER_CAPITA    = 0.50   # t/capita/yr, air-dried 
 VM0050_DEFAULT_CHARCOAL_CONSUMPTION_PER_CAPITA = 0.13  # t/capita/yr
 
 # Fuel NCV defaults — IPCC 2006 Guidelines (§9.1, NCVb,i / NCVp,j table)
-VM0050_NCV_WOOD_TJ_PER_TON      = 0.0156   # TJ/tonne (= 15.6 TJ/Gg)
-VM0050_NCV_CHARCOAL_TJ_PER_TON  = 0.0295   # TJ/tonne (= 29.5 TJ/Gg)
+VM0050_NCV_WOOD_TJ_PER_GG       = 15.6     # TJ/Gg (canonical form)
+VM0050_NCV_CHARCOAL_TJ_PER_GG   = 29.5     # TJ/Gg (canonical form)
+VM0050_NCV_WOOD_TJ_PER_TON      = 0.0156   # TJ/tonne — alias; use _TJ_PER_GG in new code
+VM0050_NCV_CHARCOAL_TJ_PER_TON  = 0.0295   # TJ/tonne — alias; use _TJ_PER_GG in new code
 
 # CO2 emission factors — IPCC 2006 (§9.1, EFb,i,CO2 table)
 VM0050_EF_CO2_WOOD                         = 112.0    # tCO2/TJ

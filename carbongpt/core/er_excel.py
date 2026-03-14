@@ -1036,12 +1036,34 @@ def generate_expost_workbook(project, calc_result=None):
 # Dispatcher
 # ---------------------------------------------------------------------------
 
-def generate_er_workbook(project, doc_type, calc_result=None):
+def generate_er_workbook(project, doc_type, calc_result=None, project_id=None):
     """
     Generate the appropriate ER workbook based on doc_type.
     doc_type in ('pdd', 'vpa_dd', 'poa_dd') → ex-ante
     doc_type in ('mr',)                       → ex-post
+
+    project_id : int | None
+        When provided, parameters are read from the live parameter engine so
+        the workbook always reflects the current confirmed values — not just
+        the snapshot embedded in calc_result.
     """
+    # Enrich calc_result with live parameter engine data when project_id is known
+    if project_id is not None and calc_result is not None:
+        try:
+            from carbongpt.core.parameter_engine import get_parameters_as_dict
+            live_params = get_parameters_as_dict(project_id)
+            # Merge: engine values are authoritative; calc_result snapshot fills any gaps
+            snapshot = calc_result.get("parameters_used", {})
+            if isinstance(snapshot, list):
+                snapshot = {p.get("parameter", f"p{i}"): p for i, p in enumerate(snapshot)}
+            merged = dict(snapshot)
+            merged.update(live_params)
+            calc_result = dict(calc_result)
+            calc_result["parameters_used"] = merged
+            calc_result["_source"] = "parameter_engine"
+        except Exception as _exc:
+            logger.warning("Could not enrich workbook with live parameter engine data: %s", _exc)
+
     if doc_type in ("mr",):
         return generate_expost_workbook(project, calc_result)
     return generate_exante_workbook(project, calc_result)

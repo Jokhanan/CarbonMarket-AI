@@ -401,13 +401,21 @@ PARAMETER_DEFINITIONS = {
         {"param_key": "EF_nonCO2_project", "param_name": "Non-CO2 emission factor (project fuel)", "category": "emission_factor", "unit": "tCO2e/TJ", "data_type": "number", "min_value": 0.0, "max_value": 100.0, "is_ex_ante": True, "depends_on": [],
          "aliases": ["EF_p,f,nonCO2", "project non-CO2 emission factor"],
          "noise_terms": []},
-        {"param_key": "SFC_baseline", "param_name": "Baseline specific fuel consumption", "category": "baseline", "unit": "kg/person/year", "data_type": "number", "min_value": 0.01, "max_value": 5000, "is_ex_ante": False, "depends_on": [],
-         "aliases": ["SFC_b,i", "baseline specific fuel consumption", "specific fuel consumption of the baseline scenario", "SFC baseline", "SFC_b", "traditional stove fuel consumption per person"],
-         "extraction_hint": "Only extract if text clearly refers to the BASELINE scenario specific fuel consumption, not project.",
+        {"param_key": "SFC_baseline", "param_name": "Baseline specific fuel consumption (raw KPT)", "category": "baseline", "unit": "kg/device/day", "data_type": "number", "min_value": 0.01, "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["SFC_b,i", "baseline specific fuel consumption", "specific fuel consumption of the baseline scenario", "SFC baseline", "SFC_b", "traditional stove fuel consumption per device"],
+         "extraction_hint": "Raw Kitchen Performance Test (KPT) result in kg/device/day. Only extract if text clearly refers to the BASELINE scenario. Used to derive baseline_fuel_consumption (t/device/yr).",
          "noise_terms": []},
-        {"param_key": "SFC_project", "param_name": "Project specific fuel consumption", "category": "project", "unit": "kg/person/year", "data_type": "number", "min_value": 0.0, "max_value": 5000, "is_ex_ante": False, "depends_on": [],
-         "aliases": ["SFC_p,i,y", "project specific fuel consumption", "specific fuel consumption of the project technology", "SFC project", "SFC_p", "improved stove fuel consumption per person"],
-         "extraction_hint": "Only extract if text clearly refers to the PROJECT technology specific fuel consumption, not baseline.",
+        {"param_key": "baseline_fuel_consumption", "param_name": "Baseline annual fuel consumption", "category": "baseline", "unit": "t/device/year", "data_type": "number", "min_value": 0.001, "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["baseline annual consumption", "annual baseline fuel use", "baseline consumption per device"],
+         "extraction_hint": "Canonical calculation parameter in t/device/year. For Method 2 derived from TPDDTEC default; for Methods 1 and 3 derived from SFC_b × 365 / 1000. This is the value that enters the ER formula directly.",
+         "noise_terms": []},
+        {"param_key": "project_fuel_consumption", "param_name": "Project annual fuel consumption", "category": "project", "unit": "t/device/year", "data_type": "number", "min_value": 0.0, "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["project annual consumption", "annual project fuel use", "project consumption per device"],
+         "extraction_hint": "Canonical project calculation parameter in t/device/year, derived from SFC_p × 365 / 1000.",
+         "noise_terms": []},
+        {"param_key": "SFC_project", "param_name": "Project specific fuel consumption (raw KPT)", "category": "project", "unit": "kg/device/day", "data_type": "number", "min_value": 0.0, "max_value": 20.0, "is_ex_ante": False, "depends_on": [],
+         "aliases": ["SFC_p,i,y", "project specific fuel consumption", "specific fuel consumption of the project technology", "SFC project", "SFC_p", "improved stove fuel consumption per device"],
+         "extraction_hint": "Raw KPT result in kg/device/day. Only extract if text clearly refers to the PROJECT technology. Used to derive project_fuel_consumption.",
          "noise_terms": []},
         {"param_key": "num_devices", "param_name": "Number of devices/technologies deployed", "category": "activity_data", "unit": "count", "data_type": "number", "min_value": 1, "max_value": 10000000, "is_ex_ante": True, "depends_on": [],
          "aliases": ["number of stoves", "number of devices distributed", "total devices deployed", "N_i,y", "N_j,k,y", "number of project technologies"],
@@ -763,12 +771,29 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
             value = 0.4 * 5.0
             source_reference = "CDM TOOL33 v3 §5.4 default: 0.4 t wood/person/yr * 5 persons/hh"
     elif param_key == "SFC_baseline":
+        # Raw KPT measurement in kg/device/day — TPDDTEC v4.0 ICS 14 typical values
         if is_charcoal:
-            value = 100.0
-            source_reference = "CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr = 100 kg/person/yr"
+            value = 0.55
+            source_reference = "TPDDTEC typical KPT default: ~0.55 kg charcoal/device/day (≈0.2 t/device/yr)"
         else:
-            value = 400.0
-            source_reference = "CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr = 400 kg/person/yr"
+            value = 1.37
+            source_reference = "TPDDTEC typical KPT default: ~1.37 kg wood/device/day (≈0.5 t/device/yr)"
+    elif param_key == "baseline_fuel_consumption":
+        # Canonical calculation quantity in t/device/year
+        # Default derived from CDM TOOL33 v3 §5.4 per-capita defaults × household_size
+        _hh_entry = param_values.get("household_size")
+        _hh_val = (_hh_entry.get("value") if isinstance(_hh_entry, dict) else _hh_entry) if _hh_entry else None
+        hh_sz = float(_hh_val) if (_hh_val and float(_hh_val) > 0) else 5.0
+        if is_charcoal:
+            value = round(0.1 * hh_sz, 4)
+            source_reference = f"CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr × {hh_sz} persons/hh = {0.1 * hh_sz:.4f} t/device/yr"
+        else:
+            value = round(0.4 * hh_sz, 4)
+            source_reference = f"CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh = {0.4 * hh_sz:.4f} t/device/yr"
+    elif param_key == "project_fuel_consumption":
+        value = None
+        source_type = "default"
+        source_reference = "Must be determined from project stove testing (KPT / WBT)"
     elif param_key == "usage_rate":
         value = 0.90
         source_type = "default"

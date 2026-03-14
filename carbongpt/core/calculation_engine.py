@@ -11,29 +11,14 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=6000):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.1,
-    }
-    if response_format:
-        payload["response_format"] = response_format
-    resp = http_client.post(
-        OPENAI_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=180,
+    from carbongpt.core.openai_client import call_openai
+    return call_openai(
+        system_prompt, user_prompt,
+        response_format=response_format,
+        max_tokens=max_tokens,
+        temperature=0.1,
+        model_override=MODEL,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
 
 
 CALC_SCHEMA = {

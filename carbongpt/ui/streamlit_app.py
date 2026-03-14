@@ -8177,12 +8177,12 @@ _SDG_INDICATORS = {
     "13": [
         "Annual greenhouse gas emission reductions (tCO2e/year)",
         "Total emission reductions over crediting period (tCO2e)",
-        "Fraction of non-renewable biomass (fNRB) in baseline (%)",
+        "Fraction of non-renewable biomass (fNRB) in baseline (fraction 0–1)",
     ],
     "15": [
         "Annual reduction in wood fuel / charcoal consumption (tonnes/year)",
         "Area of forest protected from deforestation / degradation (ha)",
-        "Fraction of non-renewable biomass (fNRB) reduction (%)",
+        "Fraction of non-renewable biomass (fNRB) reduction (fraction 0–1)",
     ],
 }
 

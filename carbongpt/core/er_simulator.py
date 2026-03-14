@@ -23,12 +23,12 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         Project (fuel switch, Method 3): EC_p * (EF_CO2_p + EF_nonCO2_p)  -- no fNRB
     """
     from carbongpt.core.methodology_rules import (
-        TPDDTEC_NCV_WOOD_TJ_PER_TON,
+        TPDDTEC_NCV_WOOD_TJ_PER_GG,
         TPDDTEC_EF_CO2_WOOD,
         TPDDTEC_EF_NONCO2_WOOD_AR5,
         TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION,
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
-        TPDDTEC_NCV_CHARCOAL_TJ_PER_TON,
+        TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
     )
 
@@ -51,19 +51,19 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
 
     if is_tpddtec:
         if is_charcoal_baseline:
-            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_GG)
             EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
             EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
         else:
-            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_WOOD_AR5)
         if is_charcoal_project:
-            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
         else:
-            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
     else:
@@ -81,22 +81,21 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         consumption_pj_label = "project_fuel_consumption"
     elif is_tpddtec and method_id == "method_2":
         devices_per_hh = _pval(params, "devices_per_household", 1.0)
-        sfc_b = (TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh / 365.0) * 1000.0
-        sfc_p = _pval(params, "SFC_project", sfc_b * 0.5)
-        bl_consumption = sfc_b * 365.0 / 1000.0
-        pj_consumption = sfc_p * 365.0 / 1000.0
+        # Method 2: derive baseline consumption directly from TPDDTEC default (t/device/yr)
+        bl_consumption = TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
         consumption_label = (
-            f"Method 2 default: 0.5 t/capita/yr × {hh_size} persons / {devices_per_hh} devices / 365 × 365 "
-            f"= {bl_consumption:.4f} t/device/yr (SFC_b = {sfc_b:.4f} kg/day, locked)"
+            f"Method 2 locked default: {TPDDTEC_METHOD2_DEFAULT_CONSUMPTION} t/capita/yr × "
+            f"{hh_size} persons / {devices_per_hh} device(s)/hh = {bl_consumption:.4f} t/device/yr"
         )
-        consumption_pj_label = f"SFC_project × 365 / 1000 = {sfc_p:.4f} × 365 / 1000"
+        consumption_pj_label = f"project_fuel_consumption = {pj_consumption:.4f} t/device/yr"
     else:
-        sfc_b = _pval(params, "SFC_baseline", 1.37)
-        sfc_p = _pval(params, "SFC_project", 0.68)
-        bl_consumption = sfc_b * 365.0 / 1000.0
-        pj_consumption = sfc_p * 365.0 / 1000.0
-        consumption_label = f"SFC_baseline × 365 days / 1000 = {sfc_b} × 365 / 1000"
-        consumption_pj_label = f"SFC_project × 365 days / 1000 = {sfc_p} × 365 / 1000"
+        # Method 1 / Method 3 / VM0050 fallback:
+        # canonical parameter is baseline_fuel_consumption in t/device/yr
+        bl_consumption = _pval(params, "baseline_fuel_consumption", 0.5)
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
+        consumption_label = f"baseline_fuel_consumption = {bl_consumption:.4f} t/device/yr"
+        consumption_pj_label = f"project_fuel_consumption = {pj_consumption:.4f} t/device/yr"
 
     if is_charcoal_baseline and CF > 1.0:
         bl_consumption_wood_equiv = bl_consumption * CF
@@ -280,12 +279,12 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         deployment_config = {}
 
     from carbongpt.core.methodology_rules import (
-        TPDDTEC_NCV_WOOD_TJ_PER_TON,
+        TPDDTEC_NCV_WOOD_TJ_PER_GG,
         TPDDTEC_EF_CO2_WOOD,
         TPDDTEC_EF_NONCO2_WOOD_AR5,
         TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION,
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
-        TPDDTEC_NCV_CHARCOAL_TJ_PER_TON,
+        TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
     )
 
@@ -305,19 +304,19 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
 
     if is_tpddtec:
         if is_charcoal_baseline:
-            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_CHARCOAL_TJ_PER_GG)
             EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
             EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
         else:
-            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            NCV_b = _pval(params, "NCV_baseline", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_b = _pval(params, "EF_CO2_baseline", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_b = _pval(params, "EF_nonCO2_baseline", TPDDTEC_EF_NONCO2_WOOD_AR5)
         if is_charcoal_project:
-            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_TON * 1000)
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_CHARCOAL_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_CHARCOAL_WITH_PRODUCTION)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5)
         else:
-            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_TON * 1000)
+            NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
     else:
@@ -333,15 +332,11 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
     elif is_tpddtec and method_id == "method_2":
         devices_per_hh = _pval(params, "devices_per_household", 1.0)
-        sfc_b = (TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh / 365.0) * 1000.0
-        sfc_p = _pval(params, "SFC_project", sfc_b * 0.5)
-        bl_consumption = sfc_b * 365.0 / 1000.0
-        pj_consumption = sfc_p * 365.0 / 1000.0
+        bl_consumption = TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
     else:
-        sfc_b = _pval(params, "SFC_baseline", 1.37)
-        sfc_p = _pval(params, "SFC_project", 0.68)
-        bl_consumption = sfc_b * 365.0 / 1000.0
-        pj_consumption = sfc_p * 365.0 / 1000.0
+        bl_consumption = _pval(params, "baseline_fuel_consumption", 0.5)
+        pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
 
     if is_charcoal_baseline and CF > 1.0:
         bl_consumption_wood_equiv = bl_consumption * CF
@@ -755,6 +750,9 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
             result = calculate_cookstove_er_cohort(params, crediting_years, start_year, methodology, deployment_config)
         else:
             result = calculate_cookstove_er(params, crediting_years, start_year, methodology)
+    elif methodology in ("MECD", "GS-MECD"):
+        from carbongpt.core.mecd_simulator import calculate_mecd_er
+        result = calculate_mecd_er(params, crediting_years=crediting_years, start_year=start_year)
     elif methodology in ("ACM0002", "AMS-I.D.", "AMSID"):
         result = calculate_grid_er(params, crediting_years, start_year, methodology)
     else:
@@ -1110,237 +1108,6 @@ def _add_finance(result, carbon_price, price_escalation=0, developer_share=100, 
     result["summary"]["carbon_price"] = carbon_price
     result["summary"]["developer_share_pct"] = developer_share
 
-
-def export_er_to_excel(result, project_name="Project"):
-    import io
-    try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    except ImportError:
-        return None
-
-    wb = openpyxl.Workbook()
-
-    header_font = Font(bold=True, size=12)
-    param_header_font = Font(bold=True, size=10, color="FFFFFF")
-    formula_font = Font(italic=True, size=9, color="666666")
-    number_format_2dp = '0.00'
-    number_format_6dp = '0.000000'
-    teal_fill = PatternFill(start_color="0D9488", end_color="0D9488", fill_type="solid")
-    light_fill = PatternFill(start_color="F0FDFA", end_color="F0FDFA", fill_type="solid")
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin')
-    )
-
-    ws_params = wb.active
-    ws_params.title = "Parameters"
-    ws_params.append(["CarbonGPT - ER Calculation Workbook"])
-    ws_params["A1"].font = Font(bold=True, size=14)
-    ws_params.append([f"Project: {project_name}"])
-    ws_params.append([f"Methodology: {result.get('summary', {}).get('methodology', 'N/A')}"])
-    ws_params.append([])
-
-    ws_params.append(["Parameter", "Value", "Unit", "Description"])
-    for col in range(1, 5):
-        cell = ws_params.cell(row=5, column=col)
-        cell.font = param_header_font
-        cell.fill = teal_fill
-        cell.border = thin_border
-
-    params_used = result.get("parameters_used", {})
-    row = 6
-    for key, info in params_used.items():
-        if isinstance(info, dict):
-            val = info.get("value", "")
-            unit = info.get("unit", "")
-            desc = info.get("description", "")
-        else:
-            val = info
-            unit = ""
-            desc = ""
-        ws_params.append([key, val, unit, desc])
-        for col in range(1, 5):
-            ws_params.cell(row=row, column=col).border = thin_border
-        if row % 2 == 0:
-            for col in range(1, 5):
-                ws_params.cell(row=row, column=col).fill = light_fill
-        row += 1
-
-    ws_params.column_dimensions['A'].width = 30
-    ws_params.column_dimensions['B'].width = 18
-    ws_params.column_dimensions['C'].width = 20
-    ws_params.column_dimensions['D'].width = 45
-
-    ws_steps = wb.create_sheet("Calculation Steps")
-    ws_steps.append(["Step-by-Step Calculation Breakdown"])
-    ws_steps["A1"].font = Font(bold=True, size=14)
-    ws_steps.append([])
-
-    ws_steps.append(["Step", "Description", "Formula / Calculation", "Result", "Unit"])
-    for col in range(1, 6):
-        cell = ws_steps.cell(row=3, column=col)
-        cell.font = param_header_font
-        cell.fill = teal_fill
-        cell.border = thin_border
-
-    steps = result.get("calculation_steps", [])
-    row = 4
-    for s in steps:
-        step_num = s.get("step", "")
-        name = s.get("name", "")
-        formula = s.get("formula", "")
-        val = s.get("value", s.get("value_baseline", ""))
-        unit = s.get("unit", "")
-        ws_steps.append([step_num, name, formula, val, unit])
-        for col in range(1, 6):
-            ws_steps.cell(row=row, column=col).border = thin_border
-        ws_steps.cell(row=row, column=3).font = formula_font
-        if isinstance(val, float):
-            ws_steps.cell(row=row, column=4).number_format = number_format_6dp
-        row += 1
-
-    ws_steps.column_dimensions['A'].width = 8
-    ws_steps.column_dimensions['B'].width = 45
-    ws_steps.column_dimensions['C'].width = 70
-    ws_steps.column_dimensions['D'].width = 18
-    ws_steps.column_dimensions['E'].width = 20
-
-    ws_years = wb.create_sheet("Year-by-Year Results")
-    ws_years.append(["Year-by-Year Emission Reduction Calculations"])
-    ws_years["A1"].font = Font(bold=True, size=14)
-    ws_years.append([])
-
-    year_headers = [
-        "Year", "Calendar Year", "Usage Rate", "Active HH",
-        "BE/hh (tCO2e)", "PE/hh (tCO2e)",
-        "Baseline Emissions (tCO2e)", "BE Formula",
-        "Project Emissions (tCO2e)", "PE Formula",
-        "Gross ER (tCO2e)", "Leakage (tCO2e)", "Leakage Formula",
-        "Net ER (tCO2e)", "Net ER Formula",
-    ]
-    ws_years.append(year_headers)
-    for col in range(1, len(year_headers) + 1):
-        cell = ws_years.cell(row=3, column=col)
-        cell.font = param_header_font
-        cell.fill = teal_fill
-        cell.border = thin_border
-        cell.alignment = Alignment(wrap_text=True)
-
-    years = result.get("years", [])
-    row = 4
-    for y in years:
-        ws_years.append([
-            y.get("year_number"),
-            y.get("calendar_year"),
-            y.get("usage_rate"),
-            y.get("active_households"),
-            y.get("be_per_hh"),
-            y.get("pe_per_hh"),
-            y.get("baseline_emissions"),
-            y.get("baseline_formula", ""),
-            y.get("project_emissions"),
-            y.get("project_formula", ""),
-            y.get("gross_er"),
-            y.get("leakage"),
-            y.get("leakage_formula", ""),
-            y.get("net_er"),
-            y.get("net_er_formula", ""),
-        ])
-        for col in range(1, len(year_headers) + 1):
-            cell = ws_years.cell(row=row, column=col)
-            cell.border = thin_border
-            if isinstance(cell.value, float):
-                cell.number_format = number_format_2dp
-        for formula_col in [8, 10, 13, 15]:
-            ws_years.cell(row=row, column=formula_col).font = formula_font
-        if row % 2 == 0:
-            for col in range(1, len(year_headers) + 1):
-                ws_years.cell(row=row, column=col).fill = light_fill
-        row += 1
-
-    summary = result.get("summary", {})
-    row += 1
-    ws_years.cell(row=row, column=1, value="TOTALS").font = Font(bold=True, size=11)
-    ws_years.cell(row=row, column=7, value=summary.get("total_baseline", 0)).font = Font(bold=True)
-    ws_years.cell(row=row, column=7).number_format = number_format_2dp
-    ws_years.cell(row=row, column=9, value=summary.get("total_project", 0)).font = Font(bold=True)
-    ws_years.cell(row=row, column=9).number_format = number_format_2dp
-    ws_years.cell(row=row, column=12, value=summary.get("total_leakage", 0)).font = Font(bold=True)
-    ws_years.cell(row=row, column=12).number_format = number_format_2dp
-    ws_years.cell(row=row, column=14, value=summary.get("total_er", 0)).font = Font(bold=True)
-    ws_years.cell(row=row, column=14).number_format = number_format_2dp
-    for col in range(1, len(year_headers) + 1):
-        ws_years.cell(row=row, column=col).border = Border(top=Side(style='double'))
-
-    for col_letter in ['A','B','C','D','E','F']:
-        ws_years.column_dimensions[col_letter].width = 14
-    for col_letter in ['G','H','I','J','K','L','M','N','O']:
-        ws_years.column_dimensions[col_letter].width = 22
-
-    deployment_timeline = result.get("deployment_timeline")
-    if deployment_timeline:
-        ws_deploy = wb.create_sheet("Deployment & Cohort")
-        ws_deploy.append(["Deployment & Technology Dynamics"])
-        ws_deploy["A1"].font = Font(bold=True, size=14)
-        ws_deploy.append([])
-
-        deploy_headers = [
-            "Year", "Calendar Year", "Deployed", "Cumulative Deployed",
-            "Active Units", "Surviving Units", "Effectively Used",
-            "Net ER (tCO2e)", "Cumulative ER (tCO2e)",
-        ]
-        ws_deploy.append(deploy_headers)
-        for col in range(1, len(deploy_headers) + 1):
-            cell = ws_deploy.cell(row=3, column=col)
-            cell.font = param_header_font
-            cell.fill = teal_fill
-            cell.border = thin_border
-            cell.alignment = Alignment(wrap_text=True)
-
-        drow = 4
-        for dt in deployment_timeline:
-            ws_deploy.append([
-                dt.get("year_number", ""),
-                dt.get("year", ""),
-                dt.get("deployed", 0),
-                dt.get("cumulative_deployed", 0),
-                dt.get("active", 0),
-                dt.get("surviving", 0),
-                dt.get("effectively_used", 0),
-                dt.get("net_er", 0),
-                dt.get("cumulative_er", 0),
-            ])
-            for col in range(1, len(deploy_headers) + 1):
-                cell = ws_deploy.cell(row=drow, column=col)
-                cell.border = thin_border
-                if isinstance(cell.value, float):
-                    cell.number_format = number_format_2dp
-            if drow % 2 == 0:
-                for col in range(1, len(deploy_headers) + 1):
-                    ws_deploy.cell(row=drow, column=col).fill = light_fill
-            drow += 1
-
-        for col_letter in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
-            ws_deploy.column_dimensions[col_letter].width = 18
-
-    if "total_gross_revenue" in summary:
-        ws_fin = wb.create_sheet("Carbon Finance")
-        ws_fin.append(["Carbon Finance Projections"])
-        ws_fin["A1"].font = Font(bold=True, size=14)
-        ws_fin.append([])
-        ws_fin.append(["Carbon Price ($/tCO2e)", summary.get("carbon_price", 0)])
-        ws_fin.append(["Developer Share (%)", summary.get("developer_share_pct", 100)])
-        ws_fin.append(["Total Gross Revenue ($)", summary.get("total_gross_revenue", 0)])
-        ws_fin.append(["Total Deductions ($)", summary.get("total_deductions", 0)])
-        ws_fin.append(["Total Net Revenue ($)", summary.get("total_net_revenue", 0)])
-        ws_fin.column_dimensions['A'].width = 30
-        ws_fin.column_dimensions['B'].width = 20
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return buf
 
 
 def _pval(params, key, default=0.0):

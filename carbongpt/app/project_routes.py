@@ -1748,10 +1748,21 @@ def export_calculation_endpoint(project_id: int, data: ExportCalculationRequest)
         raise HTTPException(status_code=404, detail="Project not found.")
 
     try:
+        # Prefer the selected/saved scenario; fall back to session payload
+        calc_result = data.calculation_result or {}
+        try:
+            from carbongpt.core.er_simulator import get_selected_scenario
+            selected = get_selected_scenario(project_id)
+            if selected and isinstance(selected, dict) and "annual_results" in selected:
+                calc_result = selected
+        except Exception as _se:
+            logger.debug("Could not load selected scenario, using session payload: %s", _se)
+
         buf = generate_er_workbook(
             project=project,
             doc_type=data.doc_type or "pdd",
-            calc_result=data.calculation_result or {},
+            calc_result=calc_result,
+            project_id=project_id,
         )
     except Exception as e:
         logger.error("ER workbook export failed: %s", e)

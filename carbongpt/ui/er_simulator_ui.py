@@ -7,7 +7,6 @@ from carbongpt.core.er_simulator import (
     get_scenario_detail,
     delete_scenario,
     run_sensitivity,
-    export_er_to_excel,
     select_scenario_for_drafting,
     deselect_scenario,
     update_scenario_purpose,
@@ -495,7 +494,20 @@ def _render_er_results(result, project_name="Project"):
         with col_f3:
             st.metric("Carbon Price", f"${summary.get('carbon_price', 0):,.2f}/tCO2e")
 
-    excel_data = export_er_to_excel(result, project_name=project_name)
+    try:
+        from carbongpt.core.er_excel import generate_er_workbook
+        _proj_stub = {"name": project_name}
+        _doc_type = st.session_state.get("current_doc_type", "pdd")
+        _project_id = st.session_state.get("selected_project_id")
+        excel_data = generate_er_workbook(
+            project=_proj_stub,
+            doc_type=_doc_type,
+            calc_result=result,
+            project_id=_project_id,
+        )
+    except Exception as _exc:
+        excel_data = None
+        st.warning(f"Workbook export unavailable: {_exc}")
     if excel_data:
         st.download_button(
             label="Download Excel Workbook",
