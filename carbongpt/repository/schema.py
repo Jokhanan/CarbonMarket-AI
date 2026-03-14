@@ -649,6 +649,53 @@ CREATE TABLE IF NOT EXISTS section_exemplars (
 CREATE INDEX IF NOT EXISTS idx_exemplars_domain ON section_exemplars(section_domain);
 CREATE INDEX IF NOT EXISTS idx_exemplars_lookup ON section_exemplars(section_domain, standard, project_type)
     WHERE is_usable = true;
+
+-- ============================================================
+-- CARBON INTELLIGENCE — NORMALIZATION LAYER (Step 1 + 2)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS methodology_library (
+    methodology_code   VARCHAR(30)  PRIMARY KEY,
+    display_name       VARCHAR(200) NOT NULL,
+    methodology_family VARCHAR(100),
+    registry           VARCHAR(30)  DEFAULT 'Any',
+    sector             VARCHAR(100),
+    technology         VARCHAR(100),
+    status             VARCHAR(20)  DEFAULT 'active',
+    notes              TEXT
+);
+
+CREATE TABLE IF NOT EXISTS project_methodology_codes (
+    id                SERIAL PRIMARY KEY,
+    project_id        INTEGER NOT NULL REFERENCES carbon_projects(id) ON DELETE CASCADE,
+    methodology_code  VARCHAR(30) NOT NULL REFERENCES methodology_library(methodology_code),
+    is_primary        BOOLEAN DEFAULT TRUE,
+    raw_segment       VARCHAR(300),
+    UNIQUE(project_id, methodology_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pmc_project  ON project_methodology_codes(project_id);
+CREATE INDEX IF NOT EXISTS idx_pmc_code     ON project_methodology_codes(methodology_code);
+
+CREATE TABLE IF NOT EXISTS methodology_normalization_log (
+    id               SERIAL PRIMARY KEY,
+    raw_string       VARCHAR(300) NOT NULL UNIQUE,
+    raw_segment      VARCHAR(300),
+    occurrence_count INTEGER   DEFAULT 1,
+    first_seen       TIMESTAMP DEFAULT NOW(),
+    last_seen        TIMESTAMP DEFAULT NOW(),
+    resolved_code    VARCHAR(30),
+    status           VARCHAR(20) DEFAULT 'unknown' CHECK (status IN ('unknown', 'resolved', 'ignored'))
+);
+
+CREATE TABLE IF NOT EXISTS countries (
+    country_iso   CHAR(3)      PRIMARY KEY,
+    country_name  VARCHAR(100) NOT NULL,
+    region        VARCHAR(50),
+    subregion     VARCHAR(80)
+);
+
+ALTER TABLE carbon_projects ADD COLUMN IF NOT EXISTS country_iso CHAR(3) REFERENCES countries(country_iso);
 """
 
 

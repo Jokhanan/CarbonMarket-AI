@@ -90,6 +90,25 @@ def startup_init_db():
         except Exception as exc:
             logger.warning("Methodology sync scheduler skipped: %s", exc)
 
+    if os.getenv("CARBONGPT_AUTO_SYNC_PROJECTS", "").lower() in ("1", "true", "yes"):
+        try:
+            from carbongpt.repository.project_sync import start_registry_sync_schedule
+            start_registry_sync_schedule()
+        except Exception as exc:
+            logger.warning("Registry project sync scheduler skipped: %s", exc)
+
+    try:
+        from carbongpt.repository.country_normalizer import seed_countries_table
+        seed_countries_table()
+    except Exception as exc:
+        logger.warning("Country table seed skipped: %s", exc)
+
+    try:
+        from carbongpt.repository.methodology_normalizer import seed_methodology_library_from_db
+        seed_methodology_library_from_db()
+    except Exception as exc:
+        logger.warning("Methodology library seed skipped: %s", exc)
+
 
 @app.get("/health", tags=["system"])
 def health_check() -> dict:

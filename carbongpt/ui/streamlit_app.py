@@ -2560,6 +2560,10 @@ def render_intelligence():
 
 
 def _render_global_overview(analytics, summary):
+    st.caption(
+        "Credit figures shown are registry-declared estimates at project registration, "
+        "not verified issued credits. See the Sync tab for data coverage."
+    )
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Projects", f"{summary['total_projects']:,}",
@@ -2572,8 +2576,9 @@ def _render_global_overview(analytics, summary):
             credits_str = f"{credits / 1_000_000:.0f}M"
         else:
             credits_str = f"{credits:,}"
-        st.metric("Est. Annual Credits", credits_str,
-                   help="Total estimated annual emission reductions (tCO2e)")
+        st.metric("Est. Annual Credits (not actual issued)",
+                  credits_str,
+                  help="Estimated annual emission reductions declared at registration (tCO2e). Not actual verified and issued credits.")
     with col3:
         st.metric("Countries", f"{summary['total_countries']}")
     with col4:
@@ -2659,7 +2664,8 @@ def _render_country_explorer(analytics):
             total_credits = sum(
                 (p.get("estimated_annual_credits") or 0) for p in detail.get("projects", [])
             )
-            st.metric("Est. Annual Credits", f"{total_credits:,}")
+            st.metric("Est. Annual Credits (not actual issued)", f"{total_credits:,}",
+                      help="Sum of estimated annual ER declared at registration. Not actual issued credits.")
         with col3:
             st.metric("Developers", f"{len(detail.get('developers', []))}")
 
@@ -2773,46 +2779,107 @@ def _render_project_browser():
 def _render_sync_controls(summary):
     st.subheader("Project Data Sync")
 
-    sync_status = _fetch("/admin/sync-projects/status")
+    sync_status   = _fetch("/admin/sync-projects/status")
+    sched_status  = _fetch("/admin/sync-projects/schedule") or {}
 
-    st.write(f"Total projects in database: {summary.get('total_projects', 0):,}")
-    st.write(f"Countries covered: {summary.get('total_countries', 0)}")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.write(f"Total projects in database: **{summary.get('total_projects', 0):,}**")
+        st.write(f"Countries covered: **{summary.get('total_countries', 0)}**")
+    with col_b:
+        if sched_status.get("last_run"):
+            st.write(f"Last scheduled sync: **{sched_status['last_run'][:19].replace('T',' ')} UTC**")
+        if sched_status.get("next_run"):
+            st.write(f"Next scheduled sync: **{sched_status['next_run'][:19].replace('T',' ')} UTC**")
+        elif not sched_status.get("last_run"):
+            st.caption("Scheduler inactive. Set CARBONGPT_AUTO_SYNC_PROJECTS=1 to enable.")
 
     if sync_status and sync_status.get("running"):
         st.info("A sync is currently running in the background. Refresh this page to check progress.")
-        current_count = sync_status.get("total_projects_in_db", 0)
-        st.write(f"Current project count: {current_count:,}")
     else:
         last_result = sync_status.get("last_result") if sync_status else None
         if last_result and not last_result.get("error"):
             verra = last_result.get("verra", {})
-            gs = last_result.get("goldstandard", {})
+            gs    = last_result.get("goldstandard", {})
             st.write(
-                f"Last sync: Verra {verra.get('synced', 0):,} projects, "
+                f"Last manual sync: Verra {verra.get('synced', 0):,} projects, "
                 f"Gold Standard {gs.get('synced', 0):,} projects"
             )
 
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("Sync All Projects", key="sync_all_btn", type="primary",
+                      help="Fetch latest project data from Verra and Gold Standard registries"):
+            result = _fetch("/admin/sync-projects", method="POST")
+            if result:
+                status = result.get("status", "")
+                if status == "started":
+                    st.success("Sync started in the background. Refresh this page in a few minutes.")
+                elif status == "already_running":
+                    st.warning("A sync is already running. Please wait for it to finish.")
+                else:
+                    verra = result.get("verra", {})
+                    gs    = result.get("goldstandard", {})
+                    st.success(
+                        f"Sync complete. Verra: {verra.get('synced', 0):,}. "
+                        f"Gold Standard: {gs.get('synced', 0):,}."
+                    )
+                    time.sleep(1)
+                    st.rerun()
+    with btn_col2:
+        if st.button("Run Normalization Pass", key="norm_run_btn",
+                      help="Re-run country and methodology normalization on all projects"):
+            result = _fetch("/admin/normalization/run", method="POST")
+            if result:
+                cr = result.get("country", {})
+                mr = result.get("methodology", {})
+                st.success(
+                    f"Done. Country: {cr.get('resolved', 0)}/{cr.get('total', 0)} resolved. "
+                    f"Methodology: {mr.get('linked', 0)} codes linked, "
+                    f"{mr.get('unmatched', 0)} unmatched."
+                )
+                st.rerun()
+
     st.divider()
 
-    if st.button("Sync All Projects", key="sync_all_btn", type="primary",
-                  help="Fetch latest project data from Verra and Gold Standard registries"):
-        result = _fetch("/admin/sync-projects", method="POST")
-        if result:
-            status = result.get("status", "")
-            if status == "started":
-                st.success("Sync started in the background. Refresh this page in a few minutes to see results.")
-            elif status == "already_running":
-                st.warning("A sync is already running. Please wait for it to finish.")
-            else:
-                verra = result.get("verra", {})
-                gs = result.get("goldstandard", {})
-                st.success(
-                    f"Sync complete. "
-                    f"Verra: {verra.get('synced', 0):,} projects. "
-                    f"Gold Standard: {gs.get('synced', 0):,} projects."
-                )
-                time.sleep(1)
-                st.rerun()
+    # ── Normalization Coverage ────────────────────────────────────────────────
+    st.subheader("Normalization Coverage")
+    cov = _fetch("/admin/normalization/coverage") or {}
+    if cov:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Country Resolved",
+                      f"{cov.get('country_resolved', 0):,} / {cov.get('total_projects', 0):,}",
+                      help="Projects with a mapped ISO country code")
+        with c2:
+            st.metric("Methodology Linked",
+                      f"{cov.get('meth_resolved', 0):,} / {cov.get('total_projects', 0):,}",
+                      help="Projects with at least one extracted methodology code")
+        with c3:
+            st.metric("Unmatched Methodology Strings",
+                      f"{cov.get('unresolved_meth_log', 0):,}",
+                      help="Raw methodology strings not matched by regex or name lookup")
+
+    # ── Unmatched Methodology Log ─────────────────────────────────────────────
+    st.subheader("Unmatched Methodology Strings")
+    st.caption(
+        "These raw methodology strings from the registry could not be matched to a known code. "
+        "Review and either update the normalizer or mark as ignored."
+    )
+    log_entries = _fetch("/admin/normalization/methodology-log?status=unknown&limit=50") or []
+    if log_entries:
+        import pandas as pd
+        df_log = pd.DataFrame(log_entries)
+        display_cols = ["raw_string", "occurrence_count", "first_seen", "last_seen"]
+        display_cols = [c for c in display_cols if c in df_log.columns]
+        st.dataframe(df_log[display_cols].rename(columns={
+            "raw_string": "Raw Value",
+            "occurrence_count": "Count",
+            "first_seen": "First Seen",
+            "last_seen": "Last Seen",
+        }), hide_index=True, use_container_width=True)
+    else:
+        st.success("No unmatched methodology strings. Normalization coverage is complete.")
 
 
 @st.cache_data(ttl=300)

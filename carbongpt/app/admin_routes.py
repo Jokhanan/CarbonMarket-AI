@@ -936,6 +936,58 @@ def get_sync_status():
 
 _project_sync_status = {"running": False, "last_result": None}
 
+@router.get("/normalization/coverage")
+def get_normalization_coverage():
+    """Normalization coverage stats for both country and methodology."""
+    from carbongpt.repository.store import get_normalization_coverage_stats
+    return get_normalization_coverage_stats()
+
+
+@router.get("/normalization/methodology-log")
+def get_methodology_log(status: str = "unknown", limit: int = 100):
+    """Return unmatched methodology strings queued for human review."""
+    from carbongpt.repository.store import get_methodology_normalization_log
+    return get_methodology_normalization_log(status=status, limit=limit)
+
+
+@router.post("/normalization/methodology-log/ignore")
+def ignore_methodology_log_entry(raw_string: str):
+    """Mark a normalization log entry as intentionally ignored."""
+    from carbongpt.repository.store import mark_normalization_log_ignored
+    mark_normalization_log_ignored(raw_string)
+    return {"status": "ignored", "raw_string": raw_string}
+
+
+@router.post("/normalization/run")
+def trigger_normalization():
+    """Manually trigger a normalization pass (country + methodology)."""
+    from carbongpt.repository.country_normalizer import (
+        seed_countries_table, run_country_normalization_pass,
+    )
+    from carbongpt.repository.methodology_normalizer import (
+        seed_methodology_library_from_db, run_methodology_normalization_pass,
+    )
+    seed_countries_table()
+    seed_methodology_library_from_db()
+    country_result = run_country_normalization_pass()
+    meth_result    = run_methodology_normalization_pass()
+    return {"country": country_result, "methodology": meth_result}
+
+
+@router.get("/normalization/methodology-families")
+def get_methodology_families():
+    """Return project counts grouped by normalized methodology family."""
+    from carbongpt.repository.store import get_methodology_family_analytics
+    return get_methodology_family_analytics()
+
+
+@router.get("/sync-projects/schedule")
+def get_registry_sync_schedule():
+    """Return the state of the registry sync scheduler."""
+    from carbongpt.repository.project_sync import get_registry_scheduler_state
+    return get_registry_scheduler_state()
+
+
 @router.post("/sync-projects")
 def sync_projects(max_verra: int = None, max_gs: int = None, background: bool = True):
     import threading

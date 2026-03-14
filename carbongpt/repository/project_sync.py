@@ -235,9 +235,122 @@ def _gs_country_to_region(country):
 
 def sync_all_projects(max_verra=None, max_gs=None):
     verra_result = sync_verra_projects(max_projects=max_verra)
-    gs_result = sync_gs_projects(max_projects=max_gs)
+    gs_result    = sync_gs_projects(max_projects=max_gs)
+
+    # ── Post-sync normalization passes ────────────────────────────────────
+    try:
+        from carbongpt.repository.country_normalizer import (
+            seed_countries_table,
+            run_country_normalization_pass,
+        )
+        seed_countries_table()
+        country_result = run_country_normalization_pass()
+        logger.info("Country normalization: %s", country_result)
+    except Exception as e:
+        logger.error("Country normalization failed: %s", e)
+        country_result = {"error": str(e)}
+
+    try:
+        from carbongpt.repository.methodology_normalizer import (
+            seed_methodology_library_from_db,
+            run_methodology_normalization_pass,
+        )
+        seed_methodology_library_from_db()
+        meth_result = run_methodology_normalization_pass()
+        logger.info("Methodology normalization: %s", meth_result)
+    except Exception as e:
+        logger.error("Methodology normalization failed: %s", e)
+        meth_result = {"error": str(e)}
+
     return {
-        "verra": verra_result,
-        "goldstandard": gs_result,
-        "total_synced": verra_result.get("synced", 0) + gs_result.get("synced", 0),
+        "verra":                verra_result,
+        "goldstandard":         gs_result,
+        "total_synced":         verra_result.get("synced", 0) + gs_result.get("synced", 0),
+        "country_normalization": country_result,
+        "meth_normalization":    meth_result,
     }
+
+
+# ── Step 5: Registry Sync Scheduler ─────────────────────────────────────────
+
+_registry_scheduler_started = False
+_registry_scheduler_state: dict = {
+    "running":     False,
+    "last_run":    None,
+    "next_run":    None,
+    "last_result": None,
+}
+
+
+def get_registry_scheduler_state() -> dict:
+    return dict(_registry_scheduler_state)
+
+
+def start_registry_sync_schedule() -> None:
+    """
+    Start a daemon thread that runs sync_all_projects() on a fixed interval.
+
+    Controlled by env vars:
+      CARBONGPT_AUTO_SYNC_PROJECTS=1          — enable (default: off)
+      CARBONGPT_PROJECT_SYNC_INTERVAL_HOURS=24 — interval (default: 24 h)
+
+    Mirrors the pattern used by start_weekly_sync() in methodology_sync.py.
+    The first sync runs 5 minutes after startup to avoid competing with the
+    methodology sync that fires 30 seconds after startup.
+    """
+    import os
+    import threading
+    from datetime import datetime, timedelta
+
+    global _registry_scheduler_started, _registry_scheduler_state
+
+    if _registry_scheduler_started:
+        logger.info("Registry sync scheduler already running — skipping.")
+        return
+    _registry_scheduler_started = True
+
+    interval_hours   = int(os.getenv("CARBONGPT_PROJECT_SYNC_INTERVAL_HOURS", "24"))
+    interval_seconds = interval_hours * 3600
+    initial_delay    = 300  # 5 minutes
+
+    def _run_periodic():
+        global _registry_scheduler_state
+
+        _registry_scheduler_state["next_run"] = (
+            datetime.utcnow() + timedelta(seconds=initial_delay)
+        ).isoformat() + "Z"
+
+        logger.info(
+            "Registry sync scheduler started — first run in %d s, then every %d h",
+            initial_delay, interval_hours,
+        )
+        time.sleep(initial_delay)
+
+        while True:
+            _registry_scheduler_state["running"]  = True
+            _registry_scheduler_state["last_run"] = datetime.utcnow().isoformat() + "Z"
+            _registry_scheduler_state["next_run"] = (
+                datetime.utcnow() + timedelta(seconds=interval_seconds)
+            ).isoformat() + "Z"
+
+            logger.info("Running scheduled registry project sync...")
+            try:
+                result = sync_all_projects()
+                _registry_scheduler_state["last_result"] = result
+                logger.info(
+                    "Scheduled sync complete — Verra: %d, GS: %d, total: %d",
+                    result.get("verra", {}).get("synced", 0),
+                    result.get("goldstandard", {}).get("synced", 0),
+                    result.get("total_synced", 0),
+                )
+            except Exception as e:
+                logger.error("Scheduled registry sync failed: %s", e)
+                _registry_scheduler_state["last_result"] = {"error": str(e)}
+            finally:
+                _registry_scheduler_state["running"] = False
+
+            time.sleep(interval_seconds)
+
+    thread = threading.Thread(target=_run_periodic, daemon=True)
+    thread.start()
+    logger.info("Registry sync scheduler thread started (interval: %d hours)", interval_hours)

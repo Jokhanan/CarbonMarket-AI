@@ -1412,3 +1412,109 @@ def get_methodology_structure(document_id):
         cur.execute("SELECT * FROM methodology_structure WHERE document_id = %s", (document_id,))
         row = cur.fetchone()
         return dict(row) if row else None
+
+
+# ── Carbon Intelligence — Normalization Queries ──────────────────────────────
+
+def get_methodology_normalization_log(status: str = "unknown", limit: int = 100) -> list:
+    """Return unresolved (or all) methodology normalization log entries."""
+    with get_cursor() as cur:
+        if status == "all":
+            cur.execute(
+                "SELECT * FROM methodology_normalization_log ORDER BY occurrence_count DESC LIMIT %s",
+                (limit,),
+            )
+        else:
+            cur.execute(
+                """SELECT * FROM methodology_normalization_log
+                   WHERE status = %s
+                   ORDER BY occurrence_count DESC
+                   LIMIT %s""",
+                (status, limit),
+            )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def mark_normalization_log_ignored(raw_string: str) -> bool:
+    """Mark a normalization log entry as ignored."""
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE methodology_normalization_log SET status = 'ignored' WHERE raw_string = %s",
+            (raw_string,),
+        )
+        return True
+
+
+def get_methodology_family_analytics() -> list:
+    """
+    Return project counts grouped by methodology_family from the library.
+    Uses the normalized junction table — more accurate than raw string GROUP BY.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COALESCE(ml.methodology_family, 'Unknown') AS methodology_family,
+                ml.sector,
+                ml.registry,
+                COUNT(DISTINCT pmc.project_id)             AS project_count,
+                COALESCE(SUM(cp.estimated_annual_credits), 0) AS total_credits
+            FROM project_methodology_codes pmc
+            JOIN methodology_library ml
+                ON pmc.methodology_code = ml.methodology_code
+            JOIN carbon_projects cp
+                ON pmc.project_id = cp.id
+            GROUP BY ml.methodology_family, ml.sector, ml.registry
+            ORDER BY project_count DESC
+            """
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_country_iso_analytics() -> list:
+    """
+    Return project counts grouped by normalized country_iso + canonical name.
+    Falls back gracefully to raw country name where iso is NULL.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COALESCE(cp.country_iso, 'UNK')       AS country_iso,
+                COALESCE(c.country_name, cp.country)  AS country_name,
+                COALESCE(c.region, 'Unknown')          AS region,
+                COUNT(*)                               AS project_count,
+                COALESCE(SUM(cp.estimated_annual_credits), 0) AS total_credits
+            FROM carbon_projects cp
+            LEFT JOIN countries c ON cp.country_iso = c.country_iso
+            WHERE cp.country IS NOT NULL
+            GROUP BY cp.country_iso, c.country_name, cp.country, c.region
+            ORDER BY project_count DESC
+            """
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_normalization_coverage_stats() -> dict:
+    """Return a summary of normalization coverage for the admin panel."""
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS total FROM carbon_projects")
+        total = cur.fetchone()["total"]
+
+        cur.execute("SELECT COUNT(*) AS n FROM carbon_projects WHERE country_iso IS NOT NULL")
+        country_resolved = cur.fetchone()["n"]
+
+        cur.execute("SELECT COUNT(DISTINCT project_id) AS n FROM project_methodology_codes")
+        meth_resolved = cur.fetchone()["n"]
+
+        cur.execute("SELECT COUNT(*) AS n FROM methodology_normalization_log WHERE status = 'unknown'")
+        unresolved_log = cur.fetchone()["n"]
+
+        return {
+            "total_projects":       total,
+            "country_resolved":     country_resolved,
+            "country_pct":          round(country_resolved / total * 100, 1) if total else 0,
+            "meth_resolved":        meth_resolved,
+            "meth_pct":             round(meth_resolved / total * 100, 1) if total else 0,
+            "unresolved_meth_log":  unresolved_log,
+        }
