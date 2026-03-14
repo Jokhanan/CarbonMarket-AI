@@ -1,0 +1,160 @@
+I want you to perform a complete architecture and codebase audit of the entire CarbonGPT application.
+
+This is not a quick scan. I want a deep structural analysis of the whole system from end to end.
+
+The goal is to ensure that the application has a clean, coherent, and maintainable architecture without duplication, unfinished logic, or inconsistent data flows.
+
+You must review the entire codebase including:
+- UI / frontend (Streamlit interface)
+- backend routes (FastAPI)
+- core logic modules
+- parameter engine
+- methodology rules
+- AI writer
+- repository / database layer
+- utilities
+- export modules
+
+Your analysis must cover the following dimensions:
+
+1. Code duplication
+Identify all cases where:
+- the same function or logic appears in multiple places
+- similar logic is implemented differently in different modules
+- UI widgets repeat the same logic already handled elsewhere
+- calculations are duplicated in different layers
+
+For each duplication:
+- identify the files and line ranges
+- explain what the duplicated logic is doing
+- propose the correct single location where this logic should live
+
+2. Incomplete or abandoned code paths
+Identify:
+- functions that are defined but never used
+- features partially implemented but not completed
+- TODO comments or placeholder logic
+- dead branches in decision trees
+- unreachable code
+
+Explain:
+- whether they should be removed or completed
+- what their intended purpose appears to be
+
+3. Inconsistent data sources
+Identify all places where the same data is stored or read from multiple locations.
+
+Examples:
+- values stored in both intake JSON and methodology_settings
+- parameters appearing in both parameter_engine and UI logic
+- location data duplicated across multiple fields
+- fuels or scale appearing in multiple layers
+
+For each case:
+- explain the conflicting sources
+- propose a single source of truth
+
+4. Broken or unclear workflow paths
+Trace the full workflow for major use cases:
+
+- create new project
+- create PDD
+- create PoA
+- create VPA-DD
+- create Monitoring Report
+- respond to findings
+- generate ER calculations
+- export documents
+
+For each workflow:
+- trace the full path through the system
+- identify redundant steps
+- identify missing transitions
+- detect duplicated UI steps
+- detect unclear logic branches
+
+5. UI duplication and UX inconsistencies
+Audit the UI logic to find:
+
+- duplicated input fields
+- fields asking the same information multiple times
+- parameters requested both in wizard and setup
+- inconsistent field naming
+- unclear separation between:
+  - editable authoritative values
+  - derived values
+  - narrative/context fields
+
+Provide recommendations to simplify the UI structure.
+
+6. Methodology logic consistency
+Audit the implementation of cookstove methodologies:
+
+- TPDDTEC
+- GS-MECD
+- VM0050
+
+Check:
+- methodology detection logic
+- parameter activation logic
+- formula selection
+- monitoring parameters
+- baseline vs project pathways
+
+Identify:
+- duplicated calculation logic
+- inconsistent parameter definitions
+- incorrect references
+
+7. Parameter engine integrity
+Audit the parameter engine to ensure:
+
+- each parameter is defined once
+- units are consistent
+- dependencies are explicit
+- formulas are not duplicated elsewhere
+- default sources are clearly documented
+
+Identify any inconsistencies or duplicated calculations.
+
+8. Export logic review
+Check the export modules:
+
+- ER calculation export
+- document export
+- parameter exports
+
+Ensure:
+- exports pull data from the correct source
+- no duplicated calculation logic exists in exports
+- exports rely on the parameter engine rather than recreating calculations
+
+9. Codebase maintainability
+Provide a high-level evaluation of:
+
+- modularity
+- separation of concerns
+- dependency structure
+- code readability
+- risk areas for technical debt
+
+10. Refactoring roadmap
+After the full audit, propose a prioritized cleanup plan:
+
+Phase 1 – critical structural fixes  
+Phase 2 – duplication removal  
+Phase 3 – workflow simplification  
+Phase 4 – architecture improvements  
+
+Each phase should include:
+- concrete tasks
+- affected files
+- expected impact
+
+Important rules for this audit:
+- Do not write new code yet.
+- First produce the full audit report.
+- Be explicit about file names and code locations.
+- Focus on structural clarity and long-term maintainability.
+
+The goal is to ensure CarbonGPT has a clean, robust architecture that can scale without accumulating technical debt.
