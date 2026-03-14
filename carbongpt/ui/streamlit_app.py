@@ -1267,6 +1267,153 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
+    /* ══════════════════════════════════════════════
+       Wave 2 — Premium dashboard components
+       ══════════════════════════════════════════════ */
+
+    /* ── Stat cards (replace st.metric) ── */
+    .stat-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.4rem 1.5rem 1.2rem 1.5rem;
+        box-shadow: var(--shadow-xs);
+        transition: all var(--transition-base);
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+    }
+    .stat-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 2px;
+        background: var(--brand-gradient);
+        opacity: 0;
+        transition: opacity var(--transition-base);
+    }
+    .stat-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+        border-color: var(--border-default);
+    }
+    .stat-card:hover::after {
+        opacity: 1;
+    }
+    .stat-card-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-sm);
+        background: var(--brand-primary-50);
+        border: 1px solid var(--brand-primary-100);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+        color: var(--brand-primary);
+    }
+    .stat-card-value {
+        font-size: 2.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.035em;
+        line-height: 1;
+        margin-bottom: 0.3rem;
+    }
+    .stat-card-label {
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+    }
+    .stat-card-desc {
+        font-size: 0.72rem;
+        color: var(--text-tertiary);
+        margin-top: 0.25rem;
+        font-weight: 400;
+    }
+
+    /* ── Project card interior (improved) ── */
+    .pc-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    .pc-header-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 0.3rem;
+        flex-wrap: wrap;
+    }
+    .pc-title {
+        font-size: 0.97rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        letter-spacing: -0.01em;
+        line-height: 1.3;
+    }
+    .pc-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        flex-wrap: wrap;
+        font-size: 0.79rem;
+        color: var(--text-tertiary);
+        margin-top: 0.1rem;
+        margin-bottom: 0.55rem;
+        line-height: 1.5;
+    }
+    .pc-meta-sep {
+        margin: 0 6px;
+        color: var(--border-strong);
+        font-size: 0.6rem;
+    }
+    .pc-footer-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .pc-doc-count {
+        font-size: 0.75rem;
+        color: var(--text-tertiary);
+        font-weight: 500;
+    }
+    .pc-child-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-full);
+        padding: 0.1rem 0.55rem;
+    }
+
+    /* ── Better container padding ── */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] {
+        padding: 0.5rem 0.6rem;
+    }
+
+    /* ── Projects section header ── */
+    .projects-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0 0.75rem 0;
+        margin-bottom: 0.25rem;
+    }
+    .projects-section-title {
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-tertiary);
+    }
+
     /* ── Chat Widget ── */
     .chat-container {
         border: 1px solid var(--border-default, #e5e7eb);
@@ -2989,11 +3136,32 @@ STATUS_COLORS = {
 }
 
 
+_STAT_ICONS = {
+    "projects": '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>',
+    "active":   '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    "drafts":   '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    "docs":     '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 13h4"/><path d="M10 17h4"/></svg>',
+}
+
+
+def _stat_card(icon_key, value, label, desc=""):
+    icon = _STAT_ICONS.get(icon_key, "")
+    desc_html = f'<div class="stat-card-desc">{desc}</div>' if desc else ""
+    return (
+        f'<div class="stat-card">'
+        f'  <div class="stat-card-icon">{icon}</div>'
+        f'  <div class="stat-card-value">{value}</div>'
+        f'  <div class="stat-card-label">{label}</div>'
+        f'  {desc_html}'
+        f'</div>'
+    )
+
+
 def _render_home():
     all_projects = _fetch("/projects") or []
     active_count = sum(1 for p in all_projects if p.get("status") in ("in_progress", "under_review"))
-    draft_count = sum(1 for p in all_projects if p.get("status") == "draft")
-    total_docs = sum(p.get("doc_count", 0) for p in all_projects)
+    draft_count  = sum(1 for p in all_projects if p.get("status") == "draft")
+    total_docs   = sum(p.get("doc_count", 0) for p in all_projects)
 
     st.markdown("""
     <div class="ws-hero">
@@ -3006,15 +3174,15 @@ def _render_home():
 
     wc1, wc2, wc3, wc4 = st.columns(4)
     with wc1:
-        st.metric(label="Total Projects", value=len(all_projects), help="Across all standards")
+        st.markdown(_stat_card("projects", len(all_projects), "Total Projects", "Across all standards"), unsafe_allow_html=True)
     with wc2:
-        st.metric(label="Active", value=active_count, help="In progress or review")
+        st.markdown(_stat_card("active", active_count, "Active", "In progress or review"), unsafe_allow_html=True)
     with wc3:
-        st.metric(label="Drafts", value=draft_count, help="Pending completion")
+        st.markdown(_stat_card("drafts", draft_count, "Drafts", "Pending completion"), unsafe_allow_html=True)
     with wc4:
-        st.metric(label="Documents", value=total_docs, help="Across all projects")
+        st.markdown(_stat_card("docs", total_docs, "Documents", "Across all projects"), unsafe_allow_html=True)
 
-    st.markdown("<div style='margin-top:0.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:0.5rem;'></div>", unsafe_allow_html=True)
     home_tabs = st.tabs(["Projects", "Carbon Intelligence"])
     with home_tabs[0]:
         _render_project_list()
@@ -3028,13 +3196,7 @@ def _render_project_list():
 
     list_col_left, list_col_actions = st.columns([3, 1.6])
     with list_col_left:
-        if projects:
-            st.markdown(
-                f'<div style="padding-top:0.55rem;">'
-                f'<span class="stat-pill">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+        pass
     with list_col_actions:
         btn_a, btn_b = st.columns([1, 1.15])
         with btn_a:
@@ -3059,8 +3221,8 @@ def _render_project_list():
                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="9" x2="15" y1="13" y2="13"/>
-                    <line x1="12" x2="12" y1="10" y2="16"/>
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                    <path d="M10 13h4"/><path d="M10 17h4"/>
                 </svg>
             </div>
             <h3>No projects yet</h3>
@@ -3068,14 +3230,27 @@ def _render_project_list():
                and other documents with AI assistance.</p>
         </div>
         """, unsafe_allow_html=True)
-        col_e1, col_e2, col_e3 = st.columns([1, 1.2, 1])
+        col_e1, col_e2, col_e3 = st.columns([1, 1.5, 1])
         with col_e2:
             if st.button("Create your first project", key="empty_new_proj_btn", type="primary", use_container_width=True):
                 st.session_state["show_new_project"] = True
                 st.session_state.pop("wizard_path", None)
                 st.session_state.pop("new_proj_step", None)
                 st.rerun()
+            st.markdown('<div style="text-align:center;margin:0.4rem 0;font-size:0.78rem;color:var(--text-tertiary);">or</div>', unsafe_allow_html=True)
+            if st.button("Import an existing document", key="empty_import_btn", use_container_width=True):
+                st.session_state["show_new_project"] = True
+                st.session_state["wizard_path"] = "import"
+                st.session_state.pop("new_proj_step", None)
+                st.rerun()
         return
+
+    st.markdown(
+        f'<div class="projects-section-header">'
+        f'  <span class="projects-section-title">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     proj_by_parent = {}
     top_level = []
@@ -3109,8 +3284,6 @@ def _render_project_card(proj, indent=False, child_count=0):
     badge_class = type_info.get("badge_class", "badge-pdd")
 
     std_raw = proj.get("standard", "")
-    card_border_class = "project-card-gs" if std_raw == "GoldStandard" else "project-card-verra" if std_raw == "Verra" else ""
-    indent_class = "project-card-indent" if indent else ""
     std_display = {"GoldStandard": "Gold Standard", "Verra": "Verra VCS"}.get(std_raw, std_raw)
 
     meta_parts = []
@@ -3120,23 +3293,37 @@ def _render_project_card(proj, indent=False, child_count=0):
         meta_parts.append(f'<span class="project-card-meta-item">{SVG_ICONS.get("methodology", "")} {proj["methodology"]}</span>')
     if proj.get("country"):
         meta_parts.append(f'<span class="project-card-meta-item">{proj["country"]}</span>')
-    meta_html = '<span class="project-card-meta-sep">&bull;</span>'.join(meta_parts)
-
-    child_html = ""
-    if child_count > 0:
-        child_html = f'<span class="stat-pill" style="margin-left:8px;">{child_count} VPA{"s" if child_count != 1 else ""}</span>'
+    meta_html = '<span class="pc-meta-sep">&bull;</span>'.join(meta_parts)
 
     status_class = f"status-{status.replace('_', '')}"
 
+    child_pill = ""
+    if child_count > 0:
+        child_pill = f'<span class="pc-child-pill">{child_count} VPA{"s" if child_count != 1 else ""}</span>'
+
+    doc_label = f'{doc_count} document{"s" if doc_count != 1 else ""}'
+    indent_style = 'style="margin-left:24px;"' if indent else ""
+
     with st.container(border=True):
-        col_main, col_stats, col_action = st.columns([4, 1.5, 0.8])
+        col_main, col_action = st.columns([5.5, 0.9])
         with col_main:
-            st.markdown(f'<span class="project-type-badge {badge_class}">{type_info["short"]}</span> **{proj["name"]}**{child_html}', unsafe_allow_html=True)
-            st.markdown(f'<span style="font-size:0.8rem;color:var(--text-secondary);">{meta_html}</span>', unsafe_allow_html=True)
-        with col_stats:
-            st.markdown(f'{doc_count} docs')
-            st.markdown(f'<span class="status-badge {status_class}">{status_label}</span>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="pc-inner" {indent_style}>'
+                f'  <div class="pc-header-row">'
+                f'    <span class="project-type-badge {badge_class}">{type_info["short"]}</span>'
+                f'    <span class="pc-title">{proj["name"]}</span>'
+                f'    {child_pill}'
+                f'  </div>'
+                f'  <div class="pc-meta-row">{meta_html}</div>'
+                f'  <div class="pc-footer-row">'
+                f'    <span class="status-badge {status_class}">{status_label}</span>'
+                f'    <span class="pc-doc-count">{doc_label}</span>'
+                f'  </div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
         with col_action:
+            st.markdown('<div style="padding-top:0.6rem;"></div>', unsafe_allow_html=True)
             if st.button("Open", key=f"open_proj_{pid}", type="primary", use_container_width=True):
                 st.session_state.selected_project_id = pid
                 st.rerun()

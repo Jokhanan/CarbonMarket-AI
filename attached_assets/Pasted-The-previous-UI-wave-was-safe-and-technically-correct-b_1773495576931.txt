@@ -1,0 +1,164 @@
+The previous UI wave was safe and technically correct, but visually the product still feels almost identical.
+
+The goal of the next wave is to significantly improve the perceived product quality and dashboard experience while still preserving the entire backend architecture and workflows.
+
+Important constraints:
+- Do NOT rewrite the app
+- Do NOT change calculation engines
+- Do NOT change API routes
+- Do NOT change tab logic or session state
+- Do NOT rebuild the navigation system
+- Focus only on layout, hierarchy, and visual structure
+
+--------------------------------------------------
+
+MAIN OBJECTIVE
+
+Make the workspace and dashboard feel like a premium SaaS product.
+
+The current interface still feels like an internal admin tool.
+
+We want the feel of tools like:
+- Linear
+- Vercel
+- Notion
+- Stripe Dashboard
+
+--------------------------------------------------
+
+AREAS TO IMPROVE
+
+1. Workspace Dashboard
+
+Currently the dashboard only shows:
+- total projects
+- active
+- drafts
+- documents
+
+This is visually weak.
+
+Improve it by introducing a real dashboard layout:
+
+Top section:
+Workspace title + subtitle + primary actions
+
+Middle section:
+Metric cards with stronger hierarchy
+
+Example cards:
+Projects
+Active Projects
+Drafts
+Documents
+
+Cards should feel modern:
+soft background
+larger typography
+better spacing
+hover elevation
+
+--------------------------------------------------
+
+2. Empty State Experience
+
+The empty workspace currently feels basic.
+
+Improve the empty state so that the user clearly sees what to do next.
+
+Example structure:
+
+Workspace header
+
+Empty state card:
+Icon
+Short message
+Primary action button: "Create your first project"
+
+Secondary action: "Import existing document"
+
+--------------------------------------------------
+
+3. Card Design
+
+Improve all cards to feel more modern:
+
+- more padding
+- subtle shadows
+- softer borders
+- slightly larger headings
+- consistent spacing
+
+Do NOT replace Streamlit components — just style them better.
+
+--------------------------------------------------
+
+4. Section Hierarchy
+
+Improve visual hierarchy between:
+
+- page headers
+- section headers
+- cards
+- buttons
+
+Right now everything visually competes.
+
+Make primary actions more obvious.
+
+--------------------------------------------------
+
+5. Project Workspace Header
+
+The project workspace header should feel more like a product workspace.
+
+Improve:
+- title typography
+- project metadata row
+- spacing
+- quick actions
+
+But do not remove any existing actions.
+
+--------------------------------------------------
+
+6. Copilot Integration
+
+The Copilot improvements are good.
+
+Now ensure it feels like a persistent assistant:
+
+- visible entry point
+- not visually competing with main actions
+- visually consistent with the rest of the UI
+
+Do not redesign the copilot system yet.
+
+--------------------------------------------------
+
+IMPLEMENTATION RULES
+
+1. UI changes only
+2. No backend changes
+3. No architecture refactor
+4. No removal of existing functionality
+5. Keep mobile compatibility
+6. Implement improvements progressively
+
+--------------------------------------------------
+
+DELIVERABLE
+
+Before coding:
+Provide a short UI improvement plan.
+
+Then implement the dashboard improvements first.
+
+After implementation:
+Show before/after descriptions of:
+- workspace dashboard
+- empty state
+- cards
+- project workspace header
+
+The goal is a noticeably more premium dashboard without breaking anything.
