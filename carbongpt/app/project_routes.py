@@ -110,7 +110,8 @@ class RunCalculationRequest(BaseModel):
 
 
 class ExportCalculationRequest(BaseModel):
-    calculation_result: dict
+    calculation_result: dict = {}
+    doc_type: str = "pdd"
     format: str = "excel"
 
 
@@ -1740,26 +1741,25 @@ def run_calculation_endpoint(project_id: int, data: RunCalculationRequest):
 @router.post("/{project_id}/export-calculation")
 def export_calculation_endpoint(project_id: int, data: ExportCalculationRequest):
     from carbongpt.repository.store import get_user_project
-    from carbongpt.core.doc_exporter import export_calculation_excel
+    from carbongpt.core.er_excel import generate_er_workbook
 
     project = get_user_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    project_info = {
-        "name": project["name"],
-        "standard": project.get("standard"),
-        "country": project.get("country"),
-    }
-
     try:
-        buf = export_calculation_excel(data.calculation_result, project_info=project_info)
+        buf = generate_er_workbook(
+            project=project,
+            doc_type=data.doc_type or "pdd",
+            calc_result=data.calculation_result or {},
+        )
     except Exception as e:
-        logger.error("Excel export failed: %s", e)
+        logger.error("ER workbook export failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Export failed: {e}")
 
+    doc_suffix = "ExPost" if data.doc_type in ("mr",) else "ExAnte"
     safe_name = project["name"].replace(" ", "_")[:30]
-    filename = f"{safe_name}_calculations.xlsx"
+    filename = f"{safe_name}_ER_{doc_suffix}.xlsx"
 
     return StreamingResponse(
         buf,

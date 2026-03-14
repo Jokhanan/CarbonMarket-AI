@@ -5765,34 +5765,83 @@ def _render_export_tab(project):
                 st.error(f"Failed to generate template. {detail}")
 
     st.divider()
-    st.markdown("### Calculation Spreadsheet")
+    st.markdown("### ER Calculation Spreadsheet")
+    st.write(
+        "Generate an audit-proof multi-sheet Excel workbook. "
+        "Ex-ante (PDD / VPA-DD) produces a projected crediting-period workbook. "
+        "Ex-post (MR) produces a monitoring-period workbook with vintage allocation and deviation log."
+    )
+
+    er_doc_types = {k: v for k, v in available_types.items() if k in ("pdd", "vpa_dd", "poa_dd", "mr")}
+    if not er_doc_types:
+        er_doc_types = {"pdd": "PDD (ex-ante)"}
+
+    er_doc_keys = list(er_doc_types.keys())
+    er_default_key = default_dt if default_dt in er_doc_keys else er_doc_keys[0]
+    er_selected = st.selectbox(
+        "Workbook type",
+        er_doc_keys,
+        index=er_doc_keys.index(er_default_key),
+        format_func=lambda x: {
+            "pdd": "PDD — Ex-ante (crediting period projection)",
+            "vpa_dd": "VPA-DD — Ex-ante (crediting period projection)",
+            "poa_dd": "PoA-DD — Ex-ante (crediting period projection)",
+            "mr": "MR — Ex-post (monitoring period, verified ERs)",
+        }.get(x, er_doc_types[x]),
+        key=f"er_workbook_type_{project_id}",
+    )
 
     if has_calc:
-        calc_result = st.session_state[calc_key]
-        total_er = calc_result.get("total_emission_reductions_tco2e", 0)
-        st.write(f"Calculation available: {total_er:,.0f} tCO2e total emission reductions")
-        if st.button("Download Excel Spreadsheet",
-                      key=f"export_calc_excel_{project_id}",
-                      type="primary"):
-            with st.spinner("Generating spreadsheet..."):
-                resp = requests.post(
-                    f"{API_BASE}/projects/{project_id}/export-calculation",
-                    json={"calculation_result": calc_result},
-                    timeout=30,
-                )
-                if resp.status_code == 200:
-                    safe_name = project["name"].replace(" ", "_")[:30]
-                    st.download_button(
-                        label="Save Excel File",
-                        data=resp.content,
-                        file_name=f"{safe_name}_calculations.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=f"save_export_excel_{project_id}",
-                    )
-                else:
-                    st.error("Failed to generate spreadsheet.")
+        calc_result_for_export = st.session_state[calc_key]
+        total_er = (
+            calc_result_for_export.get("total_emission_reductions_tco2e")
+            or calc_result_for_export.get("summary", {}).get("total_er")
+            or 0
+        )
+        st.caption(f"Calculation in session: {total_er:,.0f} tCO2e — will be included in the workbook.")
     else:
-        st.info("No calculations available yet. Emission reduction calculations will be available in a future update.")
+        calc_result_for_export = {}
+        st.caption(
+            "No calculation in session. The workbook will use parameter defaults from your project setup. "
+            "Run a calculation in the ER Simulator tab first for richer output."
+        )
+
+    if st.button(
+        "Generate ER Workbook",
+        key=f"export_er_workbook_{project_id}",
+        type="primary",
+    ):
+        with st.spinner("Building workbook..."):
+            resp = requests.post(
+                f"{API_BASE}/projects/{project_id}/export-calculation",
+                json={
+                    "calculation_result": calc_result_for_export,
+                    "doc_type": er_selected,
+                },
+                timeout=60,
+            )
+            if resp.status_code == 200:
+                doc_suffix = "ExPost" if er_selected == "mr" else "ExAnte"
+                safe_name = project["name"].replace(" ", "_")[:30]
+                st.download_button(
+                    label=f"Save {doc_suffix} ER Workbook (.xlsx)",
+                    data=resp.content,
+                    file_name=f"{safe_name}_ER_{doc_suffix}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"save_er_workbook_{project_id}",
+                )
+                st.success(
+                    "Workbook ready. It contains: Cover, Parameters, ER Calculation, "
+                    + ("Vintage Allocation, Data Quality, Deviation Log."
+                       if er_selected == "mr"
+                       else "Vintage Table, Sensitivity Analysis.")
+                )
+            else:
+                try:
+                    detail = resp.json().get("detail", "")
+                except Exception:
+                    detail = ""
+                st.error(f"Failed to generate workbook. {detail}")
 
     st.divider()
     st.markdown("### Methodology Reference")
