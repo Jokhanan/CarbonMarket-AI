@@ -1,0 +1,211 @@
+We need to harden the cookstove calculation engine.
+
+IMPORTANT:
+This is a refactor and stabilization task.
+Do NOT create a second parallel calculation system.
+Do NOT duplicate parameters.
+Do NOT break the current app.
+Do NOT redesign unrelated parts of the application.
+
+The goal is to move the current calculation logic toward a canonical-quantity calculation engine, while preserving the current functionality and keeping the app working throughout.
+
+--------------------------------------------------
+CORE PRINCIPLE
+--------------------------------------------------
+
+We want the calculation system to become:
+
+methodology-driven
+pathway-driven
+canonical-quantity-based
+traceable
+
+This means:
+
+- UI fields may vary by methodology and pathway
+- but the calculation engine should always convert inputs into a small set of canonical internal quantities
+- formulas should use those canonical internal quantities only
+- every conversion should be explicit and traceable
+
+But this must be done WITHOUT introducing duplicate engines, duplicate parameters, or breaking the current app.
+
+--------------------------------------------------
+WHAT WE WANT
+--------------------------------------------------
+
+For TPDDTEC, MECD, and VM0050, we want the calculation logic to eventually rely on canonical internal quantities such as:
+
+- baseline_fuel_consumption_t_per_device_year
+- project_fuel_consumption_t_per_device_year
+- project_electricity_mwh_per_year
+- baseline_energy_tj_per_device_year
+- project_energy_tj_per_device_year
+- num_devices
+- num_households
+- usage_rate
+- dropoff_rate
+- grid_ef_tco2e_per_mwh
+- baseline_fnrb_fraction
+- etc.
+
+Different UI inputs may map to those quantities:
+- SFC
+- fuel consumption per person
+- fuel consumption per household
+- electricity consumption
+- default values
+- measured values
+
+The engine should normalize them into canonical quantities BEFORE formula execution.
+
+--------------------------------------------------
+CRITICAL SAFETY REQUIREMENTS
+--------------------------------------------------
+
+1. Do NOT create a second separate engine beside the existing one.
+Refactor the current engine incrementally.
+
+2. Do NOT duplicate parameters.
+If a canonical quantity already exists in some form, reuse and standardize it instead of creating near-duplicate fields.
+
+3. Do NOT delete existing functions until all callers are identified and safely redirected.
+
+4. Keep the app functional at every step.
+
+5. Prefer additive and migration-safe changes.
+
+6. Any change to units must be explicit and tested.
+
+7. If a parameter is raw user input and another is the canonical derived calculation quantity, make that relationship explicit.
+Do not let both float independently without rules.
+
+--------------------------------------------------
+TASK
+--------------------------------------------------
+
+Before coding, I want you to produce a strict implementation plan.
+
+Please do NOT code yet.
+
+--------------------------------------------------
+PHASE 1 — INVENTORY
+--------------------------------------------------
+
+First, inventory the current calculation system and identify:
+
+1. Existing raw input parameters
+2. Existing derived parameters
+3. Existing canonical-like calculation quantities already present
+4. Duplicates / overlaps / inconsistencies
+5. Current formula entry points
+6. Current unit conversions
+7. Places where the same business concept appears under multiple names
+
+For example:
+- SFC_baseline
+- baseline_fuel_consumption
+- project_fuel_consumption
+- project electricity
+- NCV
+- EF
+- fNRB
+- household size
+- devices per household
+- number of households
+- beneficiaries
+
+I want a precise map of the current state before any refactor.
+
+--------------------------------------------------
+PHASE 2 — CANONICAL QUANTITY MODEL
+--------------------------------------------------
+
+Then propose a canonical quantity model for:
+
+A. TPDDTEC
+B. MECD
+C. VM0050
+
+For each methodology, show:
+
+- which UI/raw inputs are accepted
+- which canonical quantities are derived
+- which formulas consume those canonical quantities
+
+Important:
+Do NOT create unnecessary canonical quantities.
+Keep the model minimal and reusable.
+
+--------------------------------------------------
+PHASE 3 — SAFE REFACTOR PLAN
+--------------------------------------------------
+
+Then propose an incremental refactor plan that preserves the current application.
+
+The plan must explicitly state:
+
+1. Which files would change
+2. In what order changes should happen
+3. How existing callers will be preserved
+4. How backward compatibility will be maintained
+5. How duplicate logic will be removed only after safe redirection
+6. What tests/checks will prove that results did not silently change
+
+--------------------------------------------------
+PHASE 4 — UNIT SAFETY
+--------------------------------------------------
+
+I want a clear unit safety section.
+
+For each important quantity, specify:
+
+- canonical unit
+- accepted input units
+- conversion rule
+- validation rule
+- common failure mode
+
+Examples:
+- kg/device/day
+- kg/person/year
+- t/device/year
+- MWh/year
+- TJ/Gg
+- tCO2/TJ
+- tCO2e/MWh
+- fractions vs percentages
+
+--------------------------------------------------
+PHASE 5 — TRACEABILITY
+--------------------------------------------------
+
+I want the plan to explain how calculation traceability will work.
+
+For example:
+SFC_baseline = 1.37 kg/device/day
+→ baseline_fuel_consumption = 0.500 t/device/year
+→ baseline_energy = X TJ/device/year
+→ baseline_emissions = Y tCO2e/device/year
+
+The system should eventually expose this trace cleanly for auditability and debugging.
+
+--------------------------------------------------
+RESPONSE FORMAT
+--------------------------------------------------
+
+Please answer in this exact structure:
+
+1. Current calculation system inventory
+2. Duplicate / overlap risks
+3. Proposed canonical quantity model
+4. Methodology-by-methodology mapping
+5. Safe incremental refactor plan
+6. Unit safety and validation plan
+7. Traceability design
+8. Risks and how to avoid breaking the app
+
+IMPORTANT:
+- Do not code yet
+- Do not introduce a second engine
+- Do not propose a full rewrite
+- Focus on safe incremental hardening of the existing calculation engine
