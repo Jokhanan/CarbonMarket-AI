@@ -1,0 +1,226 @@
+Before we extend the Carbon Intelligence module, I want to fully understand how it is currently built.
+
+Do not change any code yet.
+
+Your task is to perform a complete technical audit of the Carbon Intelligence feature and explain the architecture.
+
+The goal is to understand:
+
+• where the data comes from  
+• how it is processed  
+• how it is stored  
+• how it is visualized  
+• what limitations exist  
+
+--------------------------------------------------
+
+1. MODULE STRUCTURE
+
+Explain the structure of the Carbon Intelligence module.
+
+Which files implement it?
+
+Example:
+
+- UI files
+- data loading scripts
+- database queries
+- visualization code
+
+Provide a clear file map such as:
+
+carbon_intelligence/
+    data_sources.py
+    queries.py
+    dashboard.py
+    charts.py
+
+Explain what each file does.
+
+--------------------------------------------------
+
+2. DATA SOURCES
+
+List ALL data sources currently used.
+
+For each source explain:
+
+• which registry or dataset is used
+• how the data is obtained (API / CSV / scraping / static dataset)
+• where the raw data is stored
+
+Example structure:
+
+Source:
+Gold Standard Registry
+
+Method:
+API / CSV download / manual dataset
+
+Tables or datasets used:
+projects
+issuance
+methodologies
+
+Update method:
+manual / automated
+
+--------------------------------------------------
+
+3. UPDATE FREQUENCY
+
+Explain how often the Carbon Intelligence data is updated.
+
+Is it:
+
+• static dataset
+• manually updated
+• automatically refreshed
+• refreshed at application startup
+• refreshed on a schedule
+
+If automated:
+describe the update mechanism.
+
+--------------------------------------------------
+
+4. DATA STORAGE
+
+Explain how the Carbon Intelligence data is stored.
+
+Is it stored in:
+
+• database tables
+• local CSV files
+• in-memory pandas dataframes
+• cached API results
+
+List the tables or structures used.
+
+Example:
+
+tables:
+ci_projects
+ci_methodologies
+ci_countries
+ci_registry_stats
+
+--------------------------------------------------
+
+5. DATA NORMALIZATION
+
+Explain whether any normalization currently exists.
+
+Examples of normalization problems we expect:
+
+• methodology names
+• country names
+• registry naming
+• developer names
+
+Example problem:
+
+ACM0002
+ACM0002 Grid-connected
+ACM0002 grid connected
+
+Are these normalized in the current system?
+
+If yes:
+where and how.
+
+If not:
+confirm they are raw values.
+
+--------------------------------------------------
+
+6. DATA COVERAGE
+
+Explain exactly which registries are currently included.
+
+Check for:
+
+• Verra (VCS)
+• Gold Standard
+• CDM (UNFCCC)
+• Article 6.4 (if any)
+
+For each registry confirm:
+
+• projects included?
+• issuance data included?
+• methodology data included?
+
+--------------------------------------------------
+
+7. LIMITATIONS
+
+Explain the known limitations of the current implementation.
+
+Examples:
+
+• incomplete datasets
+• missing registries
+• inconsistent country names
+• methodology duplication
+• estimated credits instead of real issuance
+
+Be explicit.
+
+--------------------------------------------------
+
+8. VISUALIZATION LAYER
+
+Explain how the visualizations are currently created.
+
+For each dashboard element explain:
+
+• where the data query happens
+• which library is used
+• how the chart/table is generated
+
+Examples:
+
+• methodology table
+• country explorer cards
+• global overview metrics
+
+--------------------------------------------------
+
+9. DATA RELIABILITY
+
+Assess how reliable the current Carbon Intelligence data is.
+
+Are the numbers:
+
+• exact registry values
+• estimated
+• partially complete
+• static snapshots
+
+Explain any approximations.
+
+--------------------------------------------------
+
+10. ARCHITECTURE SUMMARY
+
+Finish with a short architecture summary:
+
+Data source
+→ ingestion
+→ storage
+→ normalization
+→ query
+→ visualization
+
+Explain the full pipeline step by step.
+
+--------------------------------------------------
+
+Important:
+
+This is an analysis task only.
+
+Do NOT change any code yet.
+
+The objective is to understand the current system before we improve it.
