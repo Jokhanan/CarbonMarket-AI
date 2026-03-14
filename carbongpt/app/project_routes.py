@@ -1899,6 +1899,39 @@ def chat_with_ai(body: ChatMessage):
                     draft_info = [f"Section {s['section_id']} ({s.get('section_title', '')}): {(s.get('user_text') or s.get('generated_text', ''))[:200]}..." for s in drafted[:10]]
                     context_parts.append("Drafted Sections:\n" + "\n".join(draft_info))
 
+            # ── Step 7: Carbon Intelligence market context injection ──────────
+            # Fetch registry-level market data for the project's country and
+            # methodology family.  This gives the AI factual grounding on
+            # comparable projects without querying the DB directly.
+            try:
+                from carbongpt.repository.country_normalizer import resolve_country_iso
+                from carbongpt.repository.store import get_market_intelligence_context
+
+                ci_parts: list[str] = []
+                country_iso = None
+                raw_country = project.get("country") or ""
+                if raw_country:
+                    country_iso = resolve_country_iso(raw_country)
+                methodology = project.get("methodology") or ""
+
+                if country_iso or methodology:
+                    ci_ctx = get_market_intelligence_context(
+                        country_iso=country_iso or None,
+                        methodology_family=methodology[:50] if methodology else None,
+                    )
+                    raw_prompt = ci_ctx.get("raw_for_prompt", "")
+                    if raw_prompt:
+                        ci_parts.append(raw_prompt)
+
+                if ci_parts:
+                    context_parts.append(
+                        "\n--- Carbon Intelligence Market Context ---\n"
+                        "(Registry-declared estimates, not verified issued credits)\n"
+                        + "\n".join(ci_parts)
+                    )
+            except Exception as _ci_err:
+                logger.debug("CI context injection skipped: %s", _ci_err)
+
             project_context = "\n".join(context_parts)
 
     try:

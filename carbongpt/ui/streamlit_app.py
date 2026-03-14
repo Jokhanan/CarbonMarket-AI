@@ -2637,7 +2637,57 @@ def _render_global_overview(analytics, summary):
         for i, reg in enumerate(by_registry):
             with cols[i]:
                 label = reg.get("registry_display") or reg.get("registry_name") or reg.get("registry", "Unknown")
-                st.metric(label, f"{reg['project_count']:,} projects")
+                credits = reg.get("total_credits", 0) or 0
+                if credits >= 1_000_000_000:
+                    credits_str = f"{credits/1_000_000_000:.1f}B tCO2e/yr"
+                elif credits >= 1_000_000:
+                    credits_str = f"{credits/1_000_000:.0f}M tCO2e/yr"
+                else:
+                    credits_str = f"{credits:,} tCO2e/yr"
+                st.metric(label,
+                          f"{reg['project_count']:,} projects",
+                          delta=f"Est. {credits_str}",
+                          delta_color="off",
+                          help="Estimated annual tCO2e (registry-declared, not issued)")
+
+    # ── Registration Timeline ─────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Project Registrations Over Time")
+    st.caption(
+        "Monthly count of new project registrations by registry. "
+        "Only projects with a recorded registration date are shown."
+    )
+    timeline_data = _fetch("/admin/projects/timeline")
+    if timeline_data:
+        import pandas as pd
+        import altair as alt
+        df_tl = pd.DataFrame(timeline_data)
+        df_tl = df_tl.rename(columns={
+            "month":          "Month",
+            "project_count":  "Registrations",
+            "registry_label": "Registry",
+        })
+        df_tl["Month"] = pd.to_datetime(df_tl["Month"])
+
+        chart = (
+            alt.Chart(df_tl)
+            .mark_line(point=False, strokeWidth=2)
+            .encode(
+                x=alt.X("Month:T", title="Month"),
+                y=alt.Y("Registrations:Q", title="New Registrations"),
+                color=alt.Color(
+                    "Registry:N",
+                    scale=alt.Scale(scheme="tableau10"),
+                    legend=alt.Legend(title="Registry"),
+                ),
+                tooltip=["Month:T", "Registry:N", "Registrations:Q"],
+            )
+            .properties(height=260)
+            .interactive()
+        )
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.info("No registration date data available for timeline chart.")
 
 
 def _render_country_explorer(analytics):
@@ -2710,29 +2760,123 @@ def _render_country_explorer(analytics):
 
 
 def _render_methodology_analysis():
-    st.subheader("Top Methodologies")
+    import pandas as pd
+    import altair as alt
+
+    # ── Family-level breakdown from ref_methodologies ─────────────────────────
+    ref_meths = _fetch("/admin/reference/methodologies") or []
+    if ref_meths:
+        st.subheader("Methodology Families by Registry")
+        st.caption("Canonical methodology codes grouped by family, drawn from the shared reference layer.")
+
+        df_ref = pd.DataFrame(ref_meths)
+        # Aggregate by family + registry
+        if "methodology_family" in df_ref.columns and "project_count" in df_ref.columns:
+            agg = (
+                df_ref.groupby(["methodology_family", "registry_display_name"])
+                .agg(total_projects=("project_count", "sum"), code_count=("methodology_code", "count"))
+                .reset_index()
+                .sort_values("total_projects", ascending=False)
+                .head(20)
+            )
+            agg = agg.rename(columns={
+                "methodology_family":   "Family",
+                "registry_display_name": "Registry",
+                "total_projects":       "Projects",
+                "code_count":           "Codes",
+            })
+            # Bar chart: top families by project count
+            chart = (
+                alt.Chart(agg.head(15))
+                .mark_bar()
+                .encode(
+                    x=alt.X("Projects:Q", title="Projects using this family"),
+                    y=alt.Y("Family:N", sort="-x", title=None),
+                    color=alt.Color(
+                        "Registry:N",
+                        scale=alt.Scale(scheme="tableau10"),
+                        legend=alt.Legend(title="Registry"),
+                    ),
+                    tooltip=["Family:N", "Registry:N", "Projects:Q", "Codes:Q"],
+                )
+                .properties(height=380)
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+            # Summary table
+            with st.expander("Full methodology family reference table"):
+                st.dataframe(
+                    df_ref[[c for c in [
+                        "methodology_code", "methodology_name", "methodology_family",
+                        "registry_display_name", "sector", "technology",
+                        "status", "project_count",
+                    ] if c in df_ref.columns]].rename(columns={
+                        "methodology_code":     "Code",
+                        "methodology_name":     "Name",
+                        "methodology_family":   "Family",
+                        "registry_display_name": "Registry",
+                        "sector":               "Sector",
+                        "technology":           "Technology",
+                        "status":               "Status",
+                        "project_count":        "Projects",
+                    }),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+    st.divider()
+
+    # ── Raw project-level methodology ranking ────────────────────────────────
+    st.subheader("Top Methodologies by Project Count")
+    st.caption("Based on raw methodology strings recorded on each project.")
     meths = _fetch("/admin/projects/methodologies?limit=30")
     if not meths:
         st.info("No methodology data available.")
         return
 
-    import pandas as pd
     df = pd.DataFrame(meths)
     df = df.rename(columns={
         "methodology": "Methodology",
         "project_count": "Projects",
-        "total_credits": "Est. Annual Credits"
+        "total_credits": "Est. Annual Credits",
     })
+    df["Methodology"] = df["Methodology"].str[:50]
 
-    st.dataframe(df, width="stretch", hide_index=True)
+    col_left, col_right = st.columns(2)
 
-    st.subheader("Projects per Methodology")
-    top_10 = df.head(15)
-    st.bar_chart(top_10.set_index("Methodology")["Projects"])
+    with col_left:
+        st.write("By Project Count")
+        chart_count = (
+            alt.Chart(df.head(15))
+            .mark_bar(color="#4C9BE8")
+            .encode(
+                x=alt.X("Projects:Q"),
+                y=alt.Y("Methodology:N", sort="-x", title=None),
+                tooltip=["Methodology:N", "Projects:Q"],
+            )
+            .properties(height=380)
+        )
+        st.altair_chart(chart_count, use_container_width=True)
 
-    st.subheader("Credits per Methodology")
-    top_credits = df.sort_values("Est. Annual Credits", ascending=False).head(15)
-    st.bar_chart(top_credits.set_index("Methodology")["Est. Annual Credits"])
+    with col_right:
+        st.write("By Est. Annual Credits (tCO2e)")
+        top_credits = df.sort_values("Est. Annual Credits", ascending=False).head(15)
+        chart_cred = (
+            alt.Chart(top_credits)
+            .mark_bar(color="#50C878")
+            .encode(
+                x=alt.X("Est. Annual Credits:Q"),
+                y=alt.Y("Methodology:N", sort="-x", title=None),
+                tooltip=["Methodology:N", "Est. Annual Credits:Q"],
+            )
+            .properties(height=380)
+        )
+        st.altair_chart(chart_cred, use_container_width=True)
+
+    st.caption(
+        "Est. Annual Credits are registry-declared project estimates at registration. "
+        "These are not verified issued credits."
+    )
 
 
 def _render_project_browser():
@@ -2801,15 +2945,23 @@ def _render_sync_controls(summary):
         if last_result and not last_result.get("error"):
             verra = last_result.get("verra", {})
             gs    = last_result.get("goldstandard", {})
+            cdm   = last_result.get("cdm", {})
+            cdm_str = (
+                f", CDM {cdm['synced']:,} projects"
+                if cdm and not cdm.get("skipped")
+                else f", CDM skipped ({cdm.get('reason','unavailable')})"
+                if cdm
+                else ""
+            )
             st.write(
                 f"Last manual sync: Verra {verra.get('synced', 0):,} projects, "
-                f"Gold Standard {gs.get('synced', 0):,} projects"
+                f"Gold Standard {gs.get('synced', 0):,} projects{cdm_str}"
             )
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
         if st.button("Sync All Projects", key="sync_all_btn", type="primary",
-                      help="Fetch latest project data from Verra and Gold Standard registries"):
+                      help="Fetch latest project data from Verra, Gold Standard, and CDM registries"):
             result = _fetch("/admin/sync-projects", method="POST")
             if result:
                 status = result.get("status", "")

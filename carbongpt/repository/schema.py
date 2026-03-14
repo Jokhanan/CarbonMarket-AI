@@ -769,6 +769,38 @@ ALTER TABLE user_projects
 
 CREATE INDEX IF NOT EXISTS idx_user_projects_country_iso
     ON user_projects(country_iso);
+
+-- ============================================================
+-- Shared-core Wave 2: issuance groundwork.
+-- Stores actual verified/issued credit events per project.
+-- This table is intentionally empty until stable issuance
+-- sources are confirmed; it is NOT populated by any sync yet.
+-- Estimated annual credits (on carbon_projects) remain the
+-- primary planning figure; this table will hold actuals.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS project_issuance (
+    id                  SERIAL       PRIMARY KEY,
+    registry_project_id VARCHAR(100) NOT NULL,
+    registry            VARCHAR(50)  NOT NULL,
+    ref_registry_id     VARCHAR(30)  REFERENCES ref_registries(registry_id),
+    vintage_year        INTEGER,
+    issuance_date       DATE,
+    verified_credits    BIGINT,
+    retired_credits     BIGINT,
+    status              VARCHAR(30),
+    source_label        VARCHAR(100),
+    notes               TEXT,
+    raw_data            JSONB,
+    synced_at           TIMESTAMP    DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_project_issuance_unique
+    ON project_issuance(registry_project_id, registry, vintage_year, issuance_date);
+CREATE INDEX IF NOT EXISTS idx_project_issuance_registry
+    ON project_issuance(registry);
+CREATE INDEX IF NOT EXISTS idx_project_issuance_vintage
+    ON project_issuance(vintage_year);
 """
 
 

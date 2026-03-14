@@ -1,0 +1,202 @@
+The shared-core foundation is now in place:
+- canonical registries
+- canonical countries
+- canonical methodologies
+- reference endpoints
+
+Now I want to implement the remaining Carbon Intelligence wave as far as safely possible in one coordinated batch.
+
+IMPORTANT:
+This must remain incremental, production-safe, and backward-compatible.
+
+Do NOT break:
+- the current Carbon Intelligence dashboard
+- the current CarbonGPT flows
+- the current sync logic for Verra and Gold Standard
+- the existing admin endpoints
+
+Do NOT rewrite the app.
+Do NOT introduce fragile scraping if a stable source is not available.
+Do NOT fake issuance data.
+
+--------------------------------------------------
+GOAL OF THIS WAVE
+--------------------------------------------------
+
+Implement as much of the remaining Carbon Intelligence roadmap as is safely feasible now:
+
+1. CDM / UNFCCC ingestion
+2. scheduled syncs
+3. upgraded visualizations
+4. AI market-intelligence context integration
+5. issuance support only where a stable source is realistically available
+
+If part of issuance ingestion is not robust enough yet, implement the schema/hooks/UI-safe groundwork but do not force unstable scraping.
+
+--------------------------------------------------
+STEP 3 — CDM / UNFCCC INGESTION
+--------------------------------------------------
+
+Implement CDM ingestion using the safest available bulk source.
+
+Requirements:
+
+1. Add a sync_cdm_projects() flow using a stable bulk file source, not fragile page scraping.
+2. Map CDM data into carbon_projects using:
+   - registry = raw source string
+   - ref_registry_id = cdm
+   - canonical country normalization
+   - canonical methodology normalization where possible
+3. Keep the raw fields preserved.
+4. Extend sync_all_projects() to include CDM.
+5. Add clear logging and failure handling:
+   - if CDM download fails, the rest of the sync must still succeed
+   - sync result must report CDM separately
+6. Ensure current Verra and Gold Standard syncs continue working unchanged.
+
+Validation required:
+- number of CDM projects ingested
+- number with country_iso resolved
+- number with methodology normalization resolved
+- confirmation the sync remains safe if CDM source is unavailable
+
+--------------------------------------------------
+STEP 5 — SCHEDULED UPDATES
+--------------------------------------------------
+
+Implement safe automatic scheduled syncs using the current app architecture.
+
+Requirements:
+
+1. Reuse the same daemon/background scheduling pattern already used elsewhere in the app if possible.
+2. Add environment-variable control:
+   - enable/disable project auto-sync
+   - sync interval in hours
+3. Schedule Verra, Gold Standard, and CDM syncs in a safe sequence.
+4. A failure in one registry must not stop the others.
+5. Add visibility endpoints for the schedule/status if lightweight and safe.
+
+Validation required:
+- confirm scheduler starts cleanly
+- confirm disabled mode does nothing
+- confirm schedule metadata is visible somewhere safe
+
+--------------------------------------------------
+STEP 6 — VISUALIZATION UPGRADE
+--------------------------------------------------
+
+Upgrade Carbon Intelligence visualizations meaningfully, but keep scope controlled.
+
+Implement only the highest-value charts first.
+
+Required first-wave visualizations:
+1. global summary cards (preserve existing functionality, improve if safe)
+2. country map using country_iso
+3. projects over time (registration timeline)
+4. methodology ranking
+5. registry comparison
+
+Rules:
+- use stable libraries already available in the app environment
+- do not flood the dashboard with too many charts
+- keep the UI responsive
+- clearly label estimated annual credits as estimated, not issued
+- if issued credits are not available, do not visually imply they are
+
+Validation required:
+- before/after summary of dashboard sections
+- confirmation current tabs still work
+- screenshots or description of each new chart
+
+--------------------------------------------------
+STEP 7 — AI MARKET INTELLIGENCE CONTEXT
+--------------------------------------------------
+
+Integrate Carbon Intelligence into the AI layer in a safe, auditable way.
+
+Requirements:
+
+1. Add a backend query function that returns structured market intelligence context using canonical data.
+   Example dimensions:
+   - country
+   - country_iso
+   - methodology_code
+   - methodology_family
+   - registry
+   - project type / sector if available
+
+2. Add a safe endpoint if needed, or keep it as an internal query helper if that is cleaner.
+
+3. Inject this context into the AI layer only as structured factual text.
+   The AI should not query the DB directly.
+
+4. The context should help with questions like:
+   - existing projects in a country
+   - common methodologies in a country
+   - typical annual credits
+   - major developers
+   - registry distribution
+
+5. Keep this additive and lightweight.
+   Do not redesign the copilot architecture.
+
+Validation required:
+- example output for a country such as Uganda
+- example output for a methodology family such as Clean Cooking
+- confirmation no existing AI flows were broken
+
+--------------------------------------------------
+STEP 4 — ISSUANCE DATA
+--------------------------------------------------
+
+Implement only what is production-safe.
+
+Requirements:
+
+1. If a stable issuance source exists for CDM, ingest it.
+2. If stable issuance sources for Verra and Gold Standard are not available, do NOT implement fragile scraping.
+3. If full issuance ingestion is not feasible yet:
+   - add the schema/table structure needed
+   - add clear placeholders/hooks
+   - keep the UI clearly labeled so estimated credits are not confused with issued credits
+4. If any issuance dataset is partial or registry-specific, label it explicitly.
+
+Validation required:
+- state clearly which issuance sources are implemented
+- state clearly which are not implemented
+- state clearly whether any dashboard numbers are estimated vs actual issued
+
+--------------------------------------------------
+WHAT NOT TO DO
+--------------------------------------------------
+
+Do NOT:
+- rewrite CarbonGPT
+- modify calculation engines
+- refactor the shared-core again
+- introduce a second analytics architecture
+- add brittle scraping that is likely to break immediately
+- mix estimated credits and issued credits without explicit labels
+- remove existing raw text fields
+- remove existing endpoints without replacement
+
+--------------------------------------------------
+IMPLEMENTATION STYLE
+--------------------------------------------------
+
+Please implement this as one coordinated batch if feasible, but remain conservative.
+
+If one sub-part is too risky (especially issuance scraping), implement the safe subset and leave the risky part as explicit groundwork only.
+
+At the end, provide a full report covering:
+
+1. files changed
+2. what was implemented
+3. what was intentionally deferred
+4. sync validation results
+5. dashboard/visualization results
+6. AI context integration results
+7. issuance coverage status by registry
+8. confirmation that current app functionality still works
+
+This should be the final major Carbon Intelligence implementation wave for now.

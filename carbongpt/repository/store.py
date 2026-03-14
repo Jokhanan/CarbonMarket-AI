@@ -1554,6 +1554,246 @@ def get_normalization_coverage_stats() -> dict:
         }
 
 
+def get_registration_timeline(registry: str | None = None) -> list[dict]:
+    """
+    Return monthly project registration counts for the timeline chart.
+    Optionally filtered by ref_registry_id slug (e.g. 'verra', 'cdm').
+    Only rows with a valid registration_date are included.
+    """
+    params: list = []
+    where_clauses = ["registration_date IS NOT NULL"]
+    if registry:
+        where_clauses.append("ref_registry_id = %s")
+        params.append(registry)
+    where = "WHERE " + " AND ".join(where_clauses)
+
+    with get_cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', registration_date), 'YYYY-MM') AS month,
+                COALESCE(rr.registry_short, ref_registry_id, cp.registry) AS registry_label,
+                COUNT(*) AS project_count
+            FROM carbon_projects cp
+            LEFT JOIN ref_registries rr ON cp.ref_registry_id = rr.registry_id
+            {where}
+            GROUP BY DATE_TRUNC('month', registration_date),
+                     rr.registry_short, cp.ref_registry_id, cp.registry
+            ORDER BY DATE_TRUNC('month', registration_date)
+            """,
+            params,
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_market_intelligence_context(
+    country_iso: str | None = None,
+    methodology_family: str | None = None,
+    limit_projects: int = 10,
+) -> dict:
+    """
+    Return structured market intelligence data for a country and/or
+    methodology family.  Used to build AI prompt context.
+
+    Returns a dict with:
+        country_summary     — project counts, top methodologies, registries, developers
+        methodology_summary — family breakdown, typical credits, registries
+        raw_for_prompt      — pre-formatted text block for injection into AI prompt
+    """
+    result: dict = {}
+
+    with get_cursor() as cur:
+        if country_iso:
+            # Country-level intelligence
+            cur.execute(
+                """
+                SELECT
+                    COALESCE(c.country_name, cp.country) AS country_name,
+                    c.region,
+                    c.subregion,
+                    COUNT(*)                             AS total_projects,
+                    COUNT(DISTINCT cp.ref_registry_id)   AS registry_count,
+                    COALESCE(SUM(cp.estimated_annual_credits), 0) AS total_est_credits,
+                    COALESCE(AVG(cp.estimated_annual_credits), 0) AS avg_est_credits,
+                    COUNT(CASE WHEN cp.status ILIKE '%%registered%%'
+                               OR cp.status ILIKE '%%active%%' THEN 1 END) AS active_count
+                FROM carbon_projects cp
+                LEFT JOIN countries c ON cp.country_iso = c.country_iso
+                WHERE cp.country_iso = %s
+                GROUP BY c.country_name, cp.country, c.region, c.subregion
+                """,
+                (country_iso,),
+            )
+            country_row = cur.fetchone()
+
+            # Top methodologies in country
+            cur.execute(
+                """
+                SELECT
+                    cp.methodology,
+                    COUNT(*)    AS project_count,
+                    COALESCE(SUM(cp.estimated_annual_credits), 0) AS total_credits
+                FROM carbon_projects cp
+                WHERE cp.country_iso = %s
+                  AND cp.methodology IS NOT NULL
+                GROUP BY cp.methodology
+                ORDER BY project_count DESC
+                LIMIT 8
+                """,
+                (country_iso,),
+            )
+            country_methodologies = [dict(r) for r in cur.fetchall()]
+
+            # Top registries in country
+            cur.execute(
+                """
+                SELECT
+                    COALESCE(rr.registry_short, cp.registry) AS registry,
+                    COUNT(*) AS project_count
+                FROM carbon_projects cp
+                LEFT JOIN ref_registries rr ON cp.ref_registry_id = rr.registry_id
+                WHERE cp.country_iso = %s
+                GROUP BY rr.registry_short, cp.registry
+                ORDER BY project_count DESC
+                """,
+                (country_iso,),
+            )
+            country_registries = [dict(r) for r in cur.fetchall()]
+
+            # Top developers in country
+            cur.execute(
+                """
+                SELECT proponent, COUNT(*) AS project_count
+                FROM carbon_projects
+                WHERE country_iso = %s AND proponent IS NOT NULL
+                GROUP BY proponent
+                ORDER BY project_count DESC
+                LIMIT 5
+                """,
+                (country_iso,),
+            )
+            country_developers = [dict(r) for r in cur.fetchall()]
+
+            result["country_summary"] = {
+                "country_iso":       country_iso,
+                "data":              dict(country_row) if country_row else {},
+                "top_methodologies": country_methodologies,
+                "registries":        country_registries,
+                "top_developers":    country_developers,
+            }
+
+        if methodology_family:
+            # Methodology family intelligence
+            cur.execute(
+                """
+                SELECT
+                    rm.methodology_family,
+                    COUNT(rm.methodology_code)     AS code_count,
+                    COALESCE(rr.registry_name, rm.ref_registry_id) AS registry_name,
+                    rm.sector,
+                    rm.technology
+                FROM ref_methodologies rm
+                LEFT JOIN ref_registries rr ON rm.ref_registry_id = rr.registry_id
+                WHERE LOWER(rm.methodology_family) LIKE LOWER(%s)
+                GROUP BY rm.methodology_family, rr.registry_name,
+                         rm.ref_registry_id, rm.sector, rm.technology
+                ORDER BY code_count DESC
+                LIMIT 10
+                """,
+                (f"{methodology_family}%",),
+            )
+            family_rows = [dict(r) for r in cur.fetchall()]
+
+            # Projects using this methodology family
+            cur.execute(
+                """
+                SELECT
+                    COALESCE(c.country_name, cp.country) AS country,
+                    COUNT(*)     AS project_count,
+                    COALESCE(AVG(cp.estimated_annual_credits), 0) AS avg_credits
+                FROM carbon_projects cp
+                INNER JOIN project_methodology_codes pmc
+                        ON pmc.project_id = cp.id
+                INNER JOIN ref_methodologies rm
+                        ON UPPER(pmc.methodology_code) = rm.methodology_code
+                LEFT JOIN countries c ON cp.country_iso = c.country_iso
+                WHERE LOWER(rm.methodology_family) LIKE LOWER(%s)
+                GROUP BY c.country_name, cp.country
+                ORDER BY project_count DESC
+                LIMIT 10
+                """,
+                (f"{methodology_family}%",),
+            )
+            family_countries = [dict(r) for r in cur.fetchall()]
+
+            result["methodology_summary"] = {
+                "family":          methodology_family,
+                "codes":           family_rows,
+                "top_countries":   family_countries,
+            }
+
+    # ── Build pre-formatted text block ────────────────────────────────────
+    parts: list[str] = []
+
+    if "country_summary" in result:
+        cs  = result["country_summary"]
+        dat = cs.get("data", {})
+        if dat:
+            name = dat.get("country_name", country_iso)
+            total = dat.get("total_projects", 0)
+            credits = dat.get("total_est_credits", 0)
+            active  = dat.get("active_count", 0)
+            region  = dat.get("region", "")
+            parts.append(
+                f"=== Market Intelligence: {name} ({country_iso}) ===\n"
+                f"Region: {region}\n"
+                f"Total carbon projects: {total:,}\n"
+                f"Active/Registered projects: {active:,}\n"
+                f"Total estimated annual credits (registry-declared, not issued): "
+                f"{int(credits):,} tCO2e/year\n"
+                f"Average per project: {int(dat.get('avg_est_credits', 0)):,} tCO2e/year\n"
+            )
+            if cs.get("top_methodologies"):
+                parts.append("Top methodologies used:")
+                for m in cs["top_methodologies"][:5]:
+                    parts.append(f"  - {m['methodology']} ({m['project_count']} projects)")
+            if cs.get("registries"):
+                reg_str = ", ".join(
+                    f"{r['registry']} ({r['project_count']})"
+                    for r in cs["registries"]
+                )
+                parts.append(f"Registries: {reg_str}")
+            if cs.get("top_developers"):
+                dev_str = ", ".join(
+                    f"{d['proponent']} ({d['project_count']})"
+                    for d in cs["top_developers"][:3]
+                )
+                parts.append(f"Top developers: {dev_str}")
+
+    if "methodology_summary" in result:
+        ms = result["methodology_summary"]
+        family = ms.get("family", methodology_family)
+        codes  = ms.get("codes", [])
+        countries_list = ms.get("top_countries", [])
+        parts.append(f"\n=== Market Intelligence: {family} Methodology Family ===")
+        if codes:
+            code_str = ", ".join(
+                c["methodology_family"] for c in codes[:3]
+                if c.get("methodology_family")
+            )
+            parts.append(f"Methodology family variant(s): {code_str or family}")
+        if countries_list:
+            parts.append("Top countries using this family:")
+            for c in countries_list[:5]:
+                parts.append(
+                    f"  - {c['country']} ({c['project_count']} projects, "
+                    f"avg {int(c['avg_credits'] or 0):,} tCO2e/year)"
+                )
+
+    result["raw_for_prompt"] = "\n".join(parts) if parts else ""
+    return result
+
+
 def get_ref_countries() -> list[dict]:
     """Return all rows from the countries table, ordered by country name."""
     with get_cursor() as cur:

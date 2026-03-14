@@ -964,6 +964,41 @@ def get_reference_methodologies(
     return get_ref_methodologies(family=family, registry=registry, sector=sector)
 
 
+@router.get("/market-intelligence")
+def get_market_intelligence(
+    country_iso: str | None = None,
+    methodology_family: str | None = None,
+):
+    """
+    Return structured Carbon Intelligence market context for a country and/or
+    methodology family.  Used by the AI prompt-building layer.
+
+    At least one of country_iso or methodology_family must be provided.
+    """
+    if not country_iso and not methodology_family:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of country_iso or methodology_family is required.",
+        )
+    from carbongpt.repository.store import get_market_intelligence_context
+    return get_market_intelligence_context(
+        country_iso=country_iso,
+        methodology_family=methodology_family,
+    )
+
+
+@router.get("/projects/timeline")
+def get_projects_timeline(registry: str | None = None):
+    """
+    Return monthly project registration counts, optionally filtered by
+    ref_registry_id slug (verra, cdm, goldstandard, etc.).
+    Used for the registration timeline chart.
+    """
+    from carbongpt.repository.store import get_registration_timeline
+    return get_registration_timeline(registry=registry)
+
+
 @router.post("/normalization/countries/run")
 def trigger_country_normalization():
     """Backfill country_iso on all carbon_projects rows."""
@@ -1054,7 +1089,13 @@ def get_registry_sync_schedule():
 
 
 @router.post("/sync-projects")
-def sync_projects(max_verra: int = None, max_gs: int = None, background: bool = True):
+def sync_projects(
+    max_verra: int = None,
+    max_gs: int = None,
+    max_cdm: int = None,
+    background: bool = True,
+):
+    """Trigger a full sync of Verra, Gold Standard, and CDM projects."""
     import threading
     from carbongpt.repository.project_sync import sync_all_projects
 
@@ -1062,14 +1103,14 @@ def sync_projects(max_verra: int = None, max_gs: int = None, background: bool = 
         return {"status": "already_running", "message": "A project sync is already in progress."}
 
     if not background:
-        result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
+        result = sync_all_projects(max_verra=max_verra, max_gs=max_gs, max_cdm=max_cdm)
         _project_sync_status["last_result"] = result
         return result
 
     def _run_sync():
         _project_sync_status["running"] = True
         try:
-            result = sync_all_projects(max_verra=max_verra, max_gs=max_gs)
+            result = sync_all_projects(max_verra=max_verra, max_gs=max_gs, max_cdm=max_cdm)
             _project_sync_status["last_result"] = result
         except Exception as e:
             _project_sync_status["last_result"] = {"error": str(e)}
@@ -1078,6 +1119,34 @@ def sync_projects(max_verra: int = None, max_gs: int = None, background: bool = 
 
     threading.Thread(target=_run_sync, daemon=True).start()
     return {"status": "started", "message": "Project sync started in background. Check /admin/sync-projects/status for progress."}
+
+
+@router.post("/sync-projects/cdm")
+def sync_cdm_only(max_cdm: int = None, background: bool = True):
+    """Trigger a CDM-only sync without touching Verra or Gold Standard."""
+    import threading
+    from carbongpt.repository.project_sync import sync_cdm_projects
+
+    if _project_sync_status["running"]:
+        return {"status": "already_running", "message": "A sync is already in progress."}
+
+    if not background:
+        result = sync_cdm_projects(max_projects=max_cdm)
+        _project_sync_status["last_result"] = {"cdm": result}
+        return result
+
+    def _run():
+        _project_sync_status["running"] = True
+        try:
+            result = sync_cdm_projects(max_projects=max_cdm)
+            _project_sync_status["last_result"] = {"cdm": result}
+        except Exception as e:
+            _project_sync_status["last_result"] = {"cdm": {"error": str(e)}}
+        finally:
+            _project_sync_status["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "message": "CDM sync started in background."}
 
 
 @router.get("/sync-projects/status")
