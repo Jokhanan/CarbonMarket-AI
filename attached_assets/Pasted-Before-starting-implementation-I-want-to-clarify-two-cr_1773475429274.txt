@@ -1,0 +1,145 @@
+Before starting implementation, I want to clarify two critical points.
+
+This next refactor must NOT be only a narrow fix of the SFC issue.
+It must still remain a full cleanup of the cookstove workflow and codebase, including:
+- duplicated code
+- duplicated inputs
+- partial or abandoned code paths
+- inconsistent data sources
+- unclear workflow transitions
+- logic duplicated across UI / backend / simulator / export
+
+So when you implement the fixes below, you must still preserve the broader objective:
+CLEAN THE APPLICATION END-TO-END, not just patch one parameter.
+
+--------------------------------------------------
+1. HOUSEHOLD CONSUMPTION IS THE PRIMARY BUSINESS CONCEPT
+--------------------------------------------------
+
+Please use this product and methodology principle:
+
+For cookstove methodologies, the main business quantity the user and auditor care about is generally:
+
+- baseline household annual consumption
+- project household annual consumption
+
+In other words, the primary practical quantity is household consumption per year.
+
+The methodology may sometimes provide default values on a per-capita annual basis, for example:
+- 0.5 t/person/year
+
+But this should be treated as a DEFAULT ENTRY ROUTE only, not as the main conceptual quantity shown everywhere in the app.
+
+The correct logic is:
+
+A. DEFAULT ROUTE
+If the user chooses methodology/tool default values expressed per person per year,
+for example:
+- 0.5 t/person/year
+
+then the system should ask for:
+- household size
+
+and derive:
+- household annual consumption = per_capita_annual_consumption × household_size
+
+B. NORMAL / DIRECT ROUTE
+In the normal case, especially for measured/project values, the system should work directly with:
+- baseline household annual consumption
+- project household annual consumption
+
+This should remain the main calculation-facing concept.
+
+--------------------------------------------------
+2. DO NOT OVER-COMPLICATE WITH TOO MANY UNIT FORMS
+--------------------------------------------------
+
+Do NOT redesign the system around many competing unit conventions unless strictly required.
+
+We do NOT want the app to become confusing by exposing everywhere:
+- kg/person/day
+- kg/person/year
+- t/person/day
+- t/person/year
+- kg/household/day
+- kg/household/year
+- etc.
+
+Instead, the implementation should be simplified as follows:
+
+- For defaults: allow per-capita annual defaults if the methodology/tool provides them
+- Convert them immediately into household annual consumption using household size
+- For normal calculation logic and UI, use household annual consumption as the main quantity
+
+So please avoid introducing unnecessary complexity into the user-facing logic.
+
+--------------------------------------------------
+3. WHAT THIS MEANS FOR THE SFC ISSUE
+--------------------------------------------------
+
+You identified a critical mismatch between:
+- parameter_engine storage
+- er_simulator expectations
+
+Before implementing the fix, reinterpret the issue using the principle above.
+
+I want you to verify whether the best canonical representation should be:
+
+Option A:
+Keep an internal methodology-native measurement unit only where strictly required,
+but expose and store the user-facing calculation logic around household annual consumption
+
+OR
+
+Option B:
+Use household annual consumption directly as the primary canonical value,
+while allowing a default per-capita annual route that converts into it
+
+You must recommend the simplest and clearest architecture that:
+- stays faithful to the methodology
+- avoids confusion for users
+- keeps formulas auditable
+- avoids hidden double counting with household size
+- does not create duplicated representations across modules
+
+--------------------------------------------------
+4. IMPORTANT: THIS IS STILL A FULL CLEANUP TASK
+--------------------------------------------------
+
+Do not lose the original objective of the broader audit.
+
+While implementing this, you must also continue to address the larger issues already identified:
+- duplicate Excel exporters
+- duplicate OpenAI clients
+- duplicate fuel display maps
+- duplicate location surfaces
+- duplicate fuel inputs
+- duplicate scale inputs
+- duplicate num_units / num_devices / households / beneficiaries paths
+- dead code
+- inconsistent methodology dispatch
+- export bypassing parameter_engine
+- session-state-only ER export
+- inconsistent AI vs deterministic calculation paths
+
+This refactor must reduce duplication and simplify the architecture overall.
+
+--------------------------------------------------
+5. DELIVERABLE BEFORE CODING
+--------------------------------------------------
+
+Before touching the code, please provide:
+
+1. Your final recommended canonical consumption model for cookstove workflows
+   - what is the primary quantity?
+   - where are defaults per capita allowed?
+   - how is household size used?
+   - what is shown to the user?
+
+2. Confirmation that the broader cleanup scope is still preserved
+
+3. The exact files that will be touched in this next implementation step
+
+4. The order in which you will implement the changes safely, without breaking the app mid-refactor
+
+Do NOT start coding before answering these four points clearly.
