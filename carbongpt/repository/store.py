@@ -779,17 +779,99 @@ def get_project_analytics():
 
 
 def get_top_methodologies(limit=20):
+    """
+    Return top methodologies using the normalized junction table so that
+    'ACM0002' and 'ACM0002 Grid-connected electricity generation...' both
+    collapse into a single 'ACM0002' row.
+
+    Falls back gracefully to raw text grouping if the junction table is empty
+    (e.g. normalization pass has not yet run).
+    """
     with get_cursor() as cur:
-        cur.execute("""
-            SELECT methodology, COUNT(*) as project_count,
-                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
+        cur.execute("SELECT COUNT(*) AS n FROM project_methodology_codes")
+        row = cur.fetchone()
+        use_normalized = row and row["n"] and int(row["n"]) > 0
+
+    if use_normalized:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    pmc.methodology_code                              AS methodology,
+                    COALESCE(ml.display_name, pmc.methodology_code)  AS display_name,
+                    ml.methodology_family,
+                    ml.sector,
+                    COUNT(DISTINCT pmc.project_id)                   AS project_count,
+                    COALESCE(SUM(cp.estimated_annual_credits), 0)    AS total_credits
+                FROM project_methodology_codes pmc
+                JOIN carbon_projects cp   ON pmc.project_id       = cp.id
+                LEFT JOIN methodology_library ml ON pmc.methodology_code = ml.methodology_code
+                GROUP BY pmc.methodology_code, ml.display_name,
+                         ml.methodology_family, ml.sector
+                ORDER BY project_count DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return cur.fetchall()
+
+    # Fallback: raw text grouping (pre-normalization)
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                methodology,
+                NULL AS display_name,
+                NULL AS methodology_family,
+                NULL AS sector,
+                COUNT(*) AS project_count,
+                COALESCE(SUM(estimated_annual_credits), 0) AS total_credits
             FROM carbon_projects
             WHERE methodology IS NOT NULL AND methodology != ''
             GROUP BY methodology
             ORDER BY project_count DESC
             LIMIT %s
-        """, (limit,))
+            """,
+            (limit,),
+        )
         return cur.fetchall()
+
+
+def get_normalized_methodology_family_analytics() -> list[dict]:
+    """
+    Return project counts and estimated credits grouped by methodology_family
+    using the normalized project_methodology_codes → methodology_library tables.
+
+    Each row:
+      family          — family label (e.g. 'Clean Cooking', 'REDD+')
+      sector          — sector label
+      methodology_count — distinct codes in this family
+      project_count   — distinct projects using any code in this family
+      total_est_credits — sum of estimated_annual_credits
+    """
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS n FROM project_methodology_codes")
+        row = cur.fetchone()
+        if not row or not row["n"] or int(row["n"]) == 0:
+            return []
+
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COALESCE(ml.methodology_family, 'Uncategorised') AS family,
+                ml.sector,
+                COUNT(DISTINCT pmc.methodology_code)             AS methodology_count,
+                COUNT(DISTINCT pmc.project_id)                   AS project_count,
+                COALESCE(SUM(cp.estimated_annual_credits), 0)    AS total_est_credits
+            FROM project_methodology_codes pmc
+            JOIN carbon_projects cp     ON pmc.project_id       = cp.id
+            LEFT JOIN methodology_library ml ON pmc.methodology_code = ml.methodology_code
+            GROUP BY ml.methodology_family, ml.sector
+            ORDER BY project_count DESC
+            """
+        )
+        return [dict(r) for r in cur.fetchall()]
 
 
 def get_country_details(country):

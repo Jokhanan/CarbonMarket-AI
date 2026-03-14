@@ -1191,6 +1191,16 @@ def get_project_methodologies(limit: int = 30):
     return get_top_methodologies(limit=limit)
 
 
+@router.get("/projects/methodologies/family")
+def get_methodology_family_analytics():
+    """
+    Return project counts and estimated credits grouped by methodology family,
+    using the normalized project_methodology_codes → methodology_library tables.
+    """
+    from carbongpt.repository.store import get_normalized_methodology_family_analytics
+    return get_normalized_methodology_family_analytics()
+
+
 @router.get("/projects/country/{country}")
 def get_country_detail(country: str):
     from carbongpt.repository.store import get_country_details

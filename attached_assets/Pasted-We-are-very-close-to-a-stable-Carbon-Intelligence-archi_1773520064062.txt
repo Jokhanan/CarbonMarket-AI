@@ -1,0 +1,257 @@
+We are very close to a stable Carbon Intelligence architecture.  
+The core reference layer (registries, countries, methodologies) is now implemented, but a few critical pieces are still incomplete or not fully applied in the analytics/UI layer.
+
+This task is a **finishing pass** to make the system consistent and production-ready.
+
+IMPORTANT RULES
+
+Do not break existing functionality.
+Do not remove existing raw fields.
+All changes must be additive and backward compatible.
+Keep CarbonGPT and Carbon Intelligence sharing the same reference layer.
+
+Focus on correctness, normalization, and UX polish.
+
+------------------------------------------------
+1. METHODLOGY NORMALIZATION (CRITICAL FIX)
+------------------------------------------------
+
+The dashboard still groups methodologies using the raw text column from carbon_projects.
+
+This is visible because entries like:
+
+ACM0002
+ACM0002 Grid-connected electricity generation from renewable sources
+
+appear separately.
+
+This means analytics are still grouping on:
+
+carbon_projects.methodology
+
+instead of using the normalized reference layer.
+
+Implement the full normalization pipeline.
+
+1. Create the junction table:
+
+project_methodology_codes
+- id
+- project_id
+- methodology_code
+- raw_segment
+- is_primary
+
+2. During every project sync:
+
+Split carbon_projects.methodology on ";" or ",".
+
+Extract methodology codes using regex patterns such as:
+
+ACM\d{4}
+AM\d{4}
+AMS-[IVX]+\.[A-Z]+\.\d*
+VM\d{4}
+VMR\d{4}
+TPDDTEC
+GS-MECD
+
+3. Insert the extracted code into project_methodology_codes.
+
+4. Link codes to ref_methodologies.
+
+If a code does not exist yet:
+create a provisional entry in ref_methodologies.
+
+5. Update ALL analytics queries to use:
+
+carbon_projects
+JOIN project_methodology_codes
+JOIN ref_methodologies
+
+instead of grouping by carbon_projects.methodology.
+
+6. Keep the original text field for display purposes.
+
+Expected result:
+
+ACM0002 appears only once in analytics.
+
+------------------------------------------------
+2. METHODOLOGY FAMILY ANALYTICS
+------------------------------------------------
+
+The dashboard should support aggregation by:
+
+methodology_code
+methodology_family
+sector
+
+Implement queries such as:
+
+Top methodologies
+Projects per methodology family
+Estimated credits per family
+
+These should all use the normalized tables.
+
+------------------------------------------------
+3. AI COPILOT BUTTON UX
+------------------------------------------------
+
+The Copilot button is currently rendered as a large bottom button.
+
+Replace it with a floating assistant button.
+
+Requirements:
+
+Floating circular button
+Bottom-right corner
+Always visible
+Small animation or hover effect
+
+Example behavior:
+
+● icon
+click → open Copilot panel
+click again → close
+
+Do not remove the Copilot functionality.
+Only update the UI component.
+
+Ensure it works on:
+
+desktop
+tablet
+mobile
+
+------------------------------------------------
+4. VISUALIZATION IMPROVEMENTS
+------------------------------------------------
+
+Upgrade Carbon Intelligence charts.
+
+Use Plotly if available.
+
+Implement the following charts:
+
+GLOBAL OVERVIEW
+
+Projects by registry
+Projects by region
+Projects by methodology family
+Projects over time (registration timeline)
+
+COUNTRY EXPLORER
+
+Country project distribution
+Top methodologies in country
+Developers active in country
+
+METHODOLOGY ANALYSIS
+
+Top methodologies
+Credits per methodology
+Projects per methodology family
+
+All charts must clearly label:
+
+"Estimated annual credits (not issued credits)"
+
+Do not imply these are issued credits.
+
+------------------------------------------------
+5. DATA LABELING AND CLARITY
+------------------------------------------------
+
+The UI must clearly distinguish:
+
+Estimated annual credits
+Actual issued credits
+
+Currently only estimated credits exist.
+
+Add clear labels in:
+
+dashboard cards
+tables
+charts
+
+Example:
+
+EST. ANNUAL CREDITS (DECLARED BY PROJECT)
+
+------------------------------------------------
+6. PROJECT DATA COVERAGE PANEL
+------------------------------------------------
+
+Add a small metadata block to Carbon Intelligence showing:
+
+Total projects in database
+Countries covered
+Registries covered
+Methodologies recognized
+Last sync timestamp
+
+Example:
+
+Projects: 8,913
+Countries: 153
+Registries: 3
+Methodologies: 209
+
+------------------------------------------------
+7. DATA SOURCE CLARIFICATION
+------------------------------------------------
+
+Add a simple info panel explaining data sources.
+
+Example:
+
+Data sources:
+
+Verra Registry (VCS)
+Gold Standard Registry
+UNFCCC CDM database
+
+Fields included:
+
+Project metadata
+Country
+Methodology
+Developer
+Estimated annual credits
+Registration dates
+
+Fields not currently available:
+
+Issued credits
+Retired credits
+Buffer contributions
+
+------------------------------------------------
+8. PERFORMANCE SAFETY
+------------------------------------------------
+
+Add lightweight caching for heavy analytics queries if needed.
+
+Do not introduce heavy dependencies.
+
+The dashboard must remain responsive.
+
+------------------------------------------------
+9. FINAL VALIDATION REPORT
+------------------------------------------------
+
+At the end provide a validation summary:
+
+Files modified
+Tables created
+Queries updated
+Methodology normalization results
+Example before/after methodology aggregation
+Copilot UI change confirmation
+Visualization summary
+Data source coverage summary
+
+The goal is to finish the normalization and UX so Carbon Intelligence is internally consistent and production-ready.

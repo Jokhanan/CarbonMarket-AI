@@ -1480,6 +1480,107 @@ st.markdown("""
         border-radius: 10px;
         margin-left: 8px;
     }
+
+    /* ── Floating Copilot FAB ── */
+    #copilot-fab-anchor { display: none; }
+    #copilot-fab-anchor + div[data-testid="stButton"] {
+        position: fixed !important;
+        bottom: 28px !important;
+        right: 28px !important;
+        z-index: 9998 !important;
+        width: auto !important;
+    }
+    #copilot-fab-anchor + div[data-testid="stButton"] button {
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 50% !important;
+        padding: 0 !important;
+        min-width: 0 !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.01em !important;
+        background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+        box-shadow: 0 4px 22px rgba(13, 148, 136, 0.52) !important;
+        border: none !important;
+        color: white !important;
+        transition: transform 160ms ease, box-shadow 160ms ease !important;
+        animation: copilot-breathe 3s ease-in-out infinite !important;
+    }
+    #copilot-fab-anchor + div[data-testid="stButton"] button:hover {
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 30px rgba(13, 148, 136, 0.65) !important;
+        animation: none !important;
+    }
+    @keyframes copilot-breathe {
+        0%, 100% { box-shadow: 0 4px 22px rgba(13, 148, 136, 0.52); }
+        50%       { box-shadow: 0 6px 30px rgba(13, 148, 136, 0.72); }
+    }
+
+    /* ── Coverage / data-source info panels ── */
+    .ci-coverage-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin: 8px 0 16px 0;
+    }
+    .ci-coverage-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .ci-coverage-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--brand-primary);
+        line-height: 1.1;
+    }
+    .ci-coverage-label {
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 4px;
+    }
+    .ci-datasource-panel {
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 18px 20px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+    .ci-datasource-panel h4 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 8px 0;
+    }
+    .ci-datasource-row {
+        display: flex;
+        gap: 32px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+    .ci-datasource-col { flex: 1; min-width: 160px; }
+    .ci-datasource-col ul {
+        margin: 4px 0 0 0;
+        padding-left: 16px;
+    }
+    .ci-datasource-col li { margin-bottom: 3px; }
+    .ci-est-notice {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        color: #9a3412;
+        margin: 6px 0 12px 0;
+        font-weight: 500;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -2560,22 +2661,74 @@ def render_intelligence():
 
 
 def _render_global_overview(analytics, summary):
-    st.caption(
-        "Credit figures shown are registry-declared estimates at project registration, "
-        "not verified issued credits. See the Sync tab for data coverage."
+    # ── Estimated credits notice ──────────────────────────────────────────────
+    st.markdown(
+        '<div class="ci-est-notice">'
+        'All credit figures are registry-declared estimates recorded at project registration. '
+        'They are <strong>not</strong> verified issued or retired credits. '
+        'Actual issuance data is not currently available in this dataset.'
+        '</div>',
+        unsafe_allow_html=True,
     )
+
+    # ── Data Coverage Panel ───────────────────────────────────────────────────
+    ref_meths_count = len(_fetch("/admin/reference/methodologies") or [])
+    sync_status     = _fetch("/admin/sync-projects/status") or {}
+    last_sync_raw   = sync_status.get("last_run") or (
+        _fetch("/admin/sync-projects/schedule") or {}
+    ).get("last_run")
+    last_sync_str   = (
+        last_sync_raw[:19].replace("T", " ") + " UTC"
+        if last_sync_raw else "Not yet run"
+    )
+
+    credits = summary.get("total_estimated_credits", 0) or 0
+    if credits >= 1_000_000_000:
+        credits_str = f"{credits / 1_000_000_000:.1f}B tCO2e/yr"
+    elif credits >= 1_000_000:
+        credits_str = f"{credits / 1_000_000:.0f}M tCO2e/yr"
+    else:
+        credits_str = f"{credits:,} tCO2e/yr"
+
+    st.markdown(
+        f"""
+        <div class="ci-coverage-grid">
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value">{summary['total_projects']:,}</div>
+            <div class="ci-coverage-label">Projects</div>
+          </div>
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value">{summary['total_countries']}</div>
+            <div class="ci-coverage-label">Countries</div>
+          </div>
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value">{summary['total_registries']}</div>
+            <div class="ci-coverage-label">Registries</div>
+          </div>
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value">{ref_meths_count}</div>
+            <div class="ci-coverage-label">Methodologies</div>
+          </div>
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value" style="font-size:1rem;">{credits_str}</div>
+            <div class="ci-coverage-label">Est. Annual Credits (declared)</div>
+          </div>
+          <div class="ci-coverage-card">
+            <div class="ci-coverage-value" style="font-size:0.9rem;color:var(--text-secondary);">{last_sync_str}</div>
+            <div class="ci-coverage-label">Last Sync</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Projects", f"{summary['total_projects']:,}",
                    help="Total carbon projects across all registries")
     with col2:
-        credits = summary.get("total_estimated_credits", 0) or 0
-        if credits >= 1_000_000_000:
-            credits_str = f"{credits / 1_000_000_000:.1f}B"
-        elif credits >= 1_000_000:
-            credits_str = f"{credits / 1_000_000:.0f}M"
-        else:
-            credits_str = f"{credits:,}"
         st.metric("Est. Annual Credits (not actual issued)",
                   credits_str,
                   help="Estimated annual emission reductions declared at registration (tCO2e). Not actual verified and issued credits.")
@@ -2763,84 +2916,104 @@ def _render_methodology_analysis():
     import pandas as pd
     import altair as alt
 
-    # ── Family-level breakdown from ref_methodologies ─────────────────────────
-    ref_meths = _fetch("/admin/reference/methodologies") or []
-    if ref_meths:
-        st.subheader("Methodology Families by Registry")
-        st.caption("Canonical methodology codes grouped by family, drawn from the shared reference layer.")
+    st.markdown(
+        '<div class="ci-est-notice">'
+        'All credit figures below are estimated annual emission reductions declared at project registration. '
+        'They are <strong>not</strong> verified issued or retired credits.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
-        df_ref = pd.DataFrame(ref_meths)
-        # Aggregate by family + registry
-        if "methodology_family" in df_ref.columns and "project_count" in df_ref.columns:
-            agg = (
-                df_ref.groupby(["methodology_family", "registry_display_name"])
-                .agg(total_projects=("project_count", "sum"), code_count=("methodology_code", "count"))
-                .reset_index()
-                .sort_values("total_projects", ascending=False)
-                .head(20)
-            )
-            agg = agg.rename(columns={
-                "methodology_family":   "Family",
-                "registry_display_name": "Registry",
-                "total_projects":       "Projects",
-                "code_count":           "Codes",
-            })
-            # Bar chart: top families by project count
-            chart = (
-                alt.Chart(agg.head(15))
+    # ── Section 1: Normalized family analytics (project_methodology_codes) ────
+    family_data = _fetch("/admin/projects/methodologies/family") or []
+    if family_data:
+        st.subheader("Projects by Methodology Family")
+        st.caption(
+            "Families are derived from the normalized methodology codes extracted from project records. "
+            "Each project may use more than one code; deduplication is applied."
+        )
+        df_fam = pd.DataFrame(family_data)
+        df_fam = df_fam.rename(columns={
+            "family":            "Family",
+            "sector":            "Sector",
+            "methodology_count": "Codes",
+            "project_count":     "Projects",
+            "total_est_credits": "Est. Annual Credits (tCO2e)",
+        })
+        df_fam = df_fam[df_fam["Family"].notna()].sort_values("Projects", ascending=False)
+
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            st.write("By Project Count")
+            chart_fam = (
+                alt.Chart(df_fam.head(15))
                 .mark_bar()
                 .encode(
-                    x=alt.X("Projects:Q", title="Projects using this family"),
+                    x=alt.X("Projects:Q", title="Projects"),
                     y=alt.Y("Family:N", sort="-x", title=None),
                     color=alt.Color(
-                        "Registry:N",
+                        "Sector:N",
                         scale=alt.Scale(scheme="tableau10"),
-                        legend=alt.Legend(title="Registry"),
+                        legend=alt.Legend(title="Sector"),
                     ),
-                    tooltip=["Family:N", "Registry:N", "Projects:Q", "Codes:Q"],
+                    tooltip=["Family:N", "Sector:N", "Projects:Q", "Codes:Q"],
                 )
                 .properties(height=380)
             )
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart_fam, use_container_width=True)
 
-            # Summary table
-            with st.expander("Full methodology family reference table"):
-                st.dataframe(
-                    df_ref[[c for c in [
-                        "methodology_code", "methodology_name", "methodology_family",
-                        "registry_display_name", "sector", "technology",
-                        "status", "project_count",
-                    ] if c in df_ref.columns]].rename(columns={
-                        "methodology_code":     "Code",
-                        "methodology_name":     "Name",
-                        "methodology_family":   "Family",
-                        "registry_display_name": "Registry",
-                        "sector":               "Sector",
-                        "technology":           "Technology",
-                        "status":               "Status",
-                        "project_count":        "Projects",
-                    }),
-                    hide_index=True,
-                    use_container_width=True,
+        with col_right:
+            st.write("By Est. Annual Credits (not actual issued credits)")
+            chart_fam_cred = (
+                alt.Chart(df_fam.head(15).sort_values("Est. Annual Credits (tCO2e)", ascending=False))
+                .mark_bar(color="#50C878")
+                .encode(
+                    x=alt.X("Est. Annual Credits (tCO2e):Q",
+                            title="Est. Annual Credits tCO2e (declared, not issued)"),
+                    y=alt.Y("Family:N", sort="-x", title=None),
+                    tooltip=["Family:N", "Est. Annual Credits (tCO2e):Q", "Projects:Q"],
                 )
+                .properties(height=380)
+            )
+            st.altair_chart(chart_fam_cred, use_container_width=True)
+
+        with st.expander("Full family breakdown table"):
+            st.dataframe(
+                df_fam[["Family", "Sector", "Codes", "Projects", "Est. Annual Credits (tCO2e)"]],
+                hide_index=True,
+                use_container_width=True,
+            )
 
     st.divider()
 
-    # ── Raw project-level methodology ranking ────────────────────────────────
-    st.subheader("Top Methodologies by Project Count")
-    st.caption("Based on raw methodology strings recorded on each project.")
+    # ── Section 2: Normalized code-level ranking ──────────────────────────────
+    st.subheader("Top Methodology Codes by Project Count")
+    st.caption(
+        "Normalized using regex code extraction — 'ACM0002' and "
+        "'ACM0002 Grid-connected electricity...' merge into a single row."
+    )
     meths = _fetch("/admin/projects/methodologies?limit=30")
     if not meths:
         st.info("No methodology data available.")
         return
 
     df = pd.DataFrame(meths)
+    # Prefer display_name for labeling when available
+    if "display_name" in df.columns:
+        df["Label"] = df.apply(
+            lambda r: f"{r['methodology']}" +
+                      (f" — {r['display_name'][:35]}" if r.get("display_name") and r["display_name"] != r["methodology"] else ""),
+            axis=1,
+        )
+    else:
+        df["Label"] = df["methodology"].astype(str).str[:50]
+
     df = df.rename(columns={
-        "methodology": "Methodology",
-        "project_count": "Projects",
-        "total_credits": "Est. Annual Credits",
+        "project_count":  "Projects",
+        "total_credits":  "Est. Annual Credits (tCO2e)",
+        "methodology_family": "Family",
     })
-    df["Methodology"] = df["Methodology"].str[:50]
 
     col_left, col_right = st.columns(2)
 
@@ -2851,32 +3024,107 @@ def _render_methodology_analysis():
             .mark_bar(color="#4C9BE8")
             .encode(
                 x=alt.X("Projects:Q"),
-                y=alt.Y("Methodology:N", sort="-x", title=None),
-                tooltip=["Methodology:N", "Projects:Q"],
+                y=alt.Y("Label:N", sort="-x", title=None),
+                tooltip=["Label:N", "Projects:Q",
+                         alt.Tooltip("Family:N", title="Family")
+                         if "Family" in df.columns else alt.Tooltip("Projects:Q")],
             )
             .properties(height=380)
         )
         st.altair_chart(chart_count, use_container_width=True)
 
     with col_right:
-        st.write("By Est. Annual Credits (tCO2e)")
-        top_credits = df.sort_values("Est. Annual Credits", ascending=False).head(15)
+        st.write("By Est. Annual Credits (not actual issued credits)")
+        top_credits = df.sort_values("Est. Annual Credits (tCO2e)", ascending=False).head(15)
         chart_cred = (
             alt.Chart(top_credits)
             .mark_bar(color="#50C878")
             .encode(
-                x=alt.X("Est. Annual Credits:Q"),
-                y=alt.Y("Methodology:N", sort="-x", title=None),
-                tooltip=["Methodology:N", "Est. Annual Credits:Q"],
+                x=alt.X("Est. Annual Credits (tCO2e):Q",
+                        title="Est. Annual Credits tCO2e (declared, not issued)"),
+                y=alt.Y("Label:N", sort="-x", title=None),
+                tooltip=["Label:N", "Est. Annual Credits (tCO2e):Q"],
             )
             .properties(height=380)
         )
         st.altair_chart(chart_cred, use_container_width=True)
 
     st.caption(
-        "Est. Annual Credits are registry-declared project estimates at registration. "
-        "These are not verified issued credits."
+        "Est. Annual Credits are registry-declared estimates at project registration. "
+        "These are NOT verified issued or retired credits."
     )
+
+    st.divider()
+
+    # ── Section 3: Canonical methodology reference from ref_methodologies ─────
+    ref_meths = _fetch("/admin/reference/methodologies") or []
+    if ref_meths:
+        st.subheader("Canonical Methodology Reference")
+        st.caption("Reference codes from the shared methodology layer, grouped by family and registry.")
+
+        df_ref = pd.DataFrame(ref_meths)
+        if "methodology_family" in df_ref.columns and "project_count" in df_ref.columns:
+            has_registry = "registry_display_name" in df_ref.columns
+            group_keys = ["methodology_family"]
+            if has_registry:
+                group_keys.append("registry_display_name")
+            agg = (
+                df_ref.groupby(group_keys)
+                .agg(total_projects=("project_count", "sum"), code_count=("methodology_code", "count"))
+                .reset_index()
+                .sort_values("total_projects", ascending=False)
+                .head(20)
+            )
+            rename_map = {
+                "methodology_family": "Family",
+                "total_projects":     "Projects",
+                "code_count":         "Codes",
+            }
+            if has_registry:
+                rename_map["registry_display_name"] = "Registry"
+            agg = agg.rename(columns=rename_map)
+
+            if "Registry" in agg.columns:
+                color_enc = alt.Color("Registry:N", scale=alt.Scale(scheme="tableau10"),
+                                       legend=alt.Legend(title="Registry"))
+                tooltip_list = ["Family:N", "Registry:N", "Projects:Q", "Codes:Q"]
+            else:
+                color_enc = alt.Color("Family:N", scale=alt.Scale(scheme="tableau10"),
+                                       legend=None)
+                tooltip_list = ["Family:N", "Projects:Q", "Codes:Q"]
+
+            chart = (
+                alt.Chart(agg.head(15))
+                .mark_bar()
+                .encode(
+                    x=alt.X("Projects:Q", title="Projects using this family"),
+                    y=alt.Y("Family:N", sort="-x", title=None),
+                    color=color_enc,
+                    tooltip=tooltip_list,
+                )
+                .properties(height=380)
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        with st.expander("Full canonical reference table"):
+            st.dataframe(
+                df_ref[[c for c in [
+                    "methodology_code", "methodology_name", "methodology_family",
+                    "registry_display_name", "sector", "technology",
+                    "status", "project_count",
+                ] if c in df_ref.columns]].rename(columns={
+                    "methodology_code":      "Code",
+                    "methodology_name":      "Name",
+                    "methodology_family":    "Family",
+                    "registry_display_name": "Registry",
+                    "sector":                "Sector",
+                    "technology":            "Technology",
+                    "status":                "Status",
+                    "project_count":         "Projects",
+                }),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def _render_project_browser():
@@ -3032,6 +3280,55 @@ def _render_sync_controls(summary):
         }), hide_index=True, use_container_width=True)
     else:
         st.success("No unmatched methodology strings. Normalization coverage is complete.")
+
+    st.divider()
+
+    # ── Data Sources Info Panel ───────────────────────────────────────────────
+    st.subheader("Data Sources")
+    st.markdown(
+        """
+        <div class="ci-datasource-panel">
+          <h4>Where this data comes from</h4>
+          <div class="ci-datasource-row">
+            <div class="ci-datasource-col">
+              <strong>Active registries</strong>
+              <ul>
+                <li>Verra Registry (VCS projects)</li>
+                <li>Gold Standard Registry</li>
+                <li>UNFCCC CDM Database (when accessible)</li>
+              </ul>
+            </div>
+            <div class="ci-datasource-col">
+              <strong>Fields available</strong>
+              <ul>
+                <li>Project name, ID, status</li>
+                <li>Country and region</li>
+                <li>Methodology code(s)</li>
+                <li>Project developer / proponent</li>
+                <li>Estimated annual emission reductions (tCO2e)</li>
+                <li>Registration &amp; crediting period dates</li>
+              </ul>
+            </div>
+            <div class="ci-datasource-col">
+              <strong>Fields NOT currently available</strong>
+              <ul>
+                <li>Verified issued credits</li>
+                <li>Retired credits</li>
+                <li>Buffer pool contributions</li>
+                <li>Vintage-level issuance history</li>
+              </ul>
+            </div>
+          </div>
+          <p style="margin-top:12px;font-size:0.8rem;">
+            Credit figures shown throughout Carbon Intelligence are
+            <strong>estimated annual emission reductions</strong> declared by the
+            project developer at registration. They have not been independently verified
+            and do not represent actual credits issued, sold, or retired.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 @st.cache_data(ttl=300)
@@ -9531,11 +9828,11 @@ def _render_chat_widget():
             project_name = proj.get("name", "")
 
     if not st.session_state.chat_open:
-        cta_cols = st.columns([5, 1.2])
-        with cta_cols[1]:
-            if st.button("AI Copilot", key="chat_toggle_btn", type="primary", use_container_width=True):
-                st.session_state.chat_open = True
-                st.rerun()
+        # Floating Action Button — CSS in global stylesheet targets #copilot-fab-anchor
+        st.markdown('<div id="copilot-fab-anchor"></div>', unsafe_allow_html=True)
+        if st.button("AI", key="chat_toggle_btn", type="primary"):
+            st.session_state.chat_open = True
+            st.rerun()
         return
 
     close_cols = st.columns([5, 1.2])
