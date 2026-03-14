@@ -1,0 +1,306 @@
+We need to perform a full data-source audit for the CarbonGPT + Carbon Intelligence platform.
+
+The goal is to clearly identify:
+
+1) Which data sources can be automated
+2) Which data sources require semi-automation
+3) Which data sources must remain manual
+4) Which sources require periodic monitoring (standards updates, methodology updates, template changes)
+
+The output must help us design a robust data pipeline for CarbonGPT.
+
+IMPORTANT:
+Do not assume APIs exist if they do not.
+Many carbon registries do not provide public APIs.
+
+We must identify what can realistically be automated.
+
+--------------------------------
+PART 1 — IDENTIFY THE THREE MAIN DATA SOURCES
+--------------------------------
+
+CarbonGPT relies on three categories of data:
+
+SOURCE A — REGISTRY / STANDARD DATA
+
+This includes data from carbon standards such as:
+
+- Verra (VCS)
+- Gold Standard
+- CDM / UNFCCC
+- ART TREES
+- Global Carbon Council
+- J-Credit (optional)
+
+Data examples:
+
+• project registry data  
+• project metadata  
+• methodologies  
+• tools  
+• templates  
+• standards documentation  
+• issuance data  
+• retirement data  
+• monitoring reports  
+• PDDs  
+
+These are hosted on the registry websites.
+
+--------------------------------
+SOURCE B — USER-PROVIDED DATA
+--------------------------------
+
+Data that the project developer provides inside CarbonGPT.
+
+Examples:
+
+• project parameters
+• KPT survey results
+• baseline studies
+• efficiency studies
+• fuel consumption
+• project boundaries
+• distribution records
+• monitoring data
+
+This data is uploaded by the user and stored internally.
+
+--------------------------------
+SOURCE C — EXTERNAL CONTEXT DATA
+--------------------------------
+
+Data that CarbonGPT may retrieve from external knowledge sources.
+
+Examples:
+
+• country statistics
+• economic indicators
+• energy statistics
+• poverty levels
+• cooking fuel usage
+• academic papers
+
+These may come from:
+
+World Bank
+IEA
+FAO
+UN data
+etc.
+
+--------------------------------
+PART 2 — ANALYZE STANDARD / REGISTRY DATA (MOST IMPORTANT)
+--------------------------------
+
+For each registry:
+
+Gold Standard
+Verra
+CDM / UNFCCC
+
+perform a detailed analysis of the following:
+
+1) PROJECT DATA
+
+What fields can we automatically extract?
+
+Examples:
+
+project ID  
+project name  
+country  
+methodology  
+developer  
+estimated ER  
+registration date  
+
+Can these be obtained via:
+
+API
+public endpoint
+HTML scraping
+CSV/Excel export
+manual download
+
+For each field, classify:
+
+AUTOMATABLE
+SEMI-AUTOMATABLE
+MANUAL
+
+--------------------------------
+
+2) ISSUANCE DATA
+
+Examples:
+
+credits issued  
+vintage year  
+verification period  
+
+Determine:
+
+Can issuance data be automatically downloaded?
+
+Example cases:
+
+Gold Standard → Excel export via email request  
+Verra → CSV export  
+CDM → datasets (IGES / UNFCCC)
+
+Classify each registry:
+
+AUTOMATABLE
+SEMI-AUTOMATABLE
+MANUAL
+
+--------------------------------
+
+3) PDD DOCUMENTS
+
+Determine:
+
+Can PDDs be automatically downloaded?
+
+For example:
+
+Gold Standard project pages
+Verra registry project pages
+CDM project pages
+
+Questions to answer:
+
+Are PDD links accessible via predictable URLs?
+Are they structured enough for scraping?
+Are there rate limits?
+
+We do NOT need to download all PDDs.
+
+Instead determine:
+
+Can we selectively download PDDs for training datasets?
+
+--------------------------------
+
+4) METHODOLOGIES
+
+Analyze whether we can automatically collect:
+
+methodology codes  
+methodology documents  
+methodology versions  
+
+Example:
+
+TPDDTEC v4
+TPDDTEC v5
+VM0006 v1.2
+
+Determine:
+
+Can methodology pages be automatically indexed?
+
+--------------------------------
+
+5) TOOLS AND STANDARD DOCUMENTS
+
+Examples:
+
+Gold Standard tools
+Verra tools
+methodology guidance
+templates
+
+Determine:
+
+Can these be automatically monitored for new versions?
+
+--------------------------------
+PART 3 — VERSIONING SYSTEM
+--------------------------------
+
+CarbonGPT must handle versioning.
+
+Examples:
+
+Methodology versions
+Standard versions
+Template versions
+Tools versions
+
+We need to detect when:
+
+• a new methodology version appears
+• a methodology is retired
+• a standard document changes
+• a template is updated
+
+Propose a system to track:
+
+version validity periods
+document history
+methodology evolution
+
+--------------------------------
+PART 4 — DESIGN THE DATA PIPELINE
+--------------------------------
+
+Using the analysis above, design a practical pipeline.
+
+For each dataset determine:
+
+AUTOMATED
+SCHEDULED DOWNLOAD
+MANUAL INGESTION
+
+Example:
+
+Gold Standard issuance → monthly manual Excel download
+Verra project list → automated API
+CDM datasets → scheduled dataset import
+
+--------------------------------
+PART 5 — PROPOSE AUTOMATION SCHEDULE
+--------------------------------
+
+Propose realistic refresh cycles:
+
+projects → weekly
+issuance → monthly
+methodologies → monthly
+standard updates → weekly monitoring
+
+--------------------------------
+PART 6 — TRAINING DATA STRATEGY
+--------------------------------
+
+CarbonGPT should not download thousands of documents unnecessarily.
+
+Instead propose:
+
+selective sampling of PDDs
+representative project datasets
+methodology-specific datasets
+
+Example:
+
+20–50 PDDs per methodology
+key monitoring reports
+validation reports
+
+--------------------------------
+PART 7 — OUTPUT REQUIRED
+--------------------------------
+
+Produce a structured report containing:
+
+1) Data sources by registry
+2) What is automatable
+3) What requires manual ingestion
+4) What requires monitoring
+5) Proposed automation architecture
+6) Version tracking design
+7) Training dataset strategy
+
+The goal is to design a realistic, stable data pipeline for CarbonGPT.
