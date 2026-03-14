@@ -448,11 +448,24 @@ def get_tpddtec_method_badge_info(method_id):
 
 def compute_sfc_b_method2(household_size, devices_per_household=1):
     """
-    Derive SFC_b (t/technology*day) for Method 2 from the TPDDTEC default.
+    Derive SFC_b in kg/device/day for Method 2 from the TPDDTEC locked default.
 
-    Formula: 0.5 t/capita/yr × household_size / devices_per_household / 365
+    TPDDTEC v4.0 §7.1 Method 2 default: 0.5 t/capita/yr fuelwood.
+
+    Formula:
+        SFC_b [kg/device/day] = 0.5 [t/capita/yr]
+                                × household_size [capita/hh]
+                                / devices_per_household [device/hh]
+                                / 365 [days/yr]
+                                × 1000 [kg/t]
     """
-    return TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * household_size / devices_per_household / 365.0
+    return (
+        TPDDTEC_METHOD2_DEFAULT_CONSUMPTION
+        * household_size
+        / devices_per_household
+        / 365.0
+        * 1000.0
+    )
 
 
 def _fuel_label(fuel_key):

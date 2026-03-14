@@ -1116,6 +1116,55 @@ def get_parameters_as_dict(project_id):
             "is_ex_ante": p["is_ex_ante"],
             "category": p["category"],
         }
+
+    # -----------------------------------------------------------------------
+    # Derived-parameter bridge: SFC (kg/device/day) → annual consumption (t/device/yr)
+    #
+    # Priority order (highest wins):
+    #   1. Manual entry of baseline_fuel_consumption / project_fuel_consumption
+    #      (source_type in 'user_override', 'measured', 'confirmed')
+    #   2. Derived from SFC_baseline / SFC_project when those carry a
+    #      user-measured or user-override value.
+    #   3. Parameter-engine default (already set by _resolve_parameter_value).
+    #
+    # Conversion: SFC [kg/device/day] × 365 [days/yr] ÷ 1000 [kg/t] = t/device/yr
+    # -----------------------------------------------------------------------
+    _MANUAL_SOURCES = {"user_override", "measured", "confirmed"}
+
+    for sfc_key, annual_key, unit_label in (
+        ("SFC_baseline", "baseline_fuel_consumption", "t/device/year"),
+        ("SFC_project",  "project_fuel_consumption",  "t/device/year"),
+    ):
+        sfc_entry  = result.get(sfc_key)
+        annual_entry = result.get(annual_key)
+
+        sfc_has_user_value = (
+            sfc_entry is not None
+            and sfc_entry.get("source_type") in _MANUAL_SOURCES
+            and sfc_entry.get("value") not in (None, "", 0)
+        )
+        annual_manually_set = (
+            annual_entry is not None
+            and annual_entry.get("source_type") in _MANUAL_SOURCES
+        )
+
+        if sfc_has_user_value and not annual_manually_set:
+            sfc_val = float(sfc_entry["value"])
+            derived_val = round(sfc_val * 365.0 / 1000.0, 6)
+            result[annual_key] = {
+                "value": derived_val,
+                "unit": unit_label,
+                "source_type": "derived",
+                "source_reference": (
+                    f"Derived: {sfc_key} ({sfc_val} kg/device/day)"
+                    f" × 365 ÷ 1000 = {derived_val} t/device/yr"
+                ),
+                "validation_status": "valid",
+                "param_status": "derived",
+                "is_ex_ante": False,
+                "category": "baseline" if "baseline" in annual_key else "project",
+            }
+
     return result
 
 
