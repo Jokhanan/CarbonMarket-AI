@@ -801,6 +801,115 @@ CREATE INDEX IF NOT EXISTS idx_project_issuance_registry
     ON project_issuance(registry);
 CREATE INDEX IF NOT EXISTS idx_project_issuance_vintage
     ON project_issuance(vintage_year);
+
+-- ============================================================
+-- METHODOLOGY PACK MANAGER
+-- Curated, versioned knowledge packs that ground CarbonGPT
+-- AI responses in real approved-project precedent.
+-- Reuses the existing documents + document_chunks system.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS methodology_packs (
+    id                       SERIAL       PRIMARY KEY,
+    methodology_code         VARCHAR(50)  NOT NULL,
+    methodology_family       VARCHAR(100),
+    registry                 VARCHAR(30)  NOT NULL,
+    methodology_version      VARCHAR(30),
+    version_valid_from       DATE,
+    version_valid_to         DATE,
+    indexing_status          VARCHAR(30)  NOT NULL DEFAULT 'not_started'
+        CHECK (indexing_status IN (
+            'not_started', 'collecting_documents', 'ready_for_indexing',
+            'indexed', 'needs_update', 'archived'
+        )),
+    pdd_count                INTEGER      DEFAULT 0,
+    mr_count                 INTEGER      DEFAULT 0,
+    validation_count         INTEGER      DEFAULT 0,
+    tool_doc_count           INTEGER      DEFAULT 0,
+    target_pdd_count         INTEGER      DEFAULT 30,
+    target_mr_count          INTEGER      DEFAULT 5,
+    target_validation_count  INTEGER      DEFAULT 3,
+    readiness_score          INTEGER      DEFAULT 0,
+    readiness_gates_passed   JSONB        DEFAULT '{}',
+    notes                    TEXT,
+    created_by               TEXT,
+    created_at               TIMESTAMPTZ  DEFAULT NOW(),
+    last_updated             TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_packs_unique_code_registry_version
+    ON methodology_packs (methodology_code, registry, COALESCE(methodology_version, ''));
+CREATE INDEX IF NOT EXISTS idx_packs_methodology ON methodology_packs(methodology_code);
+CREATE INDEX IF NOT EXISTS idx_packs_status     ON methodology_packs(indexing_status);
+CREATE INDEX IF NOT EXISTS idx_packs_registry   ON methodology_packs(registry);
+
+-- Junction table: links existing documents to a pack with role metadata.
+-- Reuses the full documents + document_chunks storage — no second chunk store.
+CREATE TABLE IF NOT EXISTS methodology_pack_document_links (
+    id                   SERIAL       PRIMARY KEY,
+    pack_id              INTEGER      NOT NULL REFERENCES methodology_packs(id) ON DELETE CASCADE,
+    document_id          INTEGER      NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_role        VARCHAR(30)  NOT NULL
+        CHECK (document_role IN (
+            'METHODOLOGY_DOC', 'TOOL_DOC', 'GUIDANCE_DOC', 'TEMPLATE',
+            'PDD', 'MR', 'VALIDATION_REPORT', 'VERIFICATION_REPORT',
+            'DEVIATION_REPORT', 'DOE_FINDING'
+        )),
+    project_id           INTEGER      REFERENCES carbon_projects(id) ON DELETE SET NULL,
+    project_registry_id  VARCHAR(100),
+    methodology_version  VARCHAR(30),
+    vintage_year         INTEGER,
+    validation_body      VARCHAR(200),
+    added_by             TEXT,
+    added_at             TIMESTAMPTZ  DEFAULT NOW(),
+    quality_flags        JSONB        DEFAULT '{}',
+    UNIQUE (pack_id, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mpdl_pack     ON methodology_pack_document_links(pack_id);
+CREATE INDEX IF NOT EXISTS idx_mpdl_document ON methodology_pack_document_links(document_id);
+CREATE INDEX IF NOT EXISTS idx_mpdl_role     ON methodology_pack_document_links(pack_id, document_role);
+
+-- Structured DOE findings: CARs, CLs, FARs, review comments.
+-- Populated by AI extraction during ingestion OR by admin manual entry.
+CREATE TABLE IF NOT EXISTS pack_findings (
+    id                      SERIAL       PRIMARY KEY,
+    pack_id                 INTEGER      NOT NULL REFERENCES methodology_packs(id) ON DELETE CASCADE,
+    source_link_id          INTEGER      REFERENCES methodology_pack_document_links(id) ON DELETE SET NULL,
+    finding_type            VARCHAR(20)  NOT NULL
+        CHECK (finding_type IN ('CAR', 'CL', 'FAR', 'CR', 'REVIEW_COMMENT')),
+    finding_reference       VARCHAR(50),
+    section_reference       VARCHAR(200),
+    finding_text            TEXT         NOT NULL,
+    response_text           TEXT,
+    resolution_status       VARCHAR(25)  DEFAULT 'closed'
+        CHECK (resolution_status IN ('open', 'closed', 'pending_next_period')),
+    finding_vintage         INTEGER,
+    validation_body         VARCHAR(200),
+    extracted_automatically BOOLEAN      DEFAULT FALSE,
+    created_at              TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pf_pack ON pack_findings(pack_id);
+CREATE INDEX IF NOT EXISTS idx_pf_type ON pack_findings(pack_id, finding_type);
+
+-- Version history: used by the monthly monitor job to detect new methodology versions.
+CREATE TABLE IF NOT EXISTS methodology_version_history (
+    id                SERIAL       PRIMARY KEY,
+    methodology_code  VARCHAR(50)  NOT NULL,
+    registry          VARCHAR(30)  NOT NULL,
+    version           VARCHAR(30)  NOT NULL,
+    detected_at       TIMESTAMPTZ  DEFAULT NOW(),
+    source_url        TEXT,
+    content_hash      VARCHAR(64),
+    status            VARCHAR(20)  DEFAULT 'active'
+        CHECK (status IN ('active', 'superseded', 'retired')),
+    superseded_by     VARCHAR(30),
+    pack_id           INTEGER      REFERENCES methodology_packs(id) ON DELETE SET NULL,
+    UNIQUE (methodology_code, registry, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mvh_methodology ON methodology_version_history(methodology_code, registry);
 """
 
 

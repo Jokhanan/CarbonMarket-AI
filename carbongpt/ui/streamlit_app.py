@@ -1813,7 +1813,7 @@ def render_repository():
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "Upload Documents",
         "Document Library",
         "Semantic Search",
@@ -1821,6 +1821,7 @@ def render_repository():
         "Web Intelligence",
         "Methodology Sync",
         "Manage Standards",
+        "Methodology Packs",
     ])
 
     with tab1:
@@ -1837,6 +1838,445 @@ def render_repository():
         _render_methodology_sync()
     with tab7:
         _render_manage_standards()
+    with tab8:
+        _render_methodology_packs()
+
+
+def _render_methodology_packs():
+    """Methodology Pack Manager — curated knowledge packs for AI grounding."""
+    st.subheader("Methodology Packs")
+    st.caption(
+        "Build curated training packs for specific methodologies. "
+        "Each pack links real PDDs, Monitoring Reports, Validation/Verification Reports, "
+        "and DOE findings to ground CarbonGPT responses in approved-project precedent."
+    )
+
+    STATUS_COLORS = {
+        "not_started":        "#9ca3af",
+        "collecting_documents": "#f59e0b",
+        "ready_for_indexing": "#3b82f6",
+        "indexed":            "#10b981",
+        "needs_update":       "#ef4444",
+        "archived":           "#6b7280",
+    }
+
+    def _status_badge(status):
+        color = STATUS_COLORS.get(status, "#9ca3af")
+        label = status.replace("_", " ").title()
+        return (
+            f'<span style="background:{color};color:white;padding:2px 10px;'
+            f'border-radius:12px;font-size:0.75rem;font-weight:600;">{label}</span>'
+        )
+
+    # ── Fetch packs ──────────────────────────────────────────────────────────
+    packs = _fetch("/admin/packs") or []
+
+    # ── Summary metrics ──────────────────────────────────────────────────────
+    if packs:
+        total        = len(packs)
+        indexed      = sum(1 for p in packs if p.get("indexing_status") == "indexed")
+        collecting   = sum(1 for p in packs if p.get("indexing_status") == "collecting_documents")
+        needs_update = sum(1 for p in packs if p.get("indexing_status") == "needs_update")
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("Total Packs",     total)
+        mc2.metric("Indexed (Live)",  indexed)
+        mc3.metric("Collecting",      collecting)
+        mc4.metric("Needs Update",    needs_update)
+        st.divider()
+
+    # ── Two-panel layout: pack list (left) | detail (right) ─────────────────
+    list_col, detail_col = st.columns([1, 2], gap="medium")
+
+    with list_col:
+        st.markdown("**Packs**")
+
+        # Create new pack expander
+        with st.expander("+ New Pack", expanded=(len(packs) == 0)):
+            with st.form("new_pack_form", clear_on_submit=True):
+                np_code     = st.text_input("Methodology code", placeholder="e.g. GS-TPDDTEC")
+                np_registry = st.selectbox("Registry", ["goldstandard", "verra", "cdm", "art-trees", "gcc", "other"])
+                np_version  = st.text_input("Version (optional)", placeholder="e.g. v4.0")
+                np_family   = st.text_input("Family (optional)", placeholder="e.g. Clean Cooking")
+                np_cols     = st.columns(3)
+                np_tgt_pdd  = np_cols[0].number_input("PDD target",  min_value=1, max_value=200, value=30)
+                np_tgt_mr   = np_cols[1].number_input("MR target",   min_value=1, max_value=50,  value=5)
+                np_tgt_val  = np_cols[2].number_input("Val. target",  min_value=1, max_value=30,  value=3)
+                np_notes    = st.text_area("Notes", height=60)
+                if st.form_submit_button("Create Pack", type="primary"):
+                    if not np_code.strip():
+                        st.error("Methodology code is required.")
+                    else:
+                        result = _fetch("/admin/packs", method="POST", json={
+                            "methodology_code":      np_code.strip().upper(),
+                            "registry":              np_registry,
+                            "methodology_version":   np_version.strip() or None,
+                            "methodology_family":    np_family.strip() or None,
+                            "target_pdd_count":      np_tgt_pdd,
+                            "target_mr_count":       np_tgt_mr,
+                            "target_validation_count": np_tgt_val,
+                            "notes":                 np_notes.strip() or None,
+                        })
+                        if result:
+                            st.success(f"Pack created: {np_code.upper()}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to create pack.")
+
+        if not packs:
+            st.info("No packs yet. Create the first one above.")
+        else:
+            # Pack list as selectable items
+            pack_labels = [
+                f"{p['methodology_code']} ({p['registry']})" for p in packs
+            ]
+            if "selected_pack_idx" not in st.session_state:
+                st.session_state.selected_pack_idx = 0
+
+            for i, (p, label) in enumerate(zip(packs, pack_labels)):
+                status = p.get("indexing_status", "not_started")
+                color  = STATUS_COLORS.get(status, "#9ca3af")
+                active = (i == st.session_state.get("selected_pack_idx", 0))
+                border = "2px solid #10b981" if active else "1px solid #e5e7eb"
+                st.markdown(
+                    f'<div data-testid="pack-item-{p["id"]}" style="border:{border};border-radius:8px;'
+                    f'padding:8px 12px;margin-bottom:6px;cursor:pointer;background:{"#f0fdf4" if active else "white"};">'
+                    f'<div style="font-weight:600;font-size:0.85rem;">{p["methodology_code"]}</div>'
+                    f'<div style="font-size:0.75rem;color:#6b7280;">{p.get("registry","").upper()}'
+                    + (f' · {p["methodology_version"]}' if p.get("methodology_version") else "")
+                    + f'</div><div style="margin-top:3px;">'
+                    + _status_badge(status)
+                    + f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("Open", key=f"open_pack_{p['id']}", use_container_width=True):
+                    st.session_state.selected_pack_idx = i
+                    st.rerun()
+
+    with detail_col:
+        if not packs:
+            st.info("Create a pack to get started.")
+            return
+
+        idx = st.session_state.get("selected_pack_idx", 0)
+        if idx >= len(packs):
+            idx = 0
+        pack = packs[idx]
+        pack_id = pack["id"]
+
+        # Pack header
+        st.markdown(
+            f"### {pack['methodology_code']}"
+            + (f" {pack['methodology_version']}" if pack.get("methodology_version") else "")
+        )
+        st.markdown(
+            _status_badge(pack.get("indexing_status", "not_started")),
+            unsafe_allow_html=True,
+        )
+        st.caption(f"Registry: {pack.get('registry','').upper()} | "
+                   f"PDDs: {pack.get('pdd_count',0)}/{pack.get('target_pdd_count',30)} | "
+                   f"MRs: {pack.get('mr_count',0)}/{pack.get('target_mr_count',5)} | "
+                   f"Validations: {pack.get('validation_count',0)}/{pack.get('target_validation_count',3)} | "
+                   f"Readiness score: {pack.get('readiness_score',0)}/100")
+        if pack.get("notes"):
+            st.caption(f"Notes: {pack['notes']}")
+
+        det_tab1, det_tab2, det_tab3, det_tab4 = st.tabs([
+            "Overview & Readiness", "Candidate Projects", "Documents", "Findings"
+        ])
+
+        # ── Overview & Readiness ─────────────────────────────────────────────
+        with det_tab1:
+            readiness = _fetch(f"/admin/packs/{pack_id}/readiness") or {}
+            gates     = readiness.get("gates", {})
+            score     = readiness.get("score", 0)
+            failures  = readiness.get("gate_failures", [])
+            details   = readiness.get("details", {})
+
+            # Score gauge
+            score_color = "#10b981" if score >= 70 else "#f59e0b" if score >= 50 else "#ef4444"
+            st.markdown(
+                f'<div style="text-align:center;margin:8px 0;">'
+                f'<span style="font-size:2rem;font-weight:700;color:{score_color};">{score}</span>'
+                f'<span style="color:#6b7280;"> / 100</span>'
+                f'<div style="font-size:0.8rem;color:#6b7280;">Readiness Score</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.progress(score / 100)
+
+            # Hard gates
+            st.markdown("**Hard Gates**")
+            gate_labels = {
+                "G1_methodology_doc":   "Methodology document ingested (500+ words)",
+                "G2_pdd_count":         f"PDD count ≥ {max(5, details.get('target_pdd_count',30)//2)}",
+                "G3_extraction_quality":"Extraction quality (≤30% poor PDFs)",
+                "G4_registered_projects":"≥60% linked projects are registered",
+                "G5_monitoring_report": "Monitoring Report ingested",
+            }
+            for gate_key, gate_label in gate_labels.items():
+                passed = gates.get(gate_key, False)
+                icon   = "✓" if passed else "✗"
+                color  = "#10b981" if passed else "#ef4444"
+                st.markdown(
+                    f'<div style="color:{color};font-size:0.85rem;margin:2px 0;">'
+                    f'{icon} {gate_label}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Qualitative details
+            if details:
+                st.divider()
+                d1, d2, d3 = st.columns(3)
+                d1.metric("Countries",       len(details.get("countries", [])))
+                d2.metric("Findings",        details.get("finding_count", 0))
+                d3.metric("Val. bodies",     len(details.get("validation_bodies", [])))
+                if details.get("countries"):
+                    st.caption("Countries: " + ", ".join(details["countries"][:8]))
+
+            # Action buttons
+            st.divider()
+            status = pack.get("indexing_status", "not_started")
+            btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+            if status == "ready_for_indexing" and not failures:
+                with btn_col1:
+                    if st.button("Activate Pack", key=f"activate_{pack_id}", type="primary", use_container_width=True):
+                        result = _fetch(f"/admin/packs/{pack_id}/activate", method="POST")
+                        if result:
+                            st.success("Pack activated. AI layer will now use this pack.")
+                            st.rerun()
+                        else:
+                            st.error("Activation failed — check that all hard gates pass.")
+            elif status == "indexed":
+                st.success("This pack is live. CarbonGPT will use it for methodology context.")
+                with btn_col1:
+                    if st.button("Mark Needs Update", key=f"needs_update_{pack_id}", use_container_width=True):
+                        _fetch(f"/admin/packs/{pack_id}", method="PATCH", json={"indexing_status": "needs_update"})
+                        st.rerun()
+
+            with btn_col2:
+                if status != "archived":
+                    if st.button("Archive Pack", key=f"archive_{pack_id}", use_container_width=True):
+                        _fetch(f"/admin/packs/{pack_id}", method="DELETE")
+                        st.session_state.selected_pack_idx = 0
+                        st.rerun()
+
+            # Notes editor
+            with btn_col3:
+                pass
+            with st.expander("Edit notes"):
+                with st.form(f"notes_form_{pack_id}"):
+                    new_notes = st.text_area("Pack notes", value=pack.get("notes") or "", height=80)
+                    if st.form_submit_button("Save"):
+                        _fetch(f"/admin/packs/{pack_id}", method="PATCH", json={"notes": new_notes})
+                        st.rerun()
+
+        # ── Candidate Projects ───────────────────────────────────────────────
+        with det_tab2:
+            st.markdown("Projects from Carbon Intelligence matching this methodology.")
+            c1, c2 = st.columns([2, 1])
+            cand_country = c1.text_input("Filter by country", key=f"cand_country_{pack_id}", placeholder="e.g. Kenya")
+            reg_only     = c2.checkbox("Registered only", value=True, key=f"cand_reg_{pack_id}")
+
+            url = f"/admin/packs/{pack_id}/candidates?limit=50&registered_only={str(reg_only).lower()}"
+            if cand_country.strip():
+                url += f"&country={cand_country.strip()}"
+            candidates = _fetch(url) or []
+
+            if not candidates:
+                st.info("No candidate projects found for this methodology in Carbon Intelligence.")
+            else:
+                st.caption(f"{len(candidates)} candidate projects found.")
+                for c in candidates[:30]:
+                    cid = c.get("id")
+                    credits = c.get("estimated_annual_credits") or 0
+                    st.markdown(
+                        f'<div data-testid="candidate-{cid}" style="border:1px solid #e5e7eb;border-radius:6px;'
+                        f'padding:6px 10px;margin-bottom:4px;">'
+                        f'<strong>{c.get("name","")[:60]}</strong> '
+                        f'<span style="color:#6b7280;font-size:0.8rem;">'
+                        f'{c.get("country","")} | {c.get("registry","").upper()} | '
+                        f'{int(credits):,} tCO2e/yr</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+        # ── Documents ────────────────────────────────────────────────────────
+        with det_tab3:
+            docs = _fetch(f"/admin/packs/{pack_id}/documents") or []
+
+            # Upload new document
+            with st.expander("Upload and link a new document"):
+                with st.form(f"upload_doc_form_{pack_id}", clear_on_submit=True):
+                    up_file = st.file_uploader("Choose file (PDF, DOCX)", type=["pdf", "docx"],
+                                               key=f"pack_uploader_{pack_id}")
+                    up_role = st.selectbox("Document type", [
+                        "METHODOLOGY_DOC", "TOOL_DOC", "GUIDANCE_DOC", "TEMPLATE",
+                        "PDD", "MR", "VALIDATION_REPORT", "VERIFICATION_REPORT",
+                        "DEVIATION_REPORT", "DOE_FINDING",
+                    ], key=f"up_role_{pack_id}")
+                    up_cols = st.columns(3)
+                    up_proj = up_cols[0].text_input("Project registry ID", key=f"up_proj_{pack_id}",
+                                                     placeholder="e.g. GS1234")
+                    up_vint = up_cols[1].text_input("Vintage year", key=f"up_vint_{pack_id}",
+                                                     placeholder="e.g. 2022")
+                    up_val  = up_cols[2].text_input("Validation body", key=f"up_val_{pack_id}",
+                                                     placeholder="e.g. SCS Global")
+                    if st.form_submit_button("Upload and Link", type="primary"):
+                        if up_file is None:
+                            st.error("Please choose a file.")
+                        else:
+                            import requests as _req
+                            try:
+                                files  = {"file": (up_file.name, up_file.getvalue(), "application/octet-stream")}
+                                data   = {
+                                    "document_role":      up_role,
+                                    "project_registry_id": up_proj,
+                                    "vintage_year":        up_vint,
+                                    "validation_body":     up_val,
+                                }
+                                resp = _req.post(
+                                    f"{API_BASE}/admin/packs/{pack_id}/upload-document",
+                                    files=files, data=data, timeout=60,
+                                )
+                                if resp.ok:
+                                    st.success(f"Document uploaded. Ingestion started in background.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Upload failed: {resp.text[:200]}")
+                            except Exception as exc:
+                                st.error(f"Upload error: {exc}")
+
+            # Link existing document by ID
+            with st.expander("Link an already-ingested document by ID"):
+                with st.form(f"link_doc_form_{pack_id}", clear_on_submit=True):
+                    lk_doc_id = st.number_input("Document ID", min_value=1, step=1,
+                                                 key=f"lk_doc_id_{pack_id}")
+                    lk_role   = st.selectbox("Document role", [
+                        "PDD", "MR", "METHODOLOGY_DOC", "TOOL_DOC", "VALIDATION_REPORT",
+                        "VERIFICATION_REPORT", "GUIDANCE_DOC", "TEMPLATE", "DEVIATION_REPORT", "DOE_FINDING",
+                    ], key=f"lk_role_{pack_id}")
+                    lk_proj   = st.text_input("Project registry ID (optional)", key=f"lk_proj_{pack_id}")
+                    if st.form_submit_button("Link Document"):
+                        result = _fetch(f"/admin/packs/{pack_id}/link-document", method="POST", json={
+                            "document_id":         int(lk_doc_id),
+                            "document_role":       lk_role,
+                            "project_registry_id": lk_proj or None,
+                        })
+                        if result:
+                            st.success("Document linked.")
+                            st.rerun()
+                        else:
+                            st.error("Link failed.")
+
+            if not docs:
+                st.info("No documents linked yet. Upload or link documents above.")
+            else:
+                # Group by role
+                role_order = [
+                    "METHODOLOGY_DOC", "TOOL_DOC", "GUIDANCE_DOC", "TEMPLATE",
+                    "PDD", "MR", "VALIDATION_REPORT", "VERIFICATION_REPORT",
+                    "DEVIATION_REPORT", "DOE_FINDING",
+                ]
+                docs_by_role = {}
+                for d in docs:
+                    r = d.get("document_role", "OTHER")
+                    docs_by_role.setdefault(r, []).append(d)
+
+                for role in role_order:
+                    role_docs = docs_by_role.get(role, [])
+                    if not role_docs:
+                        continue
+                    st.markdown(f"**{role.replace('_', ' ').title()} ({len(role_docs)})**")
+                    for d in role_docs:
+                        ing_status = d.get("doc_ingestion_status", "?")
+                        ing_color  = "#10b981" if ing_status == "ingested" else \
+                                     "#f59e0b" if ing_status == "pending" else "#ef4444"
+                        d1c, d2c = st.columns([4, 1])
+                        with d1c:
+                            st.markdown(
+                                f'<div data-testid="pack-doc-{d["id"]}" style="font-size:0.82rem;">'
+                                f'{d.get("filename","unnamed")}'
+                                + (f' <span style="color:#6b7280;">— {d.get("project_registry_id","")}'
+                                   + (f', {d.get("vintage_year","")}' if d.get("vintage_year") else "")
+                                   + "</span>" if d.get("project_registry_id") else "")
+                                + f' <span style="color:{ing_color};font-weight:600;">[{ing_status}]</span>'
+                                + f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                        with d2c:
+                            if st.button("Remove", key=f"rm_link_{d['id']}", use_container_width=True):
+                                _fetch(f"/admin/packs/{pack_id}/links/{d['id']}", method="DELETE")
+                                st.rerun()
+
+        # ── Findings ─────────────────────────────────────────────────────────
+        with det_tab4:
+            st.markdown(
+                "DOE findings (CARs, CLs, FARs) from validation and verification reports "
+                "in this pack. These are used to ground CarbonGPT's review module."
+            )
+            findings = _fetch(f"/admin/packs/{pack_id}/findings") or []
+
+            with st.expander("Add a finding manually"):
+                with st.form(f"add_finding_form_{pack_id}", clear_on_submit=True):
+                    f_cols = st.columns(3)
+                    f_type = f_cols[0].selectbox("Type", ["CAR", "CL", "FAR", "CR", "REVIEW_COMMENT"],
+                                                  key=f"f_type_{pack_id}")
+                    f_ref  = f_cols[1].text_input("Reference", placeholder="e.g. CAR-01",
+                                                   key=f"f_ref_{pack_id}")
+                    f_sec  = f_cols[2].text_input("Section reference", placeholder="e.g. Section 5.2",
+                                                   key=f"f_sec_{pack_id}")
+                    f_text = st.text_area("Finding text", height=80, key=f"f_text_{pack_id}")
+                    f_resp = st.text_area("Response text (optional)", height=60, key=f"f_resp_{pack_id}")
+                    f_bdy  = st.text_input("Validation body", key=f"f_bdy_{pack_id}",
+                                           placeholder="e.g. Bureau Veritas")
+                    f_sts  = st.selectbox("Resolution status", ["closed", "open", "pending_next_period"],
+                                          key=f"f_sts_{pack_id}")
+                    if st.form_submit_button("Add Finding", type="primary"):
+                        if not f_text.strip():
+                            st.error("Finding text is required.")
+                        else:
+                            result = _fetch(f"/admin/packs/{pack_id}/findings", method="POST", json={
+                                "finding_type":      f_type,
+                                "finding_text":      f_text.strip(),
+                                "finding_reference": f_ref.strip() or None,
+                                "section_reference": f_sec.strip() or None,
+                                "response_text":     f_resp.strip() or None,
+                                "validation_body":   f_bdy.strip() or None,
+                                "resolution_status": f_sts,
+                            })
+                            if result:
+                                st.success("Finding added.")
+                                st.rerun()
+                            else:
+                                st.error("Failed to add finding.")
+
+            if not findings:
+                st.info("No findings yet. Add manually or ingest from Validation/Verification Reports.")
+            else:
+                type_colors = {"CAR": "#ef4444", "CL": "#f59e0b", "FAR": "#8b5cf6",
+                               "CR": "#3b82f6", "REVIEW_COMMENT": "#6b7280"}
+                for f in findings:
+                    tc = type_colors.get(f.get("finding_type", ""), "#6b7280")
+                    fc1, fc2 = st.columns([5, 1])
+                    with fc1:
+                        ref_label = f.get("finding_reference") or f.get("finding_type", "")
+                        sec_label = f.get("section_reference", "")
+                        st.markdown(
+                            f'<div data-testid="finding-{f["id"]}" style="border-left:3px solid {tc};'
+                            f'padding:6px 10px;margin-bottom:6px;background:#fafafa;border-radius:0 6px 6px 0;">'
+                            f'<span style="font-weight:600;color:{tc};">{ref_label}</span>'
+                            + (f' <span style="color:#6b7280;font-size:0.78rem;">({sec_label})</span>' if sec_label else "")
+                            + f'<div style="font-size:0.82rem;margin-top:3px;">{(f.get("finding_text") or "")[:200]}'
+                            + ("..." if len(f.get("finding_text", "")) > 200 else "")
+                            + f'</div>'
+                            + (f'<div style="font-size:0.78rem;color:#6b7280;margin-top:2px;">Response: '
+                               + f.get("response_text","")[:150] + "</div>" if f.get("response_text") else "")
+                            + f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                    with fc2:
+                        if st.button("Delete", key=f"del_finding_{f['id']}", use_container_width=True):
+                            _fetch(f"/admin/packs/{pack_id}/findings/{f['id']}", method="DELETE")
+                            st.rerun()
 
 
 def _render_upload():
