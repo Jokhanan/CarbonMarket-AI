@@ -1,0 +1,298 @@
+We need to design the next critical module for CarbonGPT.
+
+The goal is NOT to scrape the entire carbon market or download every PDD.
+
+Instead we want to build a structured system to train CarbonGPT methodology-by-methodology.
+
+This module will be called:
+
+METHODODOLOGY PACK MANAGER
+
+This module will connect Carbon Intelligence and CarbonGPT.
+
+Carbon Intelligence provides the market data (projects, methodologies, registries).
+
+CarbonGPT provides the AI system for writing PDDs, MR reviews, parameter analysis, etc.
+
+The Methodology Pack Manager will allow administrators to gradually prepare and train CarbonGPT on specific methodologies.
+
+The objective is to build training “knowledge packs” for each methodology.
+
+--------------------------------
+
+PART 1 — DESIGN CONCEPT
+
+A Methodology Pack is a curated dataset for one methodology.
+
+Example:
+
+Methodology Pack: TPDDTEC
+
+Contains:
+
+• methodology document
+• tools and guidance documents
+• PDD examples
+• Monitoring Reports
+• Validation / Verification Reports
+• example parameters
+• common DOE findings
+• project metadata from Carbon Intelligence
+
+We DO NOT want to download every document from every project.
+
+Instead we want a selective curated dataset.
+
+Example training corpus:
+
+TPDDTEC
+• 30 PDDs
+• 10 Monitoring Reports
+• 10 Validation reports
+• methodology + tools
+
+VM0050
+• 30 PDDs
+• 10 Monitoring Reports
+• methodology documents
+
+--------------------------------
+
+PART 2 — CURRENT ARCHITECTURE
+
+The codebase already includes:
+
+carbon_projects
+project_sync.py
+methodology_library
+methodology_normalizer
+registry_normalizer
+admin panel
+document ingestion system
+AI modules (writer, reviewer, orchestrator)
+
+The Methodology Pack Manager must integrate with these systems.
+
+It must NOT break existing data pipelines.
+
+--------------------------------
+
+PART 3 — DATA MODEL
+
+Design the database schema for:
+
+methodology_packs
+
+Fields:
+
+pack_id
+methodology_code
+registry
+methodology_version
+training_status
+
+Possible training_status values:
+
+not_started
+collecting_documents
+ready_for_training
+trained
+needs_update
+
+Additional fields:
+
+pdd_count
+mr_count
+validation_count
+last_updated
+created_by_admin
+
+--------------------------------
+
+Also create tables for:
+
+methodology_pack_documents
+
+Fields:
+
+document_id
+pack_id
+document_type
+
+Possible document types:
+
+PDD
+MR
+VALIDATION_REPORT
+VERIFICATION_REPORT
+METHODOLOGY_DOC
+TOOL_DOC
+GUIDANCE_DOC
+
+Also store:
+
+project_id (optional link to carbon_projects)
+source_url
+local_storage_path
+parsed_text
+ingestion_status
+
+--------------------------------
+
+PART 4 — ADMIN WORKFLOW
+
+Design the admin interface workflow.
+
+Admin should be able to:
+
+1) Create a methodology pack
+
+Example:
+
+Add methodology pack
+methodology_code = TPDDTEC
+registry = Gold Standard
+
+Status = not_started
+
+--------------------------------
+
+2) Sync candidate projects
+
+Using Carbon Intelligence data:
+
+Find projects where
+
+methodology_code = TPDDTEC
+
+Return list of candidate projects.
+
+--------------------------------
+
+3) Select projects for training
+
+Admin selects specific projects.
+
+Example:
+
+TPDDTEC training candidates:
+
+project 1
+project 2
+project 3
+project 4
+
+--------------------------------
+
+4) Download documents
+
+For selected projects:
+
+download PDD
+download MR
+download validation report
+
+This should be selective.
+
+NOT bulk downloading all projects.
+
+--------------------------------
+
+5) Build the methodology pack
+
+When enough documents exist:
+
+Status changes to
+
+ready_for_training
+
+--------------------------------
+
+6) Index documents for AI
+
+Run ingestion pipeline:
+
+extract text
+chunk documents
+create embeddings
+store in vector DB
+
+--------------------------------
+
+7) Mark methodology as trained
+
+Status becomes
+
+trained
+
+Now CarbonGPT can use this pack for:
+
+PDD writing
+MR review
+parameter suggestions
+DOE findings analysis
+
+--------------------------------
+
+PART 5 — VERSION MANAGEMENT
+
+Methodologies evolve.
+
+Example:
+
+TPDDTEC v4
+TPDDTEC v5
+
+The system must track:
+
+methodology_version
+valid_from
+valid_to
+
+If a new methodology version appears:
+
+status becomes:
+
+needs_update
+
+Admin must rebuild the pack.
+
+--------------------------------
+
+PART 6 — AI INTEGRATION
+
+When CarbonGPT writes or reviews a document:
+
+If methodology = TPDDTEC
+
+The system loads:
+
+TPDDTEC methodology pack
+
+This pack provides context:
+
+• methodology rules
+• example PDD sections
+• example monitoring reports
+• historical DOE findings
+• parameter ranges
+
+This prevents hallucination and improves accuracy.
+
+--------------------------------
+
+PART 7 — IMPLEMENTATION PLAN
+
+Propose:
+
+database schema
+admin UI pages
+API endpoints
+document ingestion pipeline
+vector indexing integration
+
+Do NOT write code yet.
+
+Produce a detailed architecture proposal for implementing the Methodology Pack Manager within the existing CarbonGPT platform.
+
+Focus on stability, modularity, and gradual expansion to new methodologies.
