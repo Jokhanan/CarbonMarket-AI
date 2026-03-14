@@ -1,0 +1,197 @@
+We want to improve the UI/UX of the application significantly so that it feels more premium, fluid, and productized.
+
+IMPORTANT:
+This is a UI/UX hardening and refinement task.
+Do NOT rewrite the app.
+Do NOT rebuild the architecture.
+Do NOT break the current workflows.
+Do NOT change the calculation engine, parameter engine, or backend APIs.
+Do NOT remove existing functionality unless it is clearly redundant and safely replaced.
+
+The objective is:
+make the app feel like a premium SaaS product
+while preserving the current working logic and app structure.
+
+--------------------------------------------------
+CORE PROBLEM
+--------------------------------------------------
+
+Right now the app feels functional, but not yet premium.
+
+Main issues:
+- the AI is currently exposed too much like a button or chatbot, not like a true copilot
+- the visual hierarchy is weak
+- too many actions compete visually
+- the workspace does not yet feel smooth, elegant, or high-end
+- the overall product feels more like an internal tool / prototype than a polished carbon intelligence platform
+
+We want to improve:
+- information hierarchy
+- layout clarity
+- perceived product quality
+- copilot accessibility
+- consistency of spacing, typography, buttons, cards, sections
+- mobile responsiveness
+
+But:
+we do NOT want to destroy the current app.
+
+--------------------------------------------------
+DESIGN PRINCIPLES
+--------------------------------------------------
+
+Please follow these strict design principles:
+
+1. INCREMENTAL ONLY
+Improve the current interface progressively.
+No full redesign from scratch.
+
+2. PRESERVE WORKING FLOWS
+Keep all current major flows working:
+- workspace
+- new project
+- setup
+- documents
+- parameters
+- ER simulator
+- write/draft
+- review
+- audit
+- monitoring
+- export
+
+3. COPILOT, NOT CHATBOT
+The AI should feel like a copilot available throughout the workspace,
+not just a bottom button.
+But this must be introduced without breaking existing screens.
+
+4. PREMIUM SaaS FEEL
+Target the feel of:
+- Notion
+- Linear
+- Vercel
+- Stripe Dashboard
+- Cursor
+NOT a generic bootstrap/internal admin UI.
+
+5. NO BACKEND BREAKAGE
+Do not change API contracts unless absolutely necessary.
+Prefer UI-layer changes first.
+
+--------------------------------------------------
+TASK
+--------------------------------------------------
+
+Before coding, analyze the current UI structure and propose a safe UI modernization plan.
+
+Then implement only the highest-value, lowest-risk improvements first.
+
+--------------------------------------------------
+PHASE 1 — UI/UX AUDIT
+--------------------------------------------------
+
+Please review the current app and identify:
+
+1. What makes the UI feel non-premium today
+2. Which areas have weak visual hierarchy
+3. Which screens are overcrowded
+4. Which buttons/actions compete too much
+5. Where the copilot should be repositioned or redesigned
+6. Which improvements can be made safely without touching backend logic
+
+--------------------------------------------------
+PHASE 2 — SAFE MODERNIZATION PLAN
+--------------------------------------------------
+
+Please propose a safe incremental plan covering:
+
+A. Workspace home
+- improve visual hierarchy
+- improve empty state
+- reduce visual clutter
+- better primary / secondary action distinction
+
+B. Copilot access
+- propose a better placement than a simple bottom button
+- ideally a floating action button and/or side panel pattern
+- must remain accessible throughout the app
+- do NOT turn this into a new architecture project
+- keep it lightweight and compatible with the current app
+
+C. Navigation / tabs
+- improve readability and hierarchy of tabs
+- make the active section much clearer
+- reduce the “internal tool” feeling
+- preserve all existing sections and logic
+
+D. Forms and cards
+- improve spacing, typography, card hierarchy, labels, helper text
+- reduce the feeling of dense forms
+- improve mobile readability
+
+E. Visual system
+- unify button styles
+- improve section headers
+- improve stat cards
+- improve color usage
+- improve whitespace and padding
+- modernize the product feel without over-designing it
+
+--------------------------------------------------
+PHASE 3 — IMPLEMENTATION CONSTRAINTS
+--------------------------------------------------
+
+Implementation must follow these constraints:
+
+1. No full rewrite
+2. No removal of existing tabs or workflows unless purely visual
+3. No breaking of forms, session state, or routing
+4. No touching the calculation engine or methodology logic
+5. No risky refactors across unrelated files
+6. Prefer reusable UI helper components if possible
+7. Keep the mobile view usable
+8. Test after each group of changes
+
+--------------------------------------------------
+PHASE 4 — PRIORITY ORDER
+--------------------------------------------------
+
+Please prioritize improvements in this order:
+
+1. Workspace / homepage polish
+2. Better action hierarchy (Import / New Project / AI)
+3. Copilot repositioning / accessibility improvement
+4. Form and card styling improvements
+5. Tab/navigation polish
+6. Fine visual polish
+
+Do NOT start with deep structural changes.
+
+--------------------------------------------------
+EXPECTED DELIVERABLE
+--------------------------------------------------
+
+Please respond first with:
+
+1. UI/UX audit
+2. Safe incremental implementation plan
+3. Exact files that would change
+4. What will NOT be changed
+5. Proposed first wave of implementation
+
+Only after that start implementing.
+
+When implementing:
+- keep changes grouped
+- keep the app functional throughout
+- provide before/after summaries
+- explicitly confirm that no workflows were broken
+
+--------------------------------------------------
+VERY IMPORTANT
+--------------------------------------------------
+
+Do not redesign the app in a way that forces a new architecture.
+Do not replace everything with new abstractions.
+Do not build a “design concept”.
+We need real, safe, incremental improvements on the existing working app.

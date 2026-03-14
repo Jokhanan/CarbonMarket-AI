@@ -1067,6 +1067,206 @@ st.markdown("""
     ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-full); }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
+    /* ── Workspace home hero ── */
+    .ws-hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 0.5rem 0 1.6rem 0;
+        gap: 1rem;
+    }
+    .ws-hero-text h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        color: var(--text-primary);
+        margin: 0 0 0.3rem 0;
+        line-height: 1.2;
+    }
+    .ws-hero-text p {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin: 0;
+        line-height: 1.5;
+    }
+    .ws-hero-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-shrink: 0;
+        padding-top: 6px;
+    }
+    .ws-hero-btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.5rem 0.9rem;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        font-size: 0.83rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: var(--surface-raised);
+        cursor: pointer;
+        text-decoration: none;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+    }
+    .ws-hero-btn-secondary:hover {
+        border-color: var(--border-strong);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ── Empty state ── */
+    .empty-state-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4rem 2rem;
+        border: 1.5px dashed var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-raised);
+        margin: 2rem 0;
+    }
+    .empty-state-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--radius-md);
+        background: var(--brand-primary-50);
+        border: 1px solid var(--brand-primary-100);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.25rem;
+        color: var(--brand-primary);
+    }
+    .empty-state-card h3 {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem 0;
+    }
+    .empty-state-card p {
+        font-size: 0.88rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+        margin: 0 0 1.6rem 0;
+        max-width: 380px;
+    }
+
+    /* ── Sidebar copilot CTA ── */
+    .sidebar-copilot-cta {
+        margin: 0.5rem 0 0.75rem 0;
+        padding: 0.65rem 0.85rem;
+        background: rgba(13,148,136,0.12);
+        border: 1px solid rgba(13,148,136,0.22);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+    .sidebar-copilot-cta:hover {
+        background: rgba(13,148,136,0.2);
+        border-color: rgba(13,148,136,0.38);
+    }
+    .sidebar-copilot-cta-label {
+        font-size: 0.83rem;
+        font-weight: 600;
+        color: #5eead4;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .sidebar-copilot-cta-sub {
+        font-size: 0.7rem;
+        color: #64748b;
+        margin-top: 2px;
+        padding-left: 22px;
+    }
+    .sidebar-copilot-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 2px rgba(16,185,129,0.25);
+    }
+
+    /* ── Project workspace header ── */
+    .ws-header-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 1.4rem 1.6rem;
+        margin-bottom: 1rem;
+        box-shadow: var(--shadow-xs);
+    }
+    .ws-header-badges {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 0.6rem;
+        flex-wrap: wrap;
+    }
+    .ws-header-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem 0;
+        line-height: 1.25;
+    }
+    .ws-header-meta {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        flex-wrap: wrap;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+    }
+    .ws-meta-sep {
+        margin: 0 8px;
+        color: var(--border-strong);
+    }
+
+    /* ── Quick action row ── */
+    .qa-copilot-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--text-tertiary);
+        padding-top: 0.5rem;
+    }
+    .qa-copilot-hint-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        flex-shrink: 0;
+    }
+
+    /* ── Back breadcrumb ── */
+    .ws-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        color: var(--text-tertiary);
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    /* ── Project card hover elevation ── */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        transition: box-shadow var(--transition-base), transform var(--transition-base);
+    }
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+
     /* ── Chat Widget ── */
     .chat-container {
         border: 1px solid var(--border-default, #e5e7eb);
@@ -1159,20 +1359,36 @@ SVG_ICONS = {
 }
 
 with st.sidebar:
-    st.markdown(f"""
-    <span style="display:block;padding:1rem 0;">
-        <span style="display:flex;align-items:center;gap:8px;">
-            <span style="background:var(--brand-gradient);color:white;width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;">C</span>
-            <span style="font-size:1.2rem;font-weight:700;color:var(--text-primary);">CarbonGPT</span>
-        </span>
-        <span style="display:block;font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">AI Carbon Intelligence</span>
-    </span>
+    st.markdown("""
+    <div class="brand-header">
+        <div class="brand-logo-row">
+            <div class="brand-icon">C</div>
+            <div>
+                <div style="font-size:1.15rem;font-weight:700;color:#f1f5f9;letter-spacing:-0.02em;line-height:1.1;">CarbonGPT</div>
+            </div>
+        </div>
+        <div class="brand-tagline">AI Carbon Intelligence</div>
+    </div>
     """, unsafe_allow_html=True)
 
-    st.caption("Navigation")
+    st.markdown('<div class="sidebar-section-label">Navigation</div>', unsafe_allow_html=True)
     page = st.radio("Navigation", PAGES, key="nav_page", label_visibility="collapsed")
 
-    st.caption("CarbonGPT Platform v1.0")
+    st.markdown('<div style="flex:1;min-height:2rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<hr style="border-color:rgba(255,255,255,0.06);margin:0.5rem 0;"/>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="sidebar-copilot-cta">
+        <div class="sidebar-copilot-cta-label">
+            <span class="sidebar-copilot-dot"></span>
+            AI Copilot
+        </div>
+        <div class="sidebar-copilot-cta-sub">Ask anything about your project</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Open Copilot", key="sidebar_copilot_btn", use_container_width=True):
+        st.session_state.chat_open = True
+        st.rerun()
+    st.markdown('<div class="sidebar-footer"><div class="sidebar-footer-version">CarbonGPT v1.0</div></div>', unsafe_allow_html=True)
 
 
 def _render_ai_result(ai_result):
@@ -2774,13 +2990,19 @@ STATUS_COLORS = {
 
 
 def _render_home():
-    st.markdown("## Workspace")
-    st.caption("Manage your carbon projects, track progress, and explore market intelligence")
-
     all_projects = _fetch("/projects") or []
     active_count = sum(1 for p in all_projects if p.get("status") in ("in_progress", "under_review"))
     draft_count = sum(1 for p in all_projects if p.get("status") == "draft")
     total_docs = sum(p.get("doc_count", 0) for p in all_projects)
+
+    st.markdown("""
+    <div class="ws-hero">
+        <div class="ws-hero-text">
+            <h1>Workspace</h1>
+            <p>Manage carbon projects, track progress, and explore market intelligence</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     wc1, wc2, wc3, wc4 = st.columns(4)
     with wc1:
@@ -2792,6 +3014,7 @@ def _render_home():
     with wc4:
         st.metric(label="Documents", value=total_docs, help="Across all projects")
 
+    st.markdown("<div style='margin-top:0.25rem;'></div>", unsafe_allow_html=True)
     home_tabs = st.tabs(["Projects", "Carbon Intelligence"])
     with home_tabs[0]:
         _render_project_list()
@@ -2803,27 +3026,55 @@ def _render_project_list():
 
     projects = _fetch("/projects") or []
 
-    col_left, col_mid, col_right = st.columns([3, 1, 1])
-    with col_left:
+    list_col_left, list_col_actions = st.columns([3, 1.6])
+    with list_col_left:
         if projects:
-            st.markdown(f'<span class="stat-pill">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>', unsafe_allow_html=True)
-    with col_mid:
-        if st.button("Import Document", key="import_doc_btn", use_container_width=True):
-            st.session_state["show_new_project"] = True
-            st.session_state["wizard_path"] = "import"
-            st.session_state.pop("new_proj_step", None)
-    with col_right:
-        if st.button("New Project", key="new_proj_btn", type="primary", use_container_width=True):
-            st.session_state["show_new_project"] = True
-            st.session_state.pop("wizard_path", None)
-            st.session_state.pop("new_proj_step", None)
+            st.markdown(
+                f'<div style="padding-top:0.55rem;">'
+                f'<span class="stat-pill">{len(projects)} project{"s" if len(projects) != 1 else ""}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    with list_col_actions:
+        btn_a, btn_b = st.columns([1, 1.15])
+        with btn_a:
+            if st.button("Import", key="import_doc_btn", use_container_width=True):
+                st.session_state["show_new_project"] = True
+                st.session_state["wizard_path"] = "import"
+                st.session_state.pop("new_proj_step", None)
+        with btn_b:
+            if st.button("New Project", key="new_proj_btn", type="primary", use_container_width=True):
+                st.session_state["show_new_project"] = True
+                st.session_state.pop("wizard_path", None)
+                st.session_state.pop("new_proj_step", None)
 
     if st.session_state.get("show_new_project"):
         _render_new_project_wizard(projects)
         return
 
     if not projects:
-        st.info("No projects yet. Create your first carbon project to start drafting PDDs, Monitoring Reports, and other documents with AI assistance.")
+        st.markdown("""
+        <div class="empty-state-card">
+            <div class="empty-state-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="9" x2="15" y1="13" y2="13"/>
+                    <line x1="12" x2="12" y1="10" y2="16"/>
+                </svg>
+            </div>
+            <h3>No projects yet</h3>
+            <p>Create your first carbon project to start drafting PDDs, Monitoring Reports,
+               and other documents with AI assistance.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        col_e1, col_e2, col_e3 = st.columns([1, 1.2, 1])
+        with col_e2:
+            if st.button("Create your first project", key="empty_new_proj_btn", type="primary", use_container_width=True):
+                st.session_state["show_new_project"] = True
+                st.session_state.pop("wizard_path", None)
+                st.session_state.pop("new_proj_step", None)
+                st.rerun()
         return
 
     proj_by_parent = {}
@@ -4498,9 +4749,11 @@ def _render_project_workspace(project_id):
         st.rerun()
         return
 
-    if st.button("Back to Projects", key="back_to_projects"):
-        st.session_state.selected_project_id = None
-        st.rerun()
+    back_col, _ = st.columns([1.5, 6])
+    with back_col:
+        if st.button("← Back to Projects", key="back_to_projects"):
+            st.session_state.selected_project_id = None
+            st.rerun()
 
     status = project.get("status", "draft")
     status_label = STATUS_LABELS.get(status, status)
@@ -4518,7 +4771,7 @@ def _render_project_workspace(project_id):
         meta_items.append(f'<span class="workspace-meta-item">{SVG_ICONS.get("methodology", "")} {project["methodology"]}</span>')
     if project.get("country"):
         meta_items.append(f'<span class="workspace-meta-item">{SVG_ICONS.get("globe", "")} {project["country"]}</span>')
-    meta_html = '<span class="workspace-meta-dot"></span>'.join(meta_items)
+    meta_html = '<span class="ws-meta-sep">&bull;</span>'.join(meta_items)
 
     parent_html = ""
     if project.get("parent_project_id"):
@@ -4526,33 +4779,30 @@ def _render_project_workspace(project_id):
         if parent:
             parent_type_info = PROJECT_TYPE_INFO.get(parent.get("project_type", ""), {})
             parent_short = parent_type_info.get("short", "Project")
-            parent_html = f'<span style="display:block;margin-top:8px;"><span class="stat-pill">Linked to {parent_short}: {parent["name"]}</span></span>'
+            parent_html = f'<div style="margin-top:8px;"><span class="stat-pill">Linked to {parent_short}: {parent["name"]}</span></div>'
 
     desc_html = ""
     if project.get("description"):
-        desc_html = f'<span style="display:block;margin-top:10px;font-size:0.85rem;color:var(--text-secondary);line-height:1.5;">{project["description"]}</span>'
+        desc_html = f'<div style="margin-top:10px;font-size:0.85rem;color:var(--text-secondary);line-height:1.55;">{project["description"]}</div>'
 
-    with st.container(border=True):
-        st.markdown(
-            f'<span class="project-type-badge {badge_class}">{type_info["short"]}</span> '
-            f'<span class="workspace-header-badge {std_badge_class}">{std_display}</span> '
-            f'<span class="status-badge {status_class}">{status_label}</span>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(f"## {project['name']}")
-        st.markdown(
-            f'<span class="workspace-header-meta">{meta_html}</span>',
-            unsafe_allow_html=True,
-        )
-        if parent_html:
-            st.markdown(parent_html, unsafe_allow_html=True)
-        if desc_html:
-            st.markdown(desc_html, unsafe_allow_html=True)
+    st.markdown(
+        f'''<div class="ws-header-card">
+            <div class="ws-header-badges">
+                <span class="project-type-badge {badge_class}">{type_info["short"]}</span>
+                <span class="workspace-header-badge {std_badge_class}">{std_display}</span>
+                <span class="status-badge {status_class}">{status_label}</span>
+            </div>
+            <div class="ws-header-title">{project["name"]}</div>
+            <div class="ws-header-meta">{meta_html}</div>
+            {parent_html}{desc_html}
+        </div>''',
+        unsafe_allow_html=True,
+    )
 
     def _nav_to_tab(pid, idx):
         st.session_state[f"ws_tab_{pid}"] = idx
 
-    qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
+    qa_col1, qa_col2, qa_col3, qa_divider, qa_col4 = st.columns([1, 1, 1, 0.05, 1])
     with qa_col1:
         st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True,
                   on_click=_nav_to_tab, args=(project_id, 4))
@@ -4563,7 +4813,7 @@ def _render_project_workspace(project_id):
         st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True,
                   on_click=_nav_to_tab, args=(project_id, 3))
     with qa_col4:
-        if st.button("AI Assistant", key=f"qa_chat_{project_id}", use_container_width=True):
+        if st.button("AI Copilot", key=f"qa_chat_{project_id}", type="primary", use_container_width=True):
             st.session_state.chat_open = True
             st.rerun()
 
@@ -8874,23 +9124,32 @@ def _render_chat_widget():
         if proj:
             project_name = proj.get("name", "")
 
-    col_spacer, col_chat_toggle = st.columns([5, 1])
-    with col_chat_toggle:
-        toggle_label = "Close Copilot" if st.session_state.chat_open else "AI Copilot"
-        if st.button(toggle_label, key="chat_toggle_btn", type="primary" if not st.session_state.chat_open else "secondary", use_container_width=True):
-            st.session_state.chat_open = not st.session_state.chat_open
-            st.rerun()
-
     if not st.session_state.chat_open:
+        cta_cols = st.columns([5, 1.2])
+        with cta_cols[1]:
+            if st.button("AI Copilot", key="chat_toggle_btn", type="primary", use_container_width=True):
+                st.session_state.chat_open = True
+                st.rerun()
         return
 
-    context_badge = ""
-    if project_name:
-        context_badge = f'<span class="chat-context-badge">Project: {project_name}</span>'
+    close_cols = st.columns([5, 1.2])
+    with close_cols[0]:
+        context_badge = ""
+        if project_name:
+            context_badge = f'<span class="chat-context-badge">Project: {project_name}</span>'
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:8px;padding-top:6px;">'
+            f'<div style="background:var(--brand-primary);color:white;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">AI</div>'
+            f'<span style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">CarbonGPT Copilot</span>'
+            f'{context_badge}</div>',
+            unsafe_allow_html=True,
+        )
+    with close_cols[1]:
+        if st.button("Close", key="chat_toggle_btn", use_container_width=True):
+            st.session_state.chat_open = False
+            st.rerun()
 
     st.markdown("---")
-
-    st.markdown(f'<span style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="background:var(--brand-primary);color:white;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">AI</span><span style="font-weight:600;font-size:0.9rem;">CarbonGPT Copilot</span>{context_badge}</span>', unsafe_allow_html=True)
 
     chat_container = st.container(height=400)
     with chat_container:
