@@ -719,6 +719,56 @@ ALTER TABLE carbon_projects
 
 CREATE INDEX IF NOT EXISTS idx_carbon_projects_ref_registry
     ON carbon_projects(ref_registry_id);
+
+-- ============================================================
+-- Shared-core Wave 2: canonical methodology reference table.
+-- Existing methodology_library, methodology_parsed, and
+-- project_methodology_codes tables are kept unchanged.
+-- ref_methodologies is the new authoritative reference.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ref_methodologies (
+    methodology_code   VARCHAR(50)  PRIMARY KEY,
+    methodology_name   VARCHAR(400),
+    methodology_family VARCHAR(100),
+    ref_registry_id    VARCHAR(30)  REFERENCES ref_registries(registry_id),
+    sector             VARCHAR(100),
+    technology         VARCHAR(100),
+    status             VARCHAR(20)  DEFAULT 'active',
+    aliases            TEXT[],
+    version            VARCHAR(30),
+    notes              TEXT,
+    created_at         TIMESTAMP    DEFAULT NOW(),
+    updated_at         TIMESTAMP    DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ref_methodologies_family
+    ON ref_methodologies(methodology_family);
+CREATE INDEX IF NOT EXISTS idx_ref_methodologies_registry
+    ON ref_methodologies(ref_registry_id);
+CREATE INDEX IF NOT EXISTS idx_ref_methodologies_sector
+    ON ref_methodologies(sector);
+
+-- ============================================================
+-- Shared-core Wave 2: extend countries table with aliases.
+-- Allows both surfaces to query "find country by any alias"
+-- without maintaining separate Python dicts.
+-- ============================================================
+
+ALTER TABLE countries ADD COLUMN IF NOT EXISTS aliases TEXT[];
+
+-- ============================================================
+-- Shared-core Wave 2: add country_iso FK to user_projects
+-- so CarbonGPT project setup uses the same canonical country
+-- layer as Carbon Intelligence.
+-- ============================================================
+
+ALTER TABLE user_projects
+    ADD COLUMN IF NOT EXISTS country_iso CHAR(3)
+    REFERENCES countries(country_iso);
+
+CREATE INDEX IF NOT EXISTS idx_user_projects_country_iso
+    ON user_projects(country_iso);
 """
 
 

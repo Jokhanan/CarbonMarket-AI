@@ -135,6 +135,50 @@ COUNTRIES_SEED: list[tuple[str, str, str, str]] = [
     ("ZAF", "South Africa",                     "Africa",        "Sub-Saharan Africa"),
     ("ZMB", "Zambia",                           "Africa",        "Sub-Saharan Africa"),
     ("ZWE", "Zimbabwe",                         "Africa",        "Sub-Saharan Africa"),
+    # ── Wave 2 additions: countries present in registry data but missing from seed ──
+    ("ABW", "Aruba",                            "Americas",      "Caribbean"),
+    ("BEL", "Belgium",                          "Europe",        "Western Europe"),
+    ("BHR", "Bahrain",                          "Asia",          "Western Asia"),
+    ("BHS", "Bahamas",                          "Americas",      "Caribbean"),
+    ("CYP", "Cyprus",                           "Europe",        "Southern Europe"),
+    ("DEU", "Germany",                          "Europe",        "Western Europe"),
+    ("DJI", "Djibouti",                         "Africa",        "Eastern Africa"),
+    ("DNK", "Denmark",                          "Europe",        "Northern Europe"),
+    ("ESP", "Spain",                            "Europe",        "Southern Europe"),
+    ("EST", "Estonia",                          "Europe",        "Northern Europe"),
+    ("FRA", "France",                           "Europe",        "Western Europe"),
+    ("GAB", "Gabon",                            "Africa",        "Middle Africa"),
+    ("GBR", "United Kingdom",                   "Europe",        "Northern Europe"),
+    ("GEO", "Georgia",                          "Asia",          "Western Asia"),
+    ("GRC", "Greece",                           "Europe",        "Southern Europe"),
+    ("GUM", "Guam",                             "Oceania",       "Micronesia"),
+    ("HKG", "Hong Kong",                        "Asia",          "Eastern Asia"),
+    ("HRV", "Croatia",                          "Europe",        "Southern Europe"),
+    ("IRL", "Ireland",                          "Europe",        "Northern Europe"),
+    ("ISL", "Iceland",                          "Europe",        "Northern Europe"),
+    ("ISR", "Israel",                           "Asia",          "Western Asia"),
+    ("ITA", "Italy",                            "Europe",        "Southern Europe"),
+    ("JPN", "Japan",                            "Asia",          "Eastern Asia"),
+    ("KAZ", "Kazakhstan",                       "Asia",          "Central Asia"),
+    ("KOR", "South Korea",                      "Asia",          "Eastern Asia"),
+    ("LTU", "Lithuania",                        "Europe",        "Northern Europe"),
+    ("LVA", "Latvia",                           "Europe",        "Northern Europe"),
+    ("MKD", "North Macedonia",                  "Europe",        "Southern Europe"),
+    ("MNG", "Mongolia",                         "Asia",          "Eastern Asia"),
+    ("MUS", "Mauritius",                        "Africa",        "Eastern Africa"),
+    ("MYT", "Mayotte",                          "Africa",        "Eastern Africa"),
+    ("NCL", "New Caledonia",                    "Oceania",       "Melanesia"),
+    ("NLD", "Netherlands",                      "Europe",        "Western Europe"),
+    ("OMN", "Oman",                             "Asia",          "Western Asia"),
+    ("POL", "Poland",                           "Europe",        "Eastern Europe"),
+    ("PRT", "Portugal",                         "Europe",        "Southern Europe"),
+    ("SAU", "Saudi Arabia",                     "Asia",          "Western Asia"),
+    ("SGP", "Singapore",                        "Asia",          "South-eastern Asia"),
+    ("SRB", "Serbia",                           "Europe",        "Southern Europe"),
+    ("SWE", "Sweden",                           "Europe",        "Northern Europe"),
+    ("SYR", "Syria",                            "Asia",          "Western Asia"),
+    ("TWN", "Taiwan",                           "Asia",          "Eastern Asia"),
+    ("XKX", "Kosovo",                           "Europe",        "Southern Europe"),
 ]
 
 # Build canonical_name → iso3 lookup
@@ -231,6 +275,26 @@ RAW_TO_ISO: dict[str, str] = {
     "Kyrgyz Republic":                          "KGZ",
     "Macedonia":                                "MKD",
     "North Macedonia":                          "MKD",
+    # Wave 2 additions — variants seen in live registry data
+    "Korea, Republic of":                       "KOR",
+    "Republic of Korea":                        "KOR",
+    "South Korea":                              "KOR",
+    "DPRK":                                     "PRK",
+    "North Korea":                              "PRK",
+    "Kosovo, Republic of":                      "XKX",
+    "Republic of Kosovo":                       "XKX",
+    "North Macedonia, Republic of":             "MKD",
+    "Republic of North Macedonia":              "MKD",
+    "Hong Kong SAR":                            "HKG",
+    "Hong Kong":                                "HKG",
+    "Bahrain":                                  "BHR",
+    "Kingdom of Bahrain":                       "BHR",
+    "Saudi Arabia":                             "SAU",
+    "Kingdom of Saudi Arabia":                  "SAU",
+    "Gabon":                                    "GAB",
+    "Bahamas":                                  "BHS",
+    "The Bahamas":                              "BHS",
+    "Aruba":                                    "ABW",
 }
 
 # Normalise all keys to lowercase for lookup
@@ -343,3 +407,120 @@ def run_country_normalization_pass() -> dict:
         total, resolved, unresolved, errors,
     )
     return {"total": total, "resolved": resolved, "unresolved": unresolved, "errors": errors}
+
+
+def seed_countries_aliases() -> int:
+    """
+    Populate the `aliases` column on the countries table from RAW_TO_ISO.
+
+    Builds a reverse index: iso3 → [list of raw strings that map to it].
+    Safe to call repeatedly — uses array_remove + array_append to deduplicate.
+    Returns the number of countries updated.
+    """
+    from carbongpt.repository.db import get_cursor
+
+    # Build iso3 → [aliases] from the raw (pre-lowercase) RAW_TO_ISO
+    iso_to_aliases: dict[str, list[str]] = {}
+    # Use the original (pre-lowercase) RAW_TO_ISO for readable aliases
+    for raw, iso in [
+        ("Democratic Republic of Congo",       "COD"),
+        ("Democratic Republic of the Congo",   "COD"),
+        ("Congo, DR",                          "COD"), ("DR Congo", "COD"), ("DRC", "COD"),
+        ("Republic of the Congo",              "COG"), ("Congo", "COG"),
+        ("Tanzania, United Republic of",       "TZA"), ("United Republic of Tanzania", "TZA"),
+        ("Viet Nam", "VNM"), ("Viet nam", "VNM"), ("Vietnam", "VNM"),
+        ("Bolivia (Plurinational State of)",   "BOL"), ("Bolivia", "BOL"),
+        ("Venezuela (Bolivarian Republic of)", "VEN"), ("Venezuela", "VEN"),
+        ("Korea, Republic of",                 "KOR"), ("Republic of Korea", "KOR"), ("South Korea", "KOR"),
+        ("Iran (Islamic Republic of)",         "IRN"), ("Iran", "IRN"),
+        ("Lao People's Democratic Republic",   "LAO"), ("Lao PDR", "LAO"), ("Laos", "LAO"),
+        ("Moldova, Republic of",               "MDA"), ("Republic of Moldova", "MDA"), ("Moldova", "MDA"),
+        ("Syrian Arab Republic",               "SYR"), ("Syria", "SYR"),
+        ("Libya",                              "LBY"), ("Libyan Arab Jamahiriya", "LBY"),
+        ("Burma",                              "MMR"), ("Myanmar", "MMR"),
+        ("Cote d'Ivoire",                      "CIV"), ("Ivory Coast", "CIV"),
+        ("Swaziland",                          "SWZ"), ("Eswatini", "SWZ"),
+        ("Gambia, The",                        "GMB"), ("The Gambia", "GMB"),
+        ("Cabo Verde",                         "CPV"), ("Cape Verde", "CPV"),
+        ("East Timor",                         "TLS"), ("Timor-Leste", "TLS"),
+        ("Sao Tome and Principe",              "STP"), ("São Tomé and Príncipe", "STP"),
+        ("Russia",                             "RUS"), ("Russian Federation", "RUS"),
+        ("Turkey",                             "TUR"), ("Turkiye", "TUR"),
+        ("United States of America",           "USA"), ("United States", "USA"), ("USA", "USA"),
+        ("UK",                                 "GBR"), ("United Kingdom",     "GBR"),
+        ("UAE",                                "ARE"),
+        ("Kyrgyz Republic",                    "KGZ"),
+        ("Macedonia",                          "MKD"), ("North Macedonia", "MKD"),
+        ("Kosovo, Republic of",                "XKX"), ("Republic of Kosovo", "XKX"),
+        ("North Macedonia, Republic of",       "MKD"), ("Republic of North Macedonia", "MKD"),
+        ("Hong Kong SAR",                      "HKG"), ("Hong Kong", "HKG"),
+        ("Kingdom of Bahrain",                 "BHR"), ("Bahrain", "BHR"),
+        ("Kingdom of Saudi Arabia",            "SAU"), ("Saudi Arabia", "SAU"),
+        ("Gabon",                              "GAB"),
+        ("The Bahamas",                        "BHS"), ("Bahamas", "BHS"),
+        ("Aruba",                              "ABW"),
+    ]:
+        iso_to_aliases.setdefault(iso, []).append(raw)
+
+    updated = 0
+    try:
+        with get_cursor() as cur:
+            for iso3, aliases in iso_to_aliases.items():
+                cur.execute(
+                    "UPDATE countries SET aliases = %s WHERE country_iso = %s",
+                    (aliases, iso3),
+                )
+                updated += 1
+    except Exception as e:
+        logger.error("seed_countries_aliases failed: %s", e)
+        return 0
+
+    logger.info("seed_countries_aliases: updated %d countries with aliases", updated)
+    return updated
+
+
+def run_user_project_country_normalization_pass() -> dict:
+    """
+    Backfill user_projects.country_iso for rows where it is NULL but country is set.
+    Safe to call repeatedly — only touches NULL rows.
+    Returns summary counts.
+    """
+    from carbongpt.repository.db import get_cursor
+
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT id, country FROM user_projects "
+                "WHERE country_iso IS NULL AND country IS NOT NULL"
+            )
+            rows = cur.fetchall()
+    except Exception as e:
+        logger.error("run_user_project_country_normalization_pass fetch failed: %s", e)
+        return {"total": 0, "resolved": 0, "unresolved": 0, "errors": 1}
+
+    resolved = 0
+    unresolved_vals: list[str] = []
+
+    for row in rows:
+        iso = resolve_country_iso(row["country"])
+        if iso:
+            try:
+                with get_cursor() as cur:
+                    cur.execute(
+                        "UPDATE user_projects SET country_iso = %s WHERE id = %s",
+                        (iso, row["id"]),
+                    )
+                resolved += 1
+            except Exception as e:
+                logger.warning("user_projects country update failed id=%s: %s", row["id"], e)
+        else:
+            unresolved_vals.append(row["country"])
+
+    result = {
+        "total":            len(rows),
+        "resolved":         resolved,
+        "unresolved":       len(unresolved_vals),
+        "unresolved_values": list(set(unresolved_vals)),
+    }
+    logger.info("user_projects country normalization: %s", result)
+    return result

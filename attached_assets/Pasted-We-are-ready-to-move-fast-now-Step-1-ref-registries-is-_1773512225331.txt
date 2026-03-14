@@ -1,0 +1,216 @@
+We are ready to move fast now.
+
+Step 1 (ref_registries) is complete and the verification checks are clean.
+
+Now I want to implement the next major shared-core wave in one coordinated batch.
+
+IMPORTANT:
+This must remain additive, safe, and backward-compatible.
+Do NOT break the current app.
+Do NOT rename or delete existing tables/columns yet unless they are fully unused and safely replaced.
+Do NOT change calculation logic, AI writing logic, or existing project workflows.
+We want to extend the shared reference core, not rewrite the app.
+
+--------------------------------------------------
+GOAL OF THIS WAVE
+--------------------------------------------------
+
+Build the shared-core reference foundation that both CarbonGPT and Carbon Intelligence can use.
+
+This wave must cover:
+
+1. canonical methodologies
+2. canonical countries
+3. shared reference endpoints
+
+The purpose is to avoid duplicated lists and inconsistent naming across:
+- CarbonGPT project setup
+- CarbonGPT methodology selection
+- Carbon Intelligence analytics
+- future AI market-intelligence grounding
+
+CarbonGPT and Carbon Intelligence must use the same reference layer.
+
+--------------------------------------------------
+SCOPE OF THIS WAVE
+--------------------------------------------------
+
+Please implement these pieces together:
+
+A. Methodology shared core
+B. Country shared core
+C. Shared reference API endpoints
+
+--------------------------------------------------
+A. METHODOLOGY SHARED CORE
+--------------------------------------------------
+
+Create a canonical methodology reference table.
+
+Use a new additive table:
+
+ref_methodologies
+
+Suggested fields:
+- methodology_code
+- methodology_name
+- methodology_family
+- registry_id
+- sector
+- technology
+- status
+- aliases
+- version (nullable)
+- notes
+
+Implementation rules:
+
+1. Do NOT destructively merge or delete old methodology tables yet.
+2. Seed ref_methodologies from the best available existing sources:
+   - methodology_library
+   - methodology_parsed / existing methodology metadata if useful
+   - methodology_db.py known dictionaries
+3. Build a normalization function that can extract a methodology code from raw strings coming from registry data.
+4. Add a junction table for multi-methodology projects:
+
+project_methodology_codes
+- project_id
+- methodology_code
+- is_primary
+- raw_segment
+
+5. Populate this junction table from carbon_projects.methodology
+   by splitting semicolon-delimited raw values and resolving codes safely.
+6. Unknown methodology strings must be logged and preserved, not dropped.
+7. Keep the raw methodology text in carbon_projects unchanged for backward compatibility.
+
+Also:
+CarbonGPT currently has only a few supported methodologies in the calculation layer.
+That is fine.
+The shared methodology library is broader than the currently implemented calculation engine.
+Do not try to make every methodology calculation-ready in this wave.
+This is a reference-data layer, not a full methodology-rules migration.
+
+--------------------------------------------------
+B. COUNTRY SHARED CORE
+--------------------------------------------------
+
+We already have country normalization logic in Python.
+Now make it part of the shared reference layer.
+
+Use the existing countries table if possible, extending it safely rather than replacing it.
+
+Required outcome:
+- one canonical countries reference source
+- one country_iso mapping path
+- both CarbonGPT and Carbon Intelligence can consume it
+
+Implementation rules:
+
+1. Extend the existing countries table safely if needed
+   (for example aliases TEXT[]).
+2. Keep the raw country text in carbon_projects unchanged.
+3. Add or backfill:
+   - carbon_projects.country_iso
+4. Also add:
+   - user_projects.country_iso
+so CarbonGPT project setup can use the same canonical country layer as Carbon Intelligence.
+5. The region/subregion must come from the canonical country table,
+   not from duplicated hardcoded region sets in Python.
+6. Remove or retire duplicated hardcoded region-grouping logic only after the canonical table is being used safely.
+
+Unknown country names should:
+- not break ingestion
+- remain visible in raw form
+- be logged for review
+
+--------------------------------------------------
+C. SHARED REFERENCE API ENDPOINTS
+--------------------------------------------------
+
+Create shared reference endpoints for both surfaces of the app.
+
+At minimum add:
+
+GET /reference/registries
+GET /reference/countries
+GET /reference/methodologies
+
+These endpoints should return canonical reference data that both:
+- CarbonGPT UI
+- Carbon Intelligence UI
+
+can consume.
+
+Rules:
+1. Keep existing admin/project endpoints working unchanged.
+2. Do not force all UI screens to switch immediately.
+3. Add the new reference endpoints now, then wire consumers safely where low-risk.
+
+--------------------------------------------------
+BACKFILL / NORMALIZATION PASSES
+--------------------------------------------------
+
+This wave should include safe normalization/backfill passes, similar to what was done for registries.
+
+Needed:
+1. methodology normalization pass for existing carbon_projects rows
+2. country normalization/backfill pass for existing carbon_projects rows
+3. country_iso backfill for existing user_projects rows where possible
+
+All of these must be:
+- additive
+- safe
+- non-blocking
+- logging unknown values instead of failing
+
+--------------------------------------------------
+WHAT NOT TO DO
+--------------------------------------------------
+
+Do NOT:
+- rewrite CarbonGPT methodology rules
+- rewrite parameter_engine
+- change AI writing templates
+- merge PascalCase CarbonGPT standard vocabulary into registry slugs
+- delete old methodology/country/raw text fields
+- attempt full sector/project-type/proponent normalization yet
+- do CDM ingestion yet
+- do issuance data yet
+- do scheduler yet
+
+This wave is only the shared-core foundation for methodologies + countries + reference endpoints.
+
+--------------------------------------------------
+VALIDATION REQUIRED
+--------------------------------------------------
+
+After implementation, provide a full report with:
+
+1. files changed
+2. schema additions
+3. backfill/normalization coverage
+4. unknown methodology strings encountered
+5. unknown country strings encountered
+6. example output from:
+   - /reference/registries
+   - /reference/countries
+   - /reference/methodologies
+7. confirmation that:
+   - current dashboard still works
+   - current CarbonGPT flows still work
+   - no existing functionality was broken
+
+Also explicitly confirm:
+- Carbon Intelligence and CarbonGPT can now begin consuming the same country reference layer
+- Carbon Intelligence and CarbonGPT can now begin consuming the same methodology reference layer
+
+--------------------------------------------------
+IMPLEMENTATION STYLE
+--------------------------------------------------
+
+Please implement this in one coordinated batch, but keep it conservative and additive.
+
+Do not start a second architecture.
+Do not over-refactor.
+Do not remove old logic until the new shared-core layer is proven working.

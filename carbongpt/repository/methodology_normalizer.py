@@ -406,3 +406,124 @@ def seed_methodology_library_from_db() -> int:
 
     logger.info("Seeded methodology_library with %d entries", inserted)
     return inserted
+
+
+# ---------------------------------------------------------------------------
+# Shared-core Wave 2: seed ref_methodologies
+# ---------------------------------------------------------------------------
+
+# Maps registry label strings (used in _FAMILY_MAP and methodology_library)
+# to canonical ref_registry_id slugs.  Must stay in sync with ref_registries.
+_REGISTRY_LABEL_TO_ID: dict[str, str] = {
+    "gold standard":                      "goldstandard",
+    "gold standard for the global goals": "goldstandard",
+    "gs4gg":                              "goldstandard",
+    "verra":                              "verra",
+    "verra vcs":                          "verra",
+    "vcs":                                "verra",
+    "cdm":                                "cdm",
+    "unfccc cdm":                         "cdm",
+    "unfccc cdm registry":                "cdm",
+    "any":                                None,  # cross-registry — no FK
+}
+
+
+def _registry_label_to_ref_id(raw_label: str | None) -> str | None:
+    if not raw_label:
+        return None
+    return _REGISTRY_LABEL_TO_ID.get(raw_label.strip().lower())
+
+
+def seed_ref_methodologies() -> int:
+    """
+    Upsert all known methodology codes into ref_methodologies.
+
+    Sources, applied in this order so later data enriches but does not
+    overwrite earlier data (COALESCE keeps the first non-NULL value):
+
+      1. _FAMILY_MAP (this module) — family / sector / technology / registry
+      2. methodology_library (DB)  — adds display_name, notes, status
+
+    Returns the total number of rows upserted.
+    Safe to call on every startup — fully idempotent via ON CONFLICT.
+    """
+    from carbongpt.repository.db import get_cursor
+
+    count = 0
+
+    with get_cursor() as cur:
+        # Pass 1: seed from _FAMILY_MAP
+        for code, (family, sector, technology, registry_label) in _FAMILY_MAP.items():
+            ref_registry_id = _registry_label_to_ref_id(registry_label)
+            cur.execute(
+                """
+                INSERT INTO ref_methodologies
+                    (methodology_code, methodology_family, sector, technology,
+                     ref_registry_id, status)
+                VALUES (%s, %s, %s, %s, %s, 'active')
+                ON CONFLICT (methodology_code) DO UPDATE SET
+                    methodology_family = COALESCE(
+                        ref_methodologies.methodology_family, EXCLUDED.methodology_family),
+                    sector = COALESCE(
+                        ref_methodologies.sector, EXCLUDED.sector),
+                    technology = COALESCE(
+                        ref_methodologies.technology, EXCLUDED.technology),
+                    ref_registry_id = COALESCE(
+                        ref_methodologies.ref_registry_id, EXCLUDED.ref_registry_id),
+                    updated_at = NOW()
+                """,
+                (code.upper(), family, sector, technology, ref_registry_id),
+            )
+            count += 1
+
+        # Pass 2: enrich from methodology_library (display_name + more metadata)
+        cur.execute(
+            """
+            SELECT methodology_code, display_name, methodology_family,
+                   registry, sector, technology, status, notes
+            FROM methodology_library
+            """
+        )
+        lib_rows = cur.fetchall()
+
+    with get_cursor() as cur:
+        for row in lib_rows:
+            ref_registry_id = _registry_label_to_ref_id(row.get("registry") or "")
+            cur.execute(
+                """
+                INSERT INTO ref_methodologies
+                    (methodology_code, methodology_name, methodology_family,
+                     ref_registry_id, sector, technology, status, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (methodology_code) DO UPDATE SET
+                    methodology_name = COALESCE(
+                        EXCLUDED.methodology_name, ref_methodologies.methodology_name),
+                    methodology_family = COALESCE(
+                        EXCLUDED.methodology_family, ref_methodologies.methodology_family),
+                    ref_registry_id = COALESCE(
+                        EXCLUDED.ref_registry_id, ref_methodologies.ref_registry_id),
+                    sector = COALESCE(
+                        EXCLUDED.sector, ref_methodologies.sector),
+                    technology = COALESCE(
+                        EXCLUDED.technology, ref_methodologies.technology),
+                    status = COALESCE(
+                        EXCLUDED.status, ref_methodologies.status),
+                    notes = COALESCE(
+                        EXCLUDED.notes, ref_methodologies.notes),
+                    updated_at = NOW()
+                """,
+                (
+                    row["methodology_code"],
+                    row.get("display_name"),
+                    row.get("methodology_family"),
+                    ref_registry_id,
+                    row.get("sector"),
+                    row.get("technology"),
+                    row.get("status") or "active",
+                    row.get("notes"),
+                ),
+            )
+            count += 1
+
+    logger.info("seed_ref_methodologies: %d rows upserted into ref_methodologies", count)
+    return count

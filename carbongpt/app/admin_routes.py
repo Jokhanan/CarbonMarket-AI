@@ -943,6 +943,50 @@ def get_reference_registries():
     return get_ref_registries()
 
 
+@router.get("/reference/countries")
+def get_reference_countries():
+    """Return all canonical countries with project counts."""
+    from carbongpt.repository.store import get_ref_countries
+    return get_ref_countries()
+
+
+@router.get("/reference/methodologies")
+def get_reference_methodologies(
+    family: str | None = None,
+    registry: str | None = None,
+    sector: str | None = None,
+):
+    """
+    Return canonical methodologies from ref_methodologies.
+    Optional query params: family, registry (slug), sector.
+    """
+    from carbongpt.repository.store import get_ref_methodologies
+    return get_ref_methodologies(family=family, registry=registry, sector=sector)
+
+
+@router.post("/normalization/countries/run")
+def trigger_country_normalization():
+    """Backfill country_iso on all carbon_projects rows."""
+    from carbongpt.repository.country_normalizer import run_country_normalization_pass
+    return run_country_normalization_pass()
+
+
+@router.get("/normalization/countries/coverage")
+def get_country_normalization_coverage():
+    """Coverage stats: how many carbon_projects have a resolved country_iso."""
+    from carbongpt.repository.db import get_cursor
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS total FROM carbon_projects")
+        total = cur.fetchone()["total"]
+        cur.execute("SELECT COUNT(*) AS n FROM carbon_projects WHERE country_iso IS NOT NULL")
+        resolved = cur.fetchone()["n"]
+    return {
+        "total":    total,
+        "resolved": resolved,
+        "pct":      round(resolved / total * 100, 1) if total else 0,
+    }
+
+
 @router.post("/normalization/registries/run")
 def trigger_registry_normalization():
     """Backfill ref_registry_id on all carbon_projects rows where it is NULL."""

@@ -1552,3 +1552,84 @@ def get_normalization_coverage_stats() -> dict:
             "meth_pct":             round(meth_resolved / total * 100, 1) if total else 0,
             "unresolved_meth_log":  unresolved_log,
         }
+
+
+def get_ref_countries() -> list[dict]:
+    """Return all rows from the countries table, ordered by country name."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                c.country_iso,
+                c.country_name,
+                c.region,
+                c.subregion,
+                c.aliases,
+                COUNT(cp.id) AS project_count
+            FROM countries c
+            LEFT JOIN carbon_projects cp ON cp.country_iso = c.country_iso
+            GROUP BY c.country_iso, c.country_name, c.region, c.subregion, c.aliases
+            ORDER BY c.country_name
+            """
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_ref_methodologies(
+    family: str | None = None,
+    registry: str | None = None,
+    sector: str | None = None,
+) -> list[dict]:
+    """
+    Return rows from ref_methodologies with optional filters.
+
+    Parameters
+    ----------
+    family:   filter by methodology_family (case-insensitive prefix match)
+    registry: filter by ref_registry_id slug (exact match)
+    sector:   filter by sector (case-insensitive substring match)
+    """
+    clauses: list[str] = []
+    params: list = []
+
+    if family:
+        clauses.append("LOWER(rm.methodology_family) LIKE LOWER(%s)")
+        params.append(f"{family}%")
+    if registry:
+        clauses.append("rm.ref_registry_id = %s")
+        params.append(registry.lower())
+    if sector:
+        clauses.append("LOWER(rm.sector) LIKE LOWER(%s)")
+        params.append(f"%{sector}%")
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    with get_cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                rm.methodology_code,
+                rm.methodology_name,
+                rm.methodology_family,
+                rm.ref_registry_id,
+                rr.registry_name  AS registry_display_name,
+                rm.sector,
+                rm.technology,
+                rm.status,
+                rm.aliases,
+                rm.version,
+                rm.notes,
+                COUNT(pmc.project_id) AS project_count
+            FROM ref_methodologies rm
+            LEFT JOIN ref_registries rr ON rr.registry_id = rm.ref_registry_id
+            LEFT JOIN project_methodology_codes pmc
+                   ON pmc.methodology_code = rm.methodology_code
+            {where}
+            GROUP BY rm.methodology_code, rm.methodology_name, rm.methodology_family,
+                     rm.ref_registry_id, rr.registry_name,
+                     rm.sector, rm.technology, rm.status, rm.aliases, rm.version, rm.notes
+            ORDER BY rm.methodology_code
+            """,
+            params,
+        )
+        return [dict(r) for r in cur.fetchall()]

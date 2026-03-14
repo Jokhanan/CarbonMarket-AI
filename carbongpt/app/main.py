@@ -106,16 +106,31 @@ def startup_init_db():
         logger.warning("Registry seed/normalization skipped: %s", exc)
 
     try:
-        from carbongpt.repository.country_normalizer import seed_countries_table
-        seed_countries_table()
+        from carbongpt.repository.country_normalizer import (
+            seed_countries_table,
+            seed_countries_aliases,
+            run_country_normalization_pass,
+            run_user_project_country_normalization_pass,
+        )
+        n = seed_countries_table()
+        logger.info("countries table seeded: %d rows", n)
+        seed_countries_aliases()
+        result = run_country_normalization_pass()
+        logger.info("carbon_projects country normalization: %s", result)
+        run_user_project_country_normalization_pass()
     except Exception as exc:
-        logger.warning("Country table seed skipped: %s", exc)
+        logger.warning("Country seed/normalization skipped: %s", exc)
 
     try:
-        from carbongpt.repository.methodology_normalizer import seed_methodology_library_from_db
+        from carbongpt.repository.methodology_normalizer import (
+            seed_methodology_library_from_db,
+            seed_ref_methodologies,
+        )
         seed_methodology_library_from_db()
+        n = seed_ref_methodologies()
+        logger.info("ref_methodologies seeded: %d rows", n)
     except Exception as exc:
-        logger.warning("Methodology library seed skipped: %s", exc)
+        logger.warning("Methodology seed skipped: %s", exc)
 
 
 @app.get("/health", tags=["system"])
