@@ -615,14 +615,17 @@ def check_methodology_rules(methodology_name, standard_slug):
 
 def upsert_carbon_project(data):
     import json
+    from carbongpt.repository.registry_normalizer import resolve_registry_id
+    ref_registry_id = resolve_registry_id(data.get("registry"))
     with get_cursor() as cur:
         cur.execute(
             """INSERT INTO carbon_projects
             (registry, registry_id, name, status, country, region, proponent,
              methodology, project_type, project_subtype, estimated_annual_credits,
              crediting_period_start, crediting_period_end, registration_date,
-             latitude, longitude, description, sdgs, extra_data, synced_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+             latitude, longitude, description, sdgs, extra_data, synced_at,
+             ref_registry_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s)
             ON CONFLICT (registry, registry_id) DO UPDATE SET
              name = EXCLUDED.name,
              status = EXCLUDED.status,
@@ -641,7 +644,8 @@ def upsert_carbon_project(data):
              description = EXCLUDED.description,
              sdgs = EXCLUDED.sdgs,
              extra_data = EXCLUDED.extra_data,
-             synced_at = NOW()
+             synced_at = NOW(),
+             ref_registry_id = EXCLUDED.ref_registry_id
             RETURNING id""",
             (
                 data["registry"], data["registry_id"], data["name"],
@@ -654,6 +658,7 @@ def upsert_carbon_project(data):
                 data.get("latitude"), data.get("longitude"),
                 data.get("description"), data.get("sdgs"),
                 json.dumps(data.get("extra_data") or {}),
+                ref_registry_id,
             )
         )
         return cur.fetchone()["id"]
@@ -746,10 +751,16 @@ def get_project_analytics():
         result["by_project_type"] = cur.fetchall()
 
         cur.execute("""
-            SELECT registry, COUNT(*) as project_count,
-                   COALESCE(SUM(estimated_annual_credits), 0) as total_credits
-            FROM carbon_projects
-            GROUP BY registry
+            SELECT
+                cp.registry                                         AS registry,
+                cp.ref_registry_id                                  AS ref_registry_id,
+                COALESCE(rr.registry_short, cp.registry)            AS registry_display,
+                COALESCE(rr.registry_name,  cp.registry)            AS registry_name,
+                COUNT(*)                                            AS project_count,
+                COALESCE(SUM(cp.estimated_annual_credits), 0)       AS total_credits
+            FROM carbon_projects cp
+            LEFT JOIN ref_registries rr ON cp.ref_registry_id = rr.registry_id
+            GROUP BY cp.registry, cp.ref_registry_id, rr.registry_short, rr.registry_name
             ORDER BY project_count DESC
         """)
         result["by_registry"] = cur.fetchall()
@@ -1415,6 +1426,29 @@ def get_methodology_structure(document_id):
 
 
 # ── Carbon Intelligence — Normalization Queries ──────────────────────────────
+
+def get_ref_registries() -> list[dict]:
+    """Return all canonical registries from the ref_registries table."""
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM ref_registries ORDER BY registry_name")
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_registry_normalization_coverage() -> dict:
+    """Summary of how many carbon_projects have been resolved to ref_registry_id."""
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS total FROM carbon_projects")
+        total = cur.fetchone()["total"]
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM carbon_projects WHERE ref_registry_id IS NOT NULL"
+        )
+        resolved = cur.fetchone()["n"]
+        return {
+            "total_projects": total,
+            "registry_resolved": resolved,
+            "registry_pct": round(resolved / total * 100, 1) if total else 0,
+        }
+
 
 def get_methodology_normalization_log(status: str = "unknown", limit: int = 100) -> list:
     """Return unresolved (or all) methodology normalization log entries."""

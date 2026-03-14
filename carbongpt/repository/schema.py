@@ -696,6 +696,29 @@ CREATE TABLE IF NOT EXISTS countries (
 );
 
 ALTER TABLE carbon_projects ADD COLUMN IF NOT EXISTS country_iso CHAR(3) REFERENCES countries(country_iso);
+
+-- ============================================================
+-- Step 1 of the shared-core architecture: ref_registries
+-- Canonical registry reference table.  Existing raw `registry`
+-- column on carbon_projects is kept for auditability.
+-- ref_registry_id is the FK to this table, populated by the
+-- registry normalizer after each sync.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ref_registries (
+    registry_id    VARCHAR(30)  PRIMARY KEY,
+    registry_name  VARCHAR(200) NOT NULL,
+    registry_short VARCHAR(30)  NOT NULL,
+    website        VARCHAR(300),
+    created_at     TIMESTAMP    DEFAULT NOW()
+);
+
+ALTER TABLE carbon_projects
+    ADD COLUMN IF NOT EXISTS ref_registry_id VARCHAR(30)
+    REFERENCES ref_registries(registry_id);
+
+CREATE INDEX IF NOT EXISTS idx_carbon_projects_ref_registry
+    ON carbon_projects(ref_registry_id);
 """
 
 

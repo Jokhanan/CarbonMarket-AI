@@ -98,6 +98,14 @@ def startup_init_db():
             logger.warning("Registry project sync scheduler skipped: %s", exc)
 
     try:
+        from carbongpt.repository.registry_normalizer import seed_ref_registries, run_registry_normalization_pass
+        n = seed_ref_registries()
+        logger.info("ref_registries seeded: %d rows", n)
+        run_registry_normalization_pass()
+    except Exception as exc:
+        logger.warning("Registry seed/normalization skipped: %s", exc)
+
+    try:
         from carbongpt.repository.country_normalizer import seed_countries_table
         seed_countries_table()
     except Exception as exc:

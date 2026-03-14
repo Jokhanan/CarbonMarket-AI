@@ -936,6 +936,27 @@ def get_sync_status():
 
 _project_sync_status = {"running": False, "last_result": None}
 
+@router.get("/reference/registries")
+def get_reference_registries():
+    """Return all canonical registries from ref_registries."""
+    from carbongpt.repository.store import get_ref_registries
+    return get_ref_registries()
+
+
+@router.post("/normalization/registries/run")
+def trigger_registry_normalization():
+    """Backfill ref_registry_id on all carbon_projects rows where it is NULL."""
+    from carbongpt.repository.registry_normalizer import run_registry_normalization_pass
+    return run_registry_normalization_pass()
+
+
+@router.get("/normalization/registries/coverage")
+def get_registry_normalization_coverage_endpoint():
+    """Coverage stats: how many carbon_projects have a resolved ref_registry_id."""
+    from carbongpt.repository.store import get_registry_normalization_coverage
+    return get_registry_normalization_coverage()
+
+
 @router.get("/normalization/coverage")
 def get_normalization_coverage():
     """Normalization coverage stats for both country and methodology."""

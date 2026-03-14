@@ -2633,10 +2633,10 @@ def _render_global_overview(analytics, summary):
     if by_registry:
         st.divider()
         st.subheader("By Registry")
-        cols = st.columns(len(by_registry))
+        cols = st.columns(max(len(by_registry), 1))
         for i, reg in enumerate(by_registry):
             with cols[i]:
-                label = "Verra VCS" if reg["registry"] == "verra" else "Gold Standard"
+                label = reg.get("registry_display") or reg.get("registry_name") or reg.get("registry", "Unknown")
                 st.metric(label, f"{reg['project_count']:,} projects")
 
 
