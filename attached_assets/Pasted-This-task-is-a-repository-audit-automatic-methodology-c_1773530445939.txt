@@ -1,0 +1,188 @@
+This task is a repository audit + automatic methodology classification + pack preparation.
+
+The objective is to analyse the existing document repository and determine whether we already have enough documents to automatically build methodology packs (TPDDTEC, VM0050, etc.) without requiring manual uploads.
+
+Do NOT redesign the architecture. The Methodology Pack Manager already exists.
+
+Your task is to analyse the repository and build an automatic classification layer that can feed the existing pack system.
+
+--------------------------------
+
+PART 1 — REPOSITORY AUDIT
+
+First inspect the existing repository.
+
+Look at the documents table and document_chunks table.
+
+Determine:
+
+• how many documents exist in total
+• how many documents have extracted text
+• how many documents appear to be:
+  - PDD
+  - Monitoring Report
+  - Validation Report
+  - Verification Report
+  - Methodology document
+  - Tools / guidance
+
+Produce counts for each category.
+
+--------------------------------
+
+PART 2 — METHODOLOGY DETECTION
+
+For each document with extracted text:
+
+detect the methodology code automatically.
+
+Examples of codes to detect:
+
+TPDDTEC
+VM0050
+VM0042
+ACM0002
+AMS-I.D
+AMS-III.R
+VM0015
+VM0007
+
+Detection methods:
+
+1) scan the first pages of the document
+2) search for patterns like:
+
+"Methodology:"
+"Applied methodology:"
+"VCS Methodology"
+"Gold Standard methodology"
+"ACM"
+"AMS"
+"VM"
+
+3) detect references inside the text body.
+
+Extract:
+
+methodology_code
+registry
+document_type
+project_name (if possible)
+
+--------------------------------
+
+PART 3 — DOCUMENT TYPE CLASSIFICATION
+
+Classify each document into one of the following:
+
+PDD
+MR
+VALIDATION_REPORT
+VERIFICATION_REPORT
+METHODOLOGY_DOC
+TOOL_DOC
+GUIDANCE_DOC
+
+Use text signals:
+
+Project Design Document
+Monitoring Report
+Validation Report
+Verification Report
+Methodology
+Tool
+Guidelines
+
+--------------------------------
+
+PART 4 — REPORT KEY METHODOLOGIES
+
+Specifically report if the repository already contains documents for:
+
+TPDDTEC
+VM0050
+VM0042
+ACM0002
+AMS-I.D
+
+For each methodology report:
+
+number of documents
+number of PDD
+number of MR
+number of validation reports
+
+--------------------------------
+
+PART 5 — AUTO LINK TO PACKS
+
+If documents clearly belong to a methodology pack:
+
+automatically link them to packs via:
+
+methodology_pack_document_links
+
+Create packs automatically if they do not exist.
+
+Example:
+
+TPDDTEC pack
+VM0050 pack
+VM0042 pack
+
+Only link documents when confidence is high.
+
+--------------------------------
+
+PART 6 — PACK READINESS CHECK
+
+For each pack compute readiness:
+
+• PDD count
+• MR count
+• validation count
+• methodology doc present
+
+Use the existing readiness system.
+
+Report which packs are already close to usable.
+
+--------------------------------
+
+PART 7 — AUTO PACK BUILDER
+
+Implement a helper function:
+
+auto_build_pack(methodology_code)
+
+Steps:
+
+1) scan repository documents
+2) detect relevant documents
+3) classify document type
+4) link documents to pack
+5) compute readiness
+6) return pack summary
+
+--------------------------------
+
+PART 8 — OUTPUT REPORT
+
+Return a full report including:
+
+Repository statistics
+Detected methodologies
+Documents per methodology
+Possible packs
+Pack readiness scores
+
+Also confirm:
+
+• document ingestion pipeline still works
+• Carbon Intelligence unchanged
+• AI writer fallback unchanged
+• no existing functionality broken
+
+--------------------------------
+
+The objective is to determine whether the repository already contains enough documents to automatically construct methodology packs for CarbonGPT.

@@ -200,11 +200,11 @@ def list_pack_documents(pack_id: int) -> list[dict]:
             """
             SELECT
                 mpdl.*,
-                d.filename,
-                d.source_url       AS doc_source_url,
+                d.title            AS filename,
                 d.ingestion_status AS doc_ingestion_status,
                 d.category         AS doc_category,
                 d.file_path,
+                d.word_count       AS doc_word_count,
                 cp.name            AS project_name,
                 cp.country         AS project_country,
                 cp.status          AS project_status
@@ -291,11 +291,13 @@ def evaluate_pack_readiness(pack_id: int) -> dict:
         )
         findings = [dict(r) for r in cur.fetchall()]
 
-    # Categorise ingested docs
+    # Categorise ingested docs  ("completed" is the live status value in the DB)
+    _INGESTED_STATUSES = frozenset({"ingested", "completed"})
+
     def ingested(role):
         return [
             d for d in docs
-            if d["document_role"] == role and d["ingestion_status"] == "ingested"
+            if d["document_role"] == role and d["ingestion_status"] in _INGESTED_STATUSES
         ]
 
     pdds      = ingested("PDD")

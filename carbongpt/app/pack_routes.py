@@ -420,3 +420,129 @@ def record_version_endpoint(data: VersionRecordCreate):
         content_hash=data.content_hash,
         pack_id=data.pack_id,
     )
+
+
+# ── Auto-build & Audit ───────────────────────────────────────────────────────
+
+class AutoBuildRequest(BaseModel):
+    methodology_code: str
+    registry: Optional[str] = None
+    dry_run: bool = False
+    min_confidence: float = 0.55
+
+
+@router.post("/audit")
+def repository_audit(
+    target_codes: Optional[str] = Query(None, description="Comma-separated methodology codes to focus on"),
+):
+    """
+    Full repository audit: document stats, methodology detection, and pack viability.
+    Pass ?target_codes=TPDDTEC,VM0050 to focus on specific methodologies.
+    """
+    from carbongpt.repository.pack_classifier import run_repository_audit
+    codes = [c.strip().upper() for c in target_codes.split(",")] if target_codes else None
+    audit = run_repository_audit(target_codes=codes)
+    return {
+        "repository": {
+            "total_documents":        audit.total_documents,
+            "completed_ingestion":    audit.completed_ingestion,
+            "processing":             audit.processing,
+            "failed_ingestion":       audit.failed_ingestion,
+            "total_chunks":           audit.total_chunks,
+            "chunks_with_embeddings": audit.chunks_with_embeddings,
+            "category_counts":        audit.category_counts,
+        },
+        "classification": {
+            "docs_with_methodology":    audit.docs_with_methodology_detected,
+            "docs_without_methodology": audit.docs_without_methodology,
+            "methodology_summary":      audit.methodology_summary,
+        },
+        "target_methodologies": audit.target_methodologies,
+        "existing_packs":       audit.existing_packs,
+    }
+
+
+@router.post("/auto-build")
+def auto_build_pack_endpoint(data: AutoBuildRequest):
+    """
+    Scan the repository for documents belonging to a methodology, create the pack
+    if it does not exist, and link qualifying documents automatically.
+    Set dry_run=true to preview without writing.
+    """
+    from carbongpt.repository.pack_classifier import auto_build_pack
+    result = auto_build_pack(
+        methodology_code=data.methodology_code,
+        registry=data.registry,
+        dry_run=data.dry_run,
+        min_confidence=data.min_confidence,
+    )
+    classified_summary = [
+        {
+            "doc_id":       c.doc_id,
+            "title":        c.title,
+            "category":     c.category,
+            "doc_role":     c.doc_role,
+            "primary_code": c.primary_code,
+            "confidence":   c.confidence,
+        }
+        for c in result.classified
+    ]
+    return {
+        "methodology_code":              result.methodology_code,
+        "registry":                      result.registry,
+        "pack_id":                       result.pack_id,
+        "created_new_pack":              result.created_new,
+        "dry_run":                       data.dry_run,
+        "docs_linked":                   result.docs_linked,
+        "docs_already_linked":           result.docs_already_linked,
+        "docs_skipped_low_confidence":   result.docs_skipped_low_confidence,
+        "readiness":                     result.readiness,
+        "classified_documents":          classified_summary,
+    }
+
+
+@router.post("/auto-build-all")
+def auto_build_all_packs(
+    min_confidence: float = Query(0.55),
+    dry_run: bool = Query(False),
+):
+    """
+    Run auto_build_pack() for every methodology detected in the repository
+    that has at least 2 qualifying documents. Returns a summary per methodology.
+    """
+    from carbongpt.repository.pack_classifier import scan_repository, auto_build_pack, MIN_CONFIDENCE
+    scan = scan_repository()
+    min_c = min_confidence or MIN_CONFIDENCE
+    results = []
+    for code, classified in scan.detected.items():
+        viable = [c for c in classified if c.confidence >= min_c]
+        if len(viable) < 2:
+            results.append({
+                "methodology_code": code,
+                "status": "skipped",
+                "reason": f"Only {len(viable)} qualifying doc(s) — need ≥ 2",
+            })
+            continue
+        try:
+            result = auto_build_pack(
+                methodology_code=code,
+                dry_run=dry_run,
+                min_confidence=min_c,
+            )
+            results.append({
+                "methodology_code": code,
+                "registry":         result.registry,
+                "pack_id":          result.pack_id,
+                "status":           "built" if not dry_run else "dry_run",
+                "docs_linked":      result.docs_linked,
+                "docs_already_linked": result.docs_already_linked,
+                "docs_skipped":     result.docs_skipped_low_confidence,
+                "readiness_score":  result.readiness.get("score", 0) if result.readiness else None,
+            })
+        except Exception as exc:
+            results.append({
+                "methodology_code": code,
+                "status": "error",
+                "error": str(exc),
+            })
+    return {"dry_run": dry_run, "results": results}
