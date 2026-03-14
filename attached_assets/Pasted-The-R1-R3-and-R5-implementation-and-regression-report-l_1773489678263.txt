@@ -1,0 +1,182 @@
+The R1, R3, and R5 implementation and regression report look correct.
+
+All regression tests passed and ER values remained unchanged, which confirms the refactor did not introduce hidden scaling or unit issues.
+
+You may now proceed with the remaining steps R2 → R4 → R6.
+
+However, these steps can affect ER outputs and parameter wiring, so they must be implemented carefully and verified with regression checks.
+
+Follow the exact sequence below and keep the application functional throughout.
+
+------------------------------------------------
+STEP R2 — Canonical device scaling
+------------------------------------------------
+
+Problem:
+calculate_cookstove_er() currently uses:
+
+num_households
+
+as the scale factor.
+
+But the correct scale factor is:
+
+num_devices = num_households × devices_per_household
+
+Implementation:
+
+1. In er_simulator.py
+   - read both parameters using _pval():
+     - num_households
+     - devices_per_household
+
+2. compute:
+
+num_devices = num_households * devices_per_household
+
+3. Replace the scale factor in the ER loop with num_devices.
+
+4. Keep both values exposed in parameters_used so traceability remains.
+
+Important safety rule:
+
+If devices_per_household is missing or equal to 1,
+results must remain identical to the previous version.
+
+Add a regression check:
+
+TPDDTEC scenario with devices_per_household = 1
+→ total ER must match baseline exactly.
+
+------------------------------------------------
+STEP R4 — Wire MECD simulator to the parameter engine
+------------------------------------------------
+
+Problem:
+calculate_mecd_er() currently relies heavily on internal defaults
+from MECD_BASELINE_FUEL_LIBRARY.
+
+This means user-confirmed parameters stored in the parameter engine
+may not be used.
+
+Implementation:
+
+1. Import or replicate the _pval() helper used in er_simulator.
+
+2. For each MECD parameter:
+
+- fNRB
+- eta_b
+- eta_p
+- n_persons
+- EF_electricity
+- usage_rate
+- num_devices (if used)
+
+Check:
+
+if value exists in params dict and passes validation
+→ override library default.
+
+Otherwise:
+→ keep the existing library default.
+
+Critical rule:
+
+Only override when value is not None and within valid ranges.
+
+Do not allow zero or empty values to silently override defaults.
+
+------------------------------------------------
+STEP R6 — P_b bridge to canonical baseline_fuel_consumption
+------------------------------------------------
+
+Problem:
+MECD uses:
+
+P_b = t/capita/year
+
+while TPDDTEC uses:
+
+baseline_fuel_consumption = t/device/year
+
+These represent the same physical quantity but at different denominators.
+
+Implementation:
+
+In parameter_engine.get_parameters_as_dict():
+
+If:
+
+P_b is defined
+AND baseline_fuel_consumption is not defined
+
+Compute:
+
+baseline_fuel_consumption =
+    P_b × household_size ÷ devices_per_household
+
+Store this as a derived parameter.
+
+Important:
+
+This bridge is ONLY for cross-methodology display
+and canonical quantity consistency.
+
+MECD calculations must continue using P_b directly.
+
+------------------------------------------------
+REGRESSION TESTS REQUIRED
+------------------------------------------------
+
+After implementing R2, R4, and R6:
+
+Run the same regression tests used earlier.
+
+Verify:
+
+1. TPDDTEC scenario
+   - total ER unchanged when devices_per_household = 1
+
+2. VM0050 scenario
+   - total ER unchanged
+
+3. MECD scenario
+   - ER unchanged when parameters match previous defaults
+
+4. Additional test:
+
+devices_per_household = 2
+
+→ ER should increase proportionally
+confirming correct device scaling.
+
+------------------------------------------------
+TRACEABILITY
+------------------------------------------------
+
+Ensure calculation_steps now expose:
+
+baseline_energy_tj
+project_energy_tj
+baseline_emissions_per_device
+project_emissions_per_device
+
+These should remain additive fields and must not break existing result payloads.
+
+------------------------------------------------
+DELIVERABLE
+------------------------------------------------
+
+When finished, provide a report including:
+
+1. Files modified
+2. Exact code changes
+3. Regression results
+4. Confirmation that ER values remain unchanged for baseline scenarios
+5. Confirmation the app starts cleanly
+
+Do not remove any legacy fields yet.
+Do not introduce new engines or duplicate parameters.
+
+This phase completes the calculation engine stabilization.

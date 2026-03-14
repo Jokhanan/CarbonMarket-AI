@@ -39,6 +39,10 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     usage_rate_base = _pval(params, "usage_rate", 0.90)
     usage_rate_decay = _pval(params, "usage_rate_decay", 0.02)
     usage_rate_floor = _pval(params, "usage_rate_floor", 0.50)
+    # R2: canonical device scale = households × devices_per_household
+    # When devices_per_household is missing or 1, num_devices == num_hh → results unchanged.
+    devices_per_hh = _pval(params, "devices_per_household", 1.0)
+    num_devices = num_hh * devices_per_hh
 
     baseline_fuel = _ptext(params, "baseline_fuel", "wood")
     project_fuel = _ptext(params, "project_fuel", baseline_fuel)
@@ -80,7 +84,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         consumption_label = "baseline_fuel_consumption"
         consumption_pj_label = "project_fuel_consumption"
     elif is_tpddtec and method_id == "method_2":
-        devices_per_hh = _pval(params, "devices_per_household", 1.0)
+        # devices_per_hh already read at the top of the function
         # Method 2: derive baseline consumption directly from TPDDTEC default (t/device/yr)
         bl_consumption = TPDDTEC_METHOD2_DEFAULT_CONSUMPTION * hh_size / devices_per_hh
         pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
@@ -205,9 +209,10 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         cal_year = start_year + y
 
         usage_rate = max(usage_rate_base - (y * usage_rate_decay), usage_rate_floor)
-        active_hh = num_hh * usage_rate
-        be_y = be_per_hh * active_hh
-        pe_y = pe_per_hh * active_hh
+        # R2: scale by num_devices (= num_hh × devices_per_hh); defaults to num_hh when DPH=1
+        active_devices = num_devices * usage_rate
+        be_y = be_per_hh * active_devices
+        pe_y = pe_per_hh * active_devices
         gross_er = be_y - pe_y
         le_y = gross_er * leakage_pct if leakage_pct > 0 else 0.0
         er_y = gross_er - le_y
@@ -221,14 +226,17 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "year_number": year_num,
             "calendar_year": cal_year,
             "usage_rate": round(usage_rate, 4),
-            "active_households": round(active_hh, 2),
-            "active_hh_formula": f"max({usage_rate_base} - ({y} * {usage_rate_decay}), {usage_rate_floor}) * {num_hh}",
+            "active_households": round(active_devices, 2),   # field name preserved for compat; value = active devices
+            "active_hh_formula": (
+                f"max({usage_rate_base} - ({y} * {usage_rate_decay}), {usage_rate_floor})"
+                f" × {int(num_hh)} hh × {devices_per_hh:.1f} DPH = {active_devices:.0f} devices"
+            ),
             "be_per_hh": round(be_per_hh, 6),
             "pe_per_hh": round(pe_per_hh, 6),
             "baseline_emissions": round(be_y, 2),
-            "baseline_formula": f"{be_per_hh:.4f} * {active_hh:.0f}",
+            "baseline_formula": f"{be_per_hh:.4f} * {active_devices:.0f}",
             "project_emissions": round(pe_y, 2),
-            "project_formula": f"{pe_per_hh:.4f} * {active_hh:.0f}",
+            "project_formula": f"{pe_per_hh:.4f} * {active_devices:.0f}",
             "gross_er": round(gross_er, 2),
             "leakage": round(le_y, 2),
             "leakage_formula": f"{gross_er:.2f} * {leakage_pct:.4f}" if leakage_pct > 0 else "0",
@@ -269,7 +277,9 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "usage_rate": {"value": usage_rate_base, "unit": "fraction", "description": f"Initial usage rate (decays {usage_rate_decay}/yr, floor {usage_rate_floor})"},
             "usage_rate_decay": {"value": usage_rate_decay, "unit": "fraction/yr", "description": "Annual usage rate decay rate"},
             "usage_rate_floor": {"value": usage_rate_floor, "unit": "fraction", "description": "Minimum usage rate floor"},
-            "num_devices": {"value": num_hh, "unit": "count", "description": "Number of cookstove devices (N_i,y)"},
+            "num_households": {"value": round(num_hh), "unit": "count", "description": "Number of households served"},
+            "devices_per_household": {"value": devices_per_hh, "unit": "count", "description": "Project devices per household"},
+            "num_devices": {"value": round(num_devices), "unit": "count", "description": "Total commissioned devices (num_hh × DPH)"},
             "household_size": {"value": hh_size, "unit": "persons", "description": "Average household size"},
         },
     }

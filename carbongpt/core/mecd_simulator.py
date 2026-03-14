@@ -126,6 +126,34 @@ MECD_CAP_FUEL_GJ_CAPITA_DAY = 0.0045
 
 # ── Step 1: Baseline emission factor ─────────────────────────────────────────
 
+def _pval(params: dict, key: str, default: float = 0.0,
+          lo: float = None, hi: float = None) -> float:
+    """
+    Read a numeric parameter from a dict that may contain either:
+      - plain float/int/str  (e.g. from calculate_mecd_er test callers)
+      - {"value": ..., ...}  (e.g. from get_parameters_as_dict() / parameter engine)
+
+    Validation:
+      - Returns `default` when key is missing, value is None, or cannot be cast to float.
+      - Returns `default` when lo/hi bounds are provided and the value falls outside them,
+        preventing silent zero/empty overrides of library defaults.
+    """
+    v = params.get(key)
+    if isinstance(v, dict):
+        v = v.get("value")
+    if v is None:
+        return default
+    try:
+        fv = float(v)
+    except (ValueError, TypeError):
+        return default
+    if lo is not None and fv < lo:
+        return default
+    if hi is not None and fv > hi:
+        return default
+    return fv
+
+
 def compute_mecd_baseline_ef(case: str, baseline_fuels: list) -> dict:
     """
     Compute the ex-ante baseline emission factor (fixed for crediting period).
@@ -401,18 +429,28 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
         leakage_pct     : float  leakage as fraction of gross ER
     """
 
+    # ── Read top-level params — handles both flat floats and {"value": ...} dicts ──
+    # _pval() returns the library/methodology default if the value is missing, None,
+    # non-numeric, or outside the lo/hi validation bounds, preventing silent zero overrides.
     case = str(params.get("mecd_case", "1"))
     project_fuel_type = params.get("project_fuel_type", "electric")
-    is_electric = project_fuel_type == "electric"
+    is_electric = (project_fuel_type == "electric")
     baseline_fuels = params.get("baseline_fuels", [])
-    n_persons = float(params.get("n_persons", 1000))
+
+    n_persons = _pval(params, "n_persons", 1000.0, lo=1.0)
     leakage_option = params.get("leakage_option", "option_1")
+
+    # fNRB: the parameter engine stores it as "fNRB"; some callers use "fnrb" (lowercase).
+    # Try fNRB first, fall back to fnrb, fall back to 0.30 if neither is valid 0–1.
+    top_level_fnrb = _pval(params, "fNRB",
+                            _pval(params, "fnrb", 0.30, lo=0.0, hi=1.0),
+                            lo=0.0, hi=1.0)
 
     if not baseline_fuels:
         baseline_fuels = [{
             "fuel_key": "wood_three_stone",
             "share_pct": 100.0,
-            "fnrb": float(params.get("fnrb", 0.30)),
+            "fnrb": top_level_fnrb,
         }]
 
     # Step 1: Baseline EF — computed once, fixed for the period
@@ -428,20 +466,20 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
         # Steps 2–3: useful energy + baseline emissions
         if case == "1":
             if is_electric:
-                eg_mwh = float(params.get("eg_p_mwh_annual", 0.0))
-                eta_p = float(params.get("eta_p", 0.85))
+                eg_mwh = _pval(params, "eg_p_mwh_annual", 0.0, lo=0.0)
+                eta_p  = _pval(params, "eta_p", 0.85, lo=0.001, hi=1.0)
                 ue = compute_useful_energy_electric(eg_mwh, eta_p, n_persons)
                 be_res = compute_baseline_emissions("1", ef_b, eg_p_useful_tj=ue["EG_p_useful_TJ"])
             else:
-                p_kg = float(params.get("p_p_kg_annual", 0.0))
-                ncv_p = float(params.get("ncv_p", 47.13))   # TJ/Gg (LPG default)
-                eta_p = float(params.get("eta_p", 0.55))
+                p_kg  = _pval(params, "p_p_kg_annual", 0.0, lo=0.0)
+                ncv_p = _pval(params, "ncv_p", 47.13, lo=1.0, hi=1000.0)  # TJ/Gg
+                eta_p = _pval(params, "eta_p", 0.55, lo=0.001, hi=1.0)
                 ue = compute_useful_energy_fuel(p_kg, ncv_p, eta_p, n_persons)
                 be_res = compute_baseline_emissions("1", ef_b, eg_p_useful_tj=ue["EG_p_useful_TJ"])
         else:
-            eg_mwh = float(params.get("eg_p_mwh_annual", 0.0))
-            sc_b_mj = float(params.get("sc_b_mj", 3.92))
-            sc_p_mj = float(params.get("sc_p_mj", 0.258))
+            eg_mwh  = _pval(params, "eg_p_mwh_annual", 0.0, lo=0.0)
+            sc_b_mj = _pval(params, "sc_b_mj", 3.92, lo=0.001)
+            sc_p_mj = _pval(params, "sc_p_mj", 0.258, lo=0.001)
             ue = None
             be_res = compute_baseline_emissions(
                 "2", ef_b,
@@ -452,14 +490,14 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
 
         # Step 4: Project emissions — always use real metered value, never capped
         if is_electric:
-            eg_raw = float(params.get("eg_p_mwh_annual", 0.0))
-            ef_el = float(params.get("ef_el", 0.50))
-            tdl = float(params.get("tdl", 0.05))
+            eg_raw = _pval(params, "eg_p_mwh_annual", 0.0, lo=0.0)
+            ef_el  = _pval(params, "ef_el", 0.50, lo=0.0, hi=2.0)
+            tdl    = _pval(params, "tdl", 0.05, lo=0.0, hi=0.5)
             pe_res = compute_project_emissions_electric(eg_raw, ef_el, tdl)
         else:
-            p_kg_raw = float(params.get("p_p_kg_annual", 0.0))
-            ncv_p = float(params.get("ncv_p", 47.13))   # TJ/Gg (LPG default)
-            ef_p = float(params.get("ef_p", 63.1))
+            p_kg_raw = _pval(params, "p_p_kg_annual", 0.0, lo=0.0)
+            ncv_p    = _pval(params, "ncv_p", 47.13, lo=1.0, hi=1000.0)  # TJ/Gg
+            ef_p     = _pval(params, "ef_p", 63.1, lo=0.0)
             pe_res = compute_project_emissions_fuel(p_kg_raw, ncv_p, ef_p)
 
         be_y = be_res["BE_y"]
@@ -471,7 +509,7 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
             le_y = max(0.0, gross_er * 0.05)
             le_formula = f"Gross ER × 5% = {gross_er:.2f} × 0.05 = {le_y:.2f} tCO2e"
         else:
-            le_pct = float(params.get("leakage_pct", 0.05))
+            le_pct = _pval(params, "leakage_pct", 0.05, lo=0.0, hi=1.0)
             le_y = max(0.0, gross_er * le_pct)
             le_formula = f"Gross ER × {le_pct:.1%} = {gross_er:.2f} × {le_pct:.3f} = {le_y:.2f} tCO2e"
 

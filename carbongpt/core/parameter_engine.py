@@ -898,6 +898,34 @@ def _compute_derived_params(resolved_values, resolved_meta):
                 "estimated",
             )
 
+    # R6: P_b (t/capita/yr, MECD) → baseline_fuel_consumption (t/device/yr, TPDDTEC/VM0050)
+    # This bridge is ONLY for cross-methodology display and canonical quantity consistency.
+    # MECD's own calculator continues to read P_b directly from params.
+    # The bridge only fires when P_b is confirmed by the user AND baseline_fuel_consumption
+    # is not already present (so it never silently overwrites a monitored/measured KPT value).
+    p_b_val = _safe_float(resolved_values.get("P_b"))
+    cur_bl = _safe_float(resolved_values.get("baseline_fuel_consumption"))
+    _, _, p_b_status = resolved_meta.get("P_b", ("default", None, "default"))
+    _, _, bl_status  = resolved_meta.get("baseline_fuel_consumption", ("default", None, "default"))
+    _MANUAL_SOURCES = {"user_override", "measured", "confirmed"}
+    if (
+        p_b_val is not None
+        and p_b_val > 0.0
+        and p_b_status in _MANUAL_SOURCES
+        and cur_bl is None
+        and bl_status not in _MANUAL_SOURCES
+    ):
+        bl_derived = p_b_val * household_size / devices_per_hh
+        resolved_values["baseline_fuel_consumption"] = bl_derived
+        resolved_meta["baseline_fuel_consumption"] = (
+            "calculated",
+            (
+                f"Derived from P_b ({p_b_val} t/capita/yr) × household_size ({household_size:.1f})"
+                f" ÷ DPH ({devices_per_hh:.1f}) = {bl_derived:.4f} t/device/yr"
+            ),
+            "estimated",
+        )
+
 
 def get_project_parameters(project_id, category=None):
     with get_cursor() as cur:
