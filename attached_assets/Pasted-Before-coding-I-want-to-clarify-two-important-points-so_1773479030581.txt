@@ -1,0 +1,109 @@
+Before coding, I want to clarify two important points so we move forward correctly.
+
+This next implementation must still be part of the broader cleanup and deduplication effort across the app.
+Do NOT treat this as only a small isolated fix.
+
+You must still continue cleaning:
+- duplicated code
+- duplicated inputs
+- unfinished or abandoned paths
+- inconsistent calculation logic
+- inconsistent sources of truth
+- duplicated export logic
+- duplicated methodology logic across modules
+
+Now here are the two clarifications.
+
+--------------------------------------------------
+1. CANONICAL CONSUMPTION MODEL MUST REMAIN METHODOLOGY-DEPENDENT
+--------------------------------------------------
+
+Do NOT assume in advance that the canonical quantity should always be:
+- per device
+or
+- per household
+
+This depends on the methodology.
+
+So your task is to verify, for each cookstove methodology currently supported:
+- TPDDTEC
+- GS-MECD
+- VM0050
+
+For each methodology, confirm:
+1. What is the primary methodological quantity actually used in the equations?
+   Examples:
+   - tonnes per household per year
+   - tonnes per device / technology per year
+   - kg/day
+   - per-capita annual defaults that must be converted
+
+2. Whether the methodology implicitly assumes one device per household
+or whether multiple devices / technologies per household must be modelled explicitly.
+
+3. Whether the system therefore needs the parameter:
+   - number_of_devices_per_household
+or not.
+
+Important:
+If a methodology fundamentally works per device / technology, then the system must support that properly.
+If a methodology fundamentally works at household level, then the system should not force a device-level abstraction unnecessarily.
+
+The correct architecture must be driven by the methodology, not by an arbitrary software assumption.
+
+--------------------------------------------------
+2. EXPORT WORKBOOK SHOULD BE CLEAR, AUDITABLE, AND NOT OVER-SPLIT
+--------------------------------------------------
+
+Do NOT redesign the export into many unnecessary sheets.
+
+The goal is not to create 10 different tabs just for the sake of it.
+
+We want a clean, audit-friendly calculation workbook where formulas, values, sources, and results are clearly connected.
+
+Please use the ex-ante examples as the conceptual inspiration:
+- one clear ER sheet
+- columns for values / sources / formulas / results
+- formulas visibly linked
+- annual ER and/or vintage logic clearly shown
+- enough structure for auditors to follow the calculation
+
+The workbook should remain compact and readable.
+
+So before implementing, please propose the best structure for:
+- ex-ante / crediting period calculations
+- monitoring period calculations
+
+Important distinction:
+- ex-ante / crediting period usually relies mostly on defaults and assumptions
+- monitoring period usually includes measured parameters, surveys, sample sizes, vintage allocation, etc.
+
+So the export design may differ slightly between ex-ante and ex-post, but it should still remain compact and well-organized.
+
+I do NOT want "many sheets because it is technical."
+I want the minimum number of sheets necessary for a clear and auditable workbook.
+
+--------------------------------------------------
+3. WHAT I WANT FROM YOU BEFORE CODING
+--------------------------------------------------
+
+Please answer these four points clearly:
+
+1. For each cookstove methodology (TPDDTEC, GS-MECD, VM0050), what is the correct primary calculation quantity?
+   - household-level?
+   - device-level?
+   - another structure?
+   - and why?
+
+2. For each methodology, do we need an explicit number_of_devices_per_household logic?
+   If yes, explain where and why.
+   If no, explain why not.
+
+3. What is the best compact export workbook structure for:
+   - ex-ante / crediting period
+   - monitoring period
+
+4. Confirm that this implementation step still remains part of the broader cleanup and deduplication scope, and list again which duplicated or inconsistent code paths you will clean while doing this work.
+
+Do NOT code yet.
+I want these methodological and export-structure clarifications first.
