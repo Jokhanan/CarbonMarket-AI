@@ -1,0 +1,314 @@
+We now want to implement the real AI-assisted Auto-Pack Builder.
+
+The goal is to make the system behave like an intelligent methodology agent, not just a passive document linker.
+
+The system should be able to:
+
+1. start from a methodology code
+2. understand which methodology documents and tools are required
+3. look in the existing repository first
+4. look in Carbon Intelligence for matching projects
+5. try to discover and download relevant project documents automatically
+6. classify and score the discovered documents
+7. build a proposed methodology pack automatically
+8. report clearly what is still missing and must be added manually by the admin
+
+IMPORTANT:
+This must be implemented on top of the existing Methodology Pack Manager.
+Do NOT redesign the architecture again.
+Do NOT break the current app.
+Do NOT remove the current fallback logic.
+Do NOT introduce fragile bulk scraping everywhere.
+Use automation where realistic, and produce a clear “manual action required” report where automation fails.
+
+--------------------------------------------------
+CORE BEHAVIOR
+--------------------------------------------------
+
+When an admin selects:
+
+"Build Pack for TPDDTEC"
+or
+"Build Pack for VM0050"
+
+the system should perform an AI-assisted workflow:
+
+A. analyze the methodology
+B. detect required supporting documents/tools/guidance
+C. inspect the existing repository for already available documents
+D. inspect Carbon Intelligence for projects using this methodology
+E. try to discover project documents automatically where possible
+F. classify all candidate documents
+G. auto-link high-confidence documents into the pack
+H. compute readiness
+I. generate a missing-items report for the admin
+
+The admin should only need to help for the remaining missing pieces.
+
+--------------------------------------------------
+PART 1 — METHODOLOGY REQUIREMENTS ANALYZER
+--------------------------------------------------
+
+Implement a methodology requirements analyzer.
+
+Input:
+- methodology_code
+- registry
+- methodology version if known
+
+Output:
+A structured requirement profile for the pack, including:
+
+1. core methodology document
+2. referenced tools
+3. referenced guidance documents
+4. likely document types needed:
+   - PDD
+   - MR
+   - Validation Report
+   - Verification Report
+   - DOE findings / CAR / CL / FAR
+5. expected version dependencies
+6. recommended minimum corpus for this methodology
+
+This analyzer should use:
+- ref_methodologies
+- methodology documents already in repository
+- the content of methodology docs if present
+- existing methodology context sources already in the app
+
+It should not hallucinate.
+If requirements are uncertain, mark them as:
+- confirmed
+- probable
+- unknown
+
+--------------------------------------------------
+PART 2 — REPOSITORY-FIRST DISCOVERY
+--------------------------------------------------
+
+The system must always search the current repository first.
+
+For the selected methodology, inspect the existing repository and detect:
+
+- documents already matching this methodology
+- their document type
+- their confidence level
+- whether they are already linked to a pack or not
+
+Examples:
+- PDD already in repository and clearly TPDDTEC
+- MR already in repository and clearly VM0050
+- methodology PDF already present
+- tool PDF already present
+
+If high confidence:
+→ auto-link to the methodology pack
+
+If medium confidence:
+→ mark as suggested for admin review
+
+If low confidence:
+→ do not auto-link, only report it
+
+--------------------------------------------------
+PART 3 — CARBON INTELLIGENCE PROJECT DISCOVERY
+--------------------------------------------------
+
+For the selected methodology, query Carbon Intelligence and identify projects using that methodology.
+
+Use:
+- carbon_projects
+- project_methodology_codes
+- canonical methodology normalization
+
+Return:
+- candidate project list
+- registry
+- country
+- status
+- estimated annual credits
+- registration date
+- whether documents already exist in repository
+
+The system should rank candidate projects by usefulness for the pack.
+
+Suggested ranking signals:
+- registered projects preferred
+- projects with documents already available preferred
+- projects with different geographies preferred
+- projects with validation/verification history preferred
+- projects with better extraction quality preferred
+
+--------------------------------------------------
+PART 4 — REMOTE DOCUMENT DISCOVERY
+--------------------------------------------------
+
+For candidate projects, attempt automatic document discovery where realistically possible.
+
+Examples:
+- project detail pages
+- known document endpoints
+- known assurance platform endpoints
+- stable PDF URLs
+- repository URLs already stored
+
+Do NOT perform uncontrolled bulk scraping.
+
+Only try to fetch documents for candidate projects selected by the system for the target methodology.
+
+If automatic retrieval succeeds:
+- download the document
+- ingest it via the existing document ingestion pipeline
+- classify it
+- link it to the pack if confidence is high
+
+If retrieval fails:
+- do not fail the whole job
+- add the item to the missing-items report
+
+--------------------------------------------------
+PART 5 — DOCUMENT CLASSIFICATION + PACK LINKING
+--------------------------------------------------
+
+For all discovered or existing documents, classify:
+
+- methodology_code
+- registry
+- document_type
+- project_id / project name if possible
+- methodology_version if detectable
+- document confidence score
+
+Document roles include:
+- METHODOLOGY_DOC
+- TOOL_DOC
+- GUIDANCE_DOC
+- TEMPLATE
+- PDD
+- MR
+- VALIDATION_REPORT
+- VERIFICATION_REPORT
+- DOE_FINDING
+
+Then:
+
+- auto-link high-confidence matches into methodology_pack_document_links
+- keep medium-confidence matches as suggestions
+- exclude low-confidence matches from automatic linking
+
+--------------------------------------------------
+PART 6 — FINDINGS DISCOVERY
+--------------------------------------------------
+
+If validation or verification reports exist in the repository for that methodology,
+or if DOE findings are already present,
+extract and link them as first-class pack content.
+
+Use the existing pack_findings structure.
+
+The goal is for the pack to capture not only “how projects are written”
+but also “what validators repeatedly flag”.
+
+--------------------------------------------------
+PART 7 — AUTO-BUILD WORKFLOW
+--------------------------------------------------
+
+Implement a helper flow such as:
+
+auto_build_pack(methodology_code, registry)
+
+The flow should:
+
+1. create pack if missing
+2. analyze methodology requirements
+3. inspect repository
+4. inspect Carbon Intelligence project candidates
+5. attempt remote document discovery where possible
+6. ingest newly downloaded documents
+7. auto-link high-confidence documents
+8. compute readiness
+9. generate a final structured report
+
+--------------------------------------------------
+PART 8 — MISSING-ITEMS REPORT
+--------------------------------------------------
+
+This is critical.
+
+At the end of auto-build, generate a human-readable structured report for the admin.
+
+The report must say clearly:
+
+FOUND AUTOMATICALLY
+- methodology doc found
+- X PDD found
+- Y MR found
+- Z validation reports found
+- N findings extracted
+
+MISSING / NEEDS MANUAL ACTION
+- missing methodology doc
+- missing tool X
+- missing guidance doc Y
+- missing MR for methodology
+- missing enough registered project examples
+- failed downloads for these specific projects/URLs
+
+UNCERTAIN ITEMS
+- documents detected with medium confidence
+- probable tool references not yet confirmed
+- probable methodology version mismatch
+
+This is the key value:
+the AI should reduce the admin workload and only escalate the missing pieces.
+
+--------------------------------------------------
+PART 9 — ADMIN UI
+--------------------------------------------------
+
+Extend the Methodology Packs admin UI with an Auto-Build action.
+
+Example actions:
+- Auto-Build Pack
+- Re-Scan Repository
+- Discover Candidate Projects
+- Attempt Remote Document Fetch
+- Show Missing Items Report
+
+The admin should be able to see:
+- what the system found
+- what it linked automatically
+- what still needs manual intervention
+
+--------------------------------------------------
+PART 10 — SAFETY RULES
+--------------------------------------------------
+
+1. Never break existing packs
+2. Never remove manually linked documents automatically
+3. Never overwrite admin selections silently
+4. If remote fetch fails, log and continue
+5. Keep all current fallback behavior in CarbonGPT
+6. Reuse existing ingestion/document systems
+7. Keep all changes additive and backward compatible
+
+--------------------------------------------------
+PART 11 — FINAL VALIDATION
+--------------------------------------------------
+
+After implementation, provide a full report including:
+
+1. files changed
+2. new functions/endpoints/UI actions added
+3. methodology auto-build results for at least:
+   - TPDDTEC
+   - VM0050
+4. what was found automatically
+5. what remains missing manually
+6. whether repository documents were successfully reused
+7. confirmation that CarbonGPT AI fallback still works
+8. confirmation that no existing functionality was broken
+
+The purpose is to make the AI behave like an intelligent methodology assistant:
+it should gather what it can automatically and ask the admin only for the missing pieces.

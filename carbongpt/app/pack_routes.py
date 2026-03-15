@@ -501,6 +501,198 @@ def auto_build_pack_endpoint(data: AutoBuildRequest):
     }
 
 
+# ─── AI-ASSISTED PACK BUILDER ENDPOINTS ────────────────────────────────────────
+
+class AIBuildRequest(BaseModel):
+    methodology_code: str
+    registry: Optional[str] = None
+    dry_run: bool = False
+    max_remote_attempts: int = 6
+    extract_findings: bool = True
+
+
+@router.get("/analyze-requirements/{code}")
+def analyze_requirements_endpoint(code: str, registry: Optional[str] = Query(None)):
+    """
+    Return the methodology requirements profile for a given code.
+    Uses static knowledge base + ref_methodologies + repository content.
+    """
+    from carbongpt.repository.pack_builder import analyze_methodology_requirements
+    profile = analyze_methodology_requirements(code, registry)
+    return {
+        "code": profile.code,
+        "registry": profile.registry,
+        "full_name": profile.full_name,
+        "sector": profile.sector,
+        "family": profile.family,
+        "source": profile.source,
+        "notes": profile.notes,
+        "known_tool_references": profile.known_tool_references,
+        "target_pdd_count": profile.target_pdd_count,
+        "target_mr_count": profile.target_mr_count,
+        "target_validation_count": profile.target_validation_count,
+        "required_docs": [
+            {
+                "doc_type":    rd.doc_type,
+                "label":       rd.label,
+                "confidence":  rd.confidence,
+                "source_hint": rd.source_hint,
+                "critical":    rd.critical,
+            }
+            for rd in profile.required_docs
+        ],
+    }
+
+
+@router.get("/discover-candidates/{code}")
+def discover_candidates_endpoint(
+    code: str,
+    registry: Optional[str] = Query(None),
+    limit: int = Query(20),
+):
+    """
+    Query Carbon Intelligence for candidate projects using this methodology.
+    Returns a ranked list with geographic diversity, registration status, and doc availability.
+    """
+    from carbongpt.repository.pack_builder import discover_ci_candidates
+    candidates = discover_ci_candidates(code, registry, limit=limit)
+    return {
+        "methodology_code": code,
+        "registry": registry,
+        "total_candidates": len(candidates),
+        "candidates": [
+            {
+                "project_id":               c.project_id,
+                "registry_id":              c.registry_id,
+                "name":                     c.name,
+                "registry":                 c.registry,
+                "country":                  c.country,
+                "status":                   c.status,
+                "estimated_annual_credits": c.estimated_annual_credits,
+                "registration_date":        c.registration_date,
+                "docs_in_repository":       c.docs_in_repository,
+                "usefulness_score":         c.usefulness_score,
+            }
+            for c in candidates
+        ],
+    }
+
+
+@router.post("/ai-build")
+def ai_build_pack_endpoint(data: AIBuildRequest):
+    """
+    Full AI-assisted pack build:
+      1. Analyze methodology requirements
+      2. Repository-first discovery (high/medium/low confidence tiers)
+      3. Carbon Intelligence candidate ranking
+      4. Remote document discovery (Verra API where possible)
+      5. Findings extraction from val/ver reports
+      6. Readiness evaluation
+      7. Missing-items report
+    """
+    from carbongpt.repository.pack_builder import build_pack_full
+
+    report = build_pack_full(
+        methodology_code=data.methodology_code,
+        registry=data.registry,
+        dry_run=data.dry_run,
+        max_remote_attempts=data.max_remote_attempts,
+        extract_findings=data.extract_findings,
+    )
+
+    def _cdoc(d):
+        return {
+            "doc_id":      d.doc_id,
+            "title":       d.title,
+            "category":    d.category,
+            "doc_role":    d.doc_role,
+            "confidence":  d.confidence,
+            "tier":        d.tier,
+            "linked":      d.linked,
+            "already_linked": d.already_linked,
+        }
+
+    return {
+        "methodology_code":  report.methodology_code,
+        "registry":          report.registry,
+        "pack_id":           report.pack_id,
+        "created_new_pack":  report.created_new_pack,
+        "dry_run":           report.dry_run,
+
+        "profile": {
+            "full_name":                report.profile.full_name,
+            "sector":                   report.profile.sector,
+            "family":                   report.profile.family,
+            "source":                   report.profile.source,
+            "notes":                    report.profile.notes,
+            "known_tool_references":    report.profile.known_tool_references,
+            "target_pdd_count":         report.profile.target_pdd_count,
+            "target_mr_count":          report.profile.target_mr_count,
+            "required_docs": [
+                {"doc_type": rd.doc_type, "label": rd.label,
+                 "confidence": rd.confidence, "source_hint": rd.source_hint}
+                for rd in report.profile.required_docs
+            ],
+        },
+
+        "found_automatically": {
+            "high_confidence_docs":   [_cdoc(d) for d in report.docs_high_confidence],
+            "medium_confidence_docs": [_cdoc(d) for d in report.docs_medium_confidence],
+            "low_confidence_docs":    [_cdoc(d) for d in report.docs_low_confidence],
+            "total_linked":           report.total_linked,
+            "total_suggested":        report.total_suggested,
+            "findings_extracted":     report.findings_extracted,
+        },
+
+        "carbon_intelligence": {
+            "total_candidates": len(report.ci_candidates),
+            "candidates": [
+                {
+                    "registry_id":              c.registry_id,
+                    "name":                     c.name[:80],
+                    "registry":                 c.registry,
+                    "country":                  c.country,
+                    "status":                   c.status,
+                    "estimated_annual_credits": c.estimated_annual_credits,
+                    "docs_in_repository":       c.docs_in_repository,
+                    "usefulness_score":         c.usefulness_score,
+                }
+                for c in report.ci_candidates[:10]
+            ],
+        },
+
+        "remote_discovery": [
+            {
+                "registry_id": d.registry_id,
+                "name":        d.name[:60],
+                "registry":    d.registry,
+                "attempted":   d.attempted,
+                "success":     d.success,
+                "doc_id":      d.doc_id,
+                "doc_url":     d.doc_url,
+                "error":       d.error,
+            }
+            for d in report.remote_discovery
+        ],
+
+        "readiness": report.readiness,
+
+        "missing_items_report": {
+            "total_missing": report.total_missing,
+            "items": [
+                {
+                    "item_type":     m.item_type,
+                    "label":         m.label,
+                    "criticality":   m.criticality,
+                    "source_hint":   m.source_hint,
+                    "manual_action": m.manual_action,
+                }
+                for m in report.missing_items
+            ],
+        },
+    }
+
+
 @router.post("/auto-build-all")
 def auto_build_all_packs(
     min_confidence: float = Query(0.55),

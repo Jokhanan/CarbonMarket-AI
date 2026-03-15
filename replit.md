@@ -53,6 +53,55 @@ The `monitoring_periods` DB table (id, project_id, period_number, period_start, 
 **Database Schema:**
 The database includes tables for standards, documents, compliance rules, carbon projects, user projects, and methodology intelligence. New tables for the Carbon Operating System include `project_parameters`, `project_lifecycle`, `project_tasks`, `evidence_links`, `er_scenarios`, `er_scenario_years`, `issuance_records`, `monitoring_tasks`, `audit_simulation_results`, and `monitoring_periods`. These tables support centralized parameter storage, lifecycle management, evidence linking, scenario management, audit reporting, and monitoring period tracking.
 
+## Methodology Pack Manager
+
+The Methodology Pack Manager provides a curated knowledge infrastructure for grounding CarbonGPT AI responses in real approved-project precedent.
+
+**Schema tables** (`carbongpt/repository/schema.py`):
+- `methodology_packs` — one pack per methodology code + registry, with readiness score and 5 hard gates
+- `methodology_pack_document_links` — links existing repository documents to packs with role, confidence flags, and provenance
+- `pack_findings` — DOE findings (CAR/CL/FAR) extracted from val/ver reports, linked to source documents
+- `methodology_pack_candidates` — Carbon Intelligence project candidates for a pack
+
+**Core modules**:
+- `carbongpt/repository/pack_store.py` — CRUD for packs, document links, readiness evaluation (G1–G5 hard gates + qualitative score)
+- `carbongpt/repository/pack_classifier.py` — Repository audit: detects methodology codes from document text, classifies doc types, auto-builds packs from scan results
+- `carbongpt/repository/pack_builder.py` — **AI-Assisted Auto Pack Builder**: orchestrates full methodology intelligence workflow
+
+**AI-Assisted Auto Pack Builder** (`pack_builder.py`):
+1. **Methodology Requirements Analyzer** — static knowledge base for TPDDTEC, VM0050, VM0042, ACM0002, AMS-I.D, AMS-I.E plus dynamic analysis from ref_methodologies and repository chunks. Returns a `MethodologyProfile` with required docs, tool references, and confidence levels (confirmed / probable / unknown).
+2. **Repository-First Discovery** — scans all document chunks for methodology codes; classifies docs into high (≥75%), medium (55–75%), low (<55%) confidence tiers; auto-links high-confidence docs into the pack.
+3. **Carbon Intelligence Candidate Discovery** — queries `carbon_projects` + `project_methodology_codes` for matching projects; ranks by registration status, geographic diversity, estimated credits, and existing repo coverage. Also searches the freeform `methodology` field (needed for TPDDTEC which isn't in pmc).
+4. **Remote Document Discovery** — attempts to download PDFs from the Verra Registry API for Verra projects; gracefully fails for Gold Standard (Cloudflare-blocked); logs all attempts to the missing-items report.
+5. **Findings Extraction** — scans validation/verification report chunks with regex for CAR/CL/FAR/CR patterns; inserts new findings into `pack_findings` table.
+6. **Missing-Items Report Generator** — compares methodology profile requirements against what's in the pack; generates prioritised list of critical / recommended / optional items with specific admin action steps.
+
+**API endpoints** (`carbongpt/app/pack_routes.py`):
+- `GET  /admin/packs/analyze-requirements/{code}` — methodology requirements profile
+- `GET  /admin/packs/discover-candidates/{code}` — CI project candidate ranking
+- `POST /admin/packs/ai-build` — full AI-assisted pack build (supports dry_run, max_remote_attempts, extract_findings)
+- `POST /admin/packs/audit` — full repository audit with methodology detection
+- `POST /admin/packs/auto-build` — lightweight pack build (classifier only, no CI/remote discovery)
+- `POST /admin/packs/auto-build-all` — auto-build all detected methodologies
+
+**Streamlit Admin UI** — "Methodology Packs" tab has 5 sub-tabs:
+1. Overview & Readiness — score gauge + hard gate status + activate/archive buttons
+2. Candidate Projects — Carbon Intelligence candidates with country/status filters
+3. Documents — upload + link + manage documents per pack
+4. Findings — CAR/CL/FAR findings manager
+5. **Auto-Build** — Run AI-Assisted Build / Dry Run / Discover CI Candidates / Extract Findings buttons; Requirements Profile expander; full build report with Found/Suggested/Remote Discovery/Missing Items sections
+
+**Readiness model**:
+- G1: methodology document ingested (500+ words)
+- G2: PDD count ≥ floor(target/2)
+- G3: extraction quality ≤ 30% poor PDFs
+- G4: ≥ 60% linked projects are registered
+- G5: at least one Monitoring Report ingested
+- Score 0–100 (gates + qualitative bonuses for diversity, findings, tool docs)
+- Status `ready_for_indexing` requires score ≥ 60 AND all 5 gates passing
+
+**AI fallback**: `_get_methodology_context()` in `ai_writer.py` uses pack-first retrieval when a pack is indexed, falls back to legacy `methodology_library` metadata transparently. No regression possible.
+
 ## External Dependencies
 
 -   **PostgreSQL:** Primary relational database.

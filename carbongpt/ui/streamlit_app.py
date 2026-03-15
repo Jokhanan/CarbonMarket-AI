@@ -1980,8 +1980,8 @@ def _render_methodology_packs():
         if pack.get("notes"):
             st.caption(f"Notes: {pack['notes']}")
 
-        det_tab1, det_tab2, det_tab3, det_tab4 = st.tabs([
-            "Overview & Readiness", "Candidate Projects", "Documents", "Findings"
+        det_tab1, det_tab2, det_tab3, det_tab4, det_tab5 = st.tabs([
+            "Overview & Readiness", "Candidate Projects", "Documents", "Findings", "Auto-Build"
         ])
 
         # ── Overview & Readiness ─────────────────────────────────────────────
@@ -2277,6 +2277,329 @@ def _render_methodology_packs():
                         if st.button("Delete", key=f"del_finding_{f['id']}", use_container_width=True):
                             _fetch(f"/admin/packs/{pack_id}/findings/{f['id']}", method="DELETE")
                             st.rerun()
+
+
+        # ── Auto-Build ────────────────────────────────────────────────────────
+        with det_tab5:
+            st.markdown(
+                "Run the AI-assisted pack builder for this methodology. "
+                "The system will analyse the requirements, scan the repository, "
+                "search Carbon Intelligence for candidate projects, attempt remote "
+                "document discovery, extract DOE findings, and produce a "
+                "structured missing-items report."
+            )
+            st.divider()
+
+            ab_code = pack.get("methodology_code", "")
+            ab_reg  = pack.get("registry", "")
+
+            # Utility: render a color badge
+            def _crit_badge(crit):
+                c = {"critical": "#ef4444", "recommended": "#f59e0b", "optional": "#6b7280"}.get(crit, "#6b7280")
+                return (f'<span style="background:{c};color:white;padding:1px 8px;'
+                        f'border-radius:10px;font-size:0.72rem;">{crit}</span>')
+
+            def _tier_badge(tier):
+                c = {"high": "#10b981", "medium": "#f59e0b", "low": "#9ca3af"}.get(tier, "#9ca3af")
+                return (f'<span style="background:{c};color:white;padding:1px 8px;'
+                        f'border-radius:10px;font-size:0.72rem;">{tier} confidence</span>')
+
+            # ── Action row ────────────────────────────────────────────────────
+            ab_col1, ab_col2, ab_col3, ab_col4 = st.columns(4)
+
+            if ab_col1.button(
+                "Run AI-Assisted Build",
+                key=f"ai_build_{pack_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                with st.spinner(f"Running AI-assisted build for {ab_code} — this may take 30–60 s…"):
+                    report = _fetch("/admin/packs/ai-build", method="POST", json={
+                        "methodology_code": ab_code,
+                        "registry":         ab_reg,
+                        "dry_run":          False,
+                        "max_remote_attempts": 6,
+                        "extract_findings": True,
+                    })
+                if report:
+                    st.session_state[f"ai_build_report_{pack_id}"] = report
+                    st.success(
+                        f"Build complete: {report.get('found_automatically', {}).get('total_linked', 0)} docs "
+                        f"linked, {report.get('missing_items_report', {}).get('total_missing', 0)} missing items."
+                    )
+                    st.rerun()
+                else:
+                    st.error("Build failed — check server logs.")
+
+            if ab_col2.button(
+                "Dry Run (Preview Only)",
+                key=f"ai_build_dry_{pack_id}",
+                use_container_width=True,
+            ):
+                with st.spinner(f"Previewing AI build for {ab_code}…"):
+                    report = _fetch("/admin/packs/ai-build", method="POST", json={
+                        "methodology_code": ab_code,
+                        "registry":         ab_reg,
+                        "dry_run":          True,
+                        "max_remote_attempts": 0,
+                        "extract_findings": False,
+                    })
+                if report:
+                    st.session_state[f"ai_build_report_{pack_id}"] = report
+                    st.info("Dry run complete — no changes made.")
+                    st.rerun()
+                else:
+                    st.error("Preview failed.")
+
+            if ab_col3.button(
+                "Discover CI Candidates",
+                key=f"ci_disc_{pack_id}",
+                use_container_width=True,
+            ):
+                with st.spinner("Querying Carbon Intelligence…"):
+                    ci = _fetch(f"/admin/packs/discover-candidates/{ab_code}?registry={ab_reg}&limit=20")
+                if ci:
+                    st.session_state[f"ci_candidates_{pack_id}"] = ci
+                    st.info(f"Found {ci.get('total_candidates', 0)} candidate projects.")
+                    st.rerun()
+                else:
+                    st.warning("No candidates found or query failed.")
+
+            if ab_col4.button(
+                "Extract Findings",
+                key=f"ext_findings_{pack_id}",
+                use_container_width=True,
+            ):
+                with st.spinner("Scanning val/ver reports for CAR/CL/FAR findings…"):
+                    from carbongpt.repository.pack_builder import extract_pack_findings
+                    try:
+                        n = extract_pack_findings(pack_id)
+                        st.success(f"Extracted {n} new findings from validation/verification reports.")
+                        st.rerun()
+                    except Exception as _exc:
+                        st.error(f"Extraction error: {_exc}")
+
+            st.divider()
+
+            # ── Methodology Requirements Profile ─────────────────────────────
+            with st.expander("Methodology Requirements Profile", expanded=False):
+                with st.spinner("Loading profile…"):
+                    profile_data = _fetch(f"/admin/packs/analyze-requirements/{ab_code}?registry={ab_reg}")
+                if profile_data:
+                    st.markdown(f"**{profile_data.get('full_name', ab_code)}**")
+                    st.caption(
+                        f"Registry: {profile_data.get('registry','').upper()} | "
+                        f"Sector: {profile_data.get('sector','')} | "
+                        f"Family: {profile_data.get('family','')} | "
+                        f"Source: {profile_data.get('source','')}"
+                    )
+                    if profile_data.get("notes"):
+                        st.caption(profile_data["notes"])
+
+                    st.markdown("**Required Documents**")
+                    for rd in profile_data.get("required_docs", []):
+                        conf_c = {"confirmed": "#10b981", "probable": "#f59e0b", "unknown": "#9ca3af"}.get(
+                            rd.get("confidence", "unknown"), "#9ca3af")
+                        st.markdown(
+                            f'<div style="padding:4px 0;font-size:0.83rem;">'
+                            f'<span style="color:{conf_c};font-weight:600;">[{rd.get("confidence","?").upper()}]</span> '
+                            f'<strong>{rd.get("doc_type","")}</strong> — {rd.get("label","")} '
+                            f'<span style="color:#6b7280;font-size:0.77rem;">(source: {rd.get("source_hint","")})</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    if profile_data.get("known_tool_references"):
+                        st.markdown("**Referenced Tools**")
+                        for t in profile_data["known_tool_references"]:
+                            st.markdown(f"- {t}")
+                else:
+                    st.info("Could not load requirements profile.")
+
+            # ── Last Build Report ─────────────────────────────────────────────
+            report = st.session_state.get(f"ai_build_report_{pack_id}")
+
+            if report:
+                dry_label = " (Dry Run — no changes made)" if report.get("dry_run") else ""
+                st.markdown(f"#### Last Build Report{dry_label}")
+
+                found = report.get("found_automatically", {})
+                ci_data = report.get("carbon_intelligence", {})
+                remote  = report.get("remote_discovery", [])
+                missing = report.get("missing_items_report", {})
+
+                # Summary strip
+                sm1, sm2, sm3, sm4 = st.columns(4)
+                sm1.metric("Docs Linked",     found.get("total_linked", 0))
+                sm2.metric("Suggested",       found.get("total_suggested", 0))
+                sm3.metric("Findings Extracted", found.get("findings_extracted", 0))
+                sm4.metric("Missing Items",   missing.get("total_missing", 0))
+
+                st.divider()
+
+                # FOUND section
+                with st.expander("FOUND AUTOMATICALLY", expanded=True):
+                    high  = found.get("high_confidence_docs", [])
+                    med   = found.get("medium_confidence_docs", [])
+                    low   = found.get("low_confidence_docs", [])
+
+                    if high:
+                        st.markdown(f"**Auto-Linked ({len(high)} docs)**")
+                        for d in high:
+                            linked_lbl = "linked" if d.get("linked") else ("dry-run" if report.get("dry_run") else "not linked")
+                            st.markdown(
+                                f'<div data-testid="ab-doc-high-{d["doc_id"]}" style="font-size:0.82rem;padding:2px 0;">'
+                                f'{_tier_badge(d["tier"])} &nbsp;'
+                                f'<strong>{d.get("doc_role","")}</strong> — '
+                                f'{(d.get("title") or "")[:70]}'
+                                f' <span style="color:#6b7280;">[{linked_lbl}]</span>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                    else:
+                        st.info("No high-confidence documents found automatically.")
+
+                    if med:
+                        st.markdown(f"**Suggested for Admin Review ({len(med)} docs)**")
+                        for d in med:
+                            st.markdown(
+                                f'<div data-testid="ab-doc-med-{d["doc_id"]}" style="font-size:0.82rem;padding:2px 0;">'
+                                f'{_tier_badge(d["tier"])} &nbsp;'
+                                f'<strong>{d.get("doc_role","")}</strong> — '
+                                f'{(d.get("title") or "")[:70]}'
+                                f' <span style="color:#6b7280;">[conf: {d.get("confidence",0):.0%}]</span>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                    if low:
+                        with st.expander(f"Low-confidence matches ({len(low)}) — not linked"):
+                            for d in low:
+                                st.markdown(
+                                    f'<div style="font-size:0.80rem;color:#6b7280;padding:1px 0;">'
+                                    f'{(d.get("title") or "")[:80]} '
+                                    f'[conf: {d.get("confidence",0):.0%}]</div>',
+                                    unsafe_allow_html=True,
+                                )
+
+                # CARBON INTELLIGENCE CANDIDATES section
+                if ci_data.get("total_candidates", 0) > 0:
+                    with st.expander(
+                        f"CARBON INTELLIGENCE CANDIDATES ({ci_data['total_candidates']} found)",
+                        expanded=False,
+                    ):
+                        st.caption(
+                            "Ranked by registration status, geographic diversity, "
+                            "estimated credits, and document availability in repository."
+                        )
+                        for c in ci_data.get("candidates", [])[:10]:
+                            cred = c.get("estimated_annual_credits") or 0
+                            doc_cnt = c.get("docs_in_repository", 0)
+                            doc_badge = (
+                                f'<span style="color:#10b981;">{doc_cnt} docs in repo</span>'
+                                if doc_cnt else '<span style="color:#ef4444;">no docs yet</span>'
+                            )
+                            st.markdown(
+                                f'<div data-testid="ci-cand-{c["registry_id"]}" '
+                                f'style="font-size:0.82rem;border-left:3px solid #3b82f6;'
+                                f'padding:3px 8px;margin-bottom:3px;">'
+                                f'<strong>{c["registry_id"]}</strong> {(c.get("name") or "")[:60]}'
+                                f'<span style="color:#6b7280;"> | {c.get("country","")} | '
+                                f'{int(cred):,} tCO2e/yr | score: {c.get("usefulness_score",0):.2f}</span>'
+                                f' {doc_badge}</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                # REMOTE DISCOVERY section
+                if remote:
+                    attempted = [d for d in remote if d.get("attempted")]
+                    successes = [d for d in remote if d.get("success")]
+                    failures  = [d for d in remote if d.get("attempted") and not d.get("success")]
+                    with st.expander(
+                        f"REMOTE DISCOVERY ({len(attempted)} attempts, {len(successes)} successful)",
+                        expanded=bool(successes),
+                    ):
+                        if successes:
+                            st.markdown("**Successfully Downloaded:**")
+                            for d in successes:
+                                st.markdown(
+                                    f'<div style="color:#10b981;font-size:0.82rem;">'
+                                    f'+ {d["registry_id"]} — {(d.get("name") or "")[:50]} '
+                                    f'(doc_id: {d.get("doc_id")})</div>',
+                                    unsafe_allow_html=True,
+                                )
+                        if failures:
+                            st.markdown("**Failed (manual download needed):**")
+                            for d in failures:
+                                st.markdown(
+                                    f'<div style="color:#ef4444;font-size:0.82rem;">'
+                                    f'- {d["registry_id"]} — {(d.get("name") or "")[:50]} — '
+                                    f'{d.get("error","unknown error")[:100]}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                        not_attempted = [d for d in remote if not d.get("attempted")]
+                        if not_attempted:
+                            st.markdown("**Skipped (registry not supported for automatic download):**")
+                            for d in not_attempted:
+                                st.markdown(
+                                    f'<div style="color:#9ca3af;font-size:0.80rem;">'
+                                    f'~ {d["registry_id"]} {(d.get("name") or "")[:50]} — '
+                                    f'{d.get("error","")[:120]}</div>',
+                                    unsafe_allow_html=True,
+                                )
+
+                # MISSING ITEMS REPORT section
+                with st.expander(
+                    f"MISSING / NEEDS MANUAL ACTION ({missing.get('total_missing', 0)} items)",
+                    expanded=True,
+                ):
+                    if not missing.get("items"):
+                        st.success("Nothing is missing — pack meets all requirements!")
+                    else:
+                        crit_order = {"critical": 0, "recommended": 1, "optional": 2}
+                        sorted_items = sorted(
+                            missing.get("items", []),
+                            key=lambda x: crit_order.get(x.get("criticality", "optional"), 3),
+                        )
+                        for m in sorted_items:
+                            st.markdown(
+                                f'<div data-testid="missing-{m["item_type"]}" '
+                                f'style="border:1px solid #e5e7eb;border-radius:6px;'
+                                f'padding:8px 12px;margin-bottom:8px;">'
+                                f'{_crit_badge(m.get("criticality","optional"))} '
+                                f'<strong style="margin-left:6px;">{m.get("label","")}</strong>'
+                                f'<div style="font-size:0.80rem;color:#374151;margin-top:4px;">'
+                                f'<strong>Action:</strong> {m.get("manual_action","")}</div>'
+                                f'<div style="font-size:0.78rem;color:#9ca3af;margin-top:2px;">'
+                                f'Source: {m.get("source_hint","")}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
+            else:
+                st.info(
+                    "No build report yet. Click 'Run AI-Assisted Build' or 'Dry Run (Preview Only)' above."
+                )
+
+            # ── Standalone CI candidates (from Discover button) ───────────────
+            ci_state = st.session_state.get(f"ci_candidates_{pack_id}")
+            if ci_state and not report:
+                with st.expander(
+                    f"CI Candidates for {ab_code} ({ci_state.get('total_candidates',0)} found)",
+                    expanded=True,
+                ):
+                    for c in ci_state.get("candidates", [])[:15]:
+                        cred = c.get("estimated_annual_credits") or 0
+                        doc_cnt = c.get("docs_in_repository", 0)
+                        st.markdown(
+                            f'<div style="font-size:0.82rem;border-left:3px solid #3b82f6;'
+                            f'padding:3px 8px;margin-bottom:3px;">'
+                            f'<strong>{c["registry_id"]}</strong> {(c.get("name") or "")[:60]}'
+                            f' <span style="color:#6b7280;"> | {c.get("country","")} | '
+                            f'{int(cred):,} tCO2e/yr | score {c.get("usefulness_score",0):.2f} '
+                            f'| {doc_cnt} docs in repo</span></div>',
+                            unsafe_allow_html=True,
+                        )
 
 
 def _render_upload():
