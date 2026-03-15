@@ -1,0 +1,103 @@
+I want to migrate this entire CarbonGPT / Carbon Intelligence application to another Replit account without losing ANY data.
+
+Please perform the following steps automatically and guide me.
+
+STEP 1 — Create a full database backup
+
+Use pg_dump to export the entire PostgreSQL database connected to DATABASE_URL.
+
+Save it in the workspace as:
+
+carbongpt_full_backup.sql
+
+The dump must include:
+- all tables
+- all rows
+- pgvector embeddings
+- methodology packs
+- findings
+- carbon intelligence projects
+- document metadata
+
+Command example (adapt if needed):
+
+pg_dump "$DATABASE_URL" \
+--no-owner \
+--no-acl \
+--if-exists \
+--clean \
+-F p \
+-f carbongpt_full_backup.sql
+
+After creating the file:
+- confirm its size
+- confirm the number of lines
+
+
+STEP 2 — Prepare the complete workspace package
+
+Verify that the following directories exist and will be included in the download:
+
+document_repository/
+uploads/
+project_files/
+attached_assets/
+
+Also confirm that the file carbongpt_full_backup.sql is present.
+
+Then instruct me EXACTLY how to download the entire workspace as a ZIP using the Replit Files panel.
+
+
+STEP 3 — Generate the restore instructions for the new Replit
+
+Write the exact procedure I must follow in the NEW Replit:
+
+1) upload the zip
+2) extract it
+3) restore the database using:
+
+psql "$DATABASE_URL" < carbongpt_full_backup.sql
+
+
+STEP 4 — Generate the startup prompt for the NEW Replit
+
+Write a prompt I can give to the new Replit AI that will:
+
+- verify the database is restored
+- verify pgvector is installed
+- verify document_chunks embeddings exist
+- verify repository files exist
+- verify carbon_projects table is populated
+- start the FastAPI server
+- run a full system health check
+
+The prompt should ask the new Replit to verify:
+
+documents
+document_chunks
+carbon_projects
+methodology_packs
+pack_findings
+
+and confirm the counts match expectations.
+
+
+STEP 5 — Safety verification
+
+Add commands to verify migration success:
+
+SELECT COUNT(*) FROM documents;
+SELECT COUNT(*) FROM document_chunks;
+SELECT COUNT(*) FROM carbon_projects;
+SELECT COUNT(*) FROM methodology_packs;
+
+and confirm that embeddings exist.
+
+
+IMPORTANT
+
+Do NOT delete anything.
+Do NOT move files.
+Only create the backup and give instructions.
+
+At the end provide a clear checklist for me.
