@@ -102,6 +102,13 @@ The Methodology Pack Manager provides a curated knowledge infrastructure for gro
 
 **AI fallback**: `_get_methodology_context()` in `ai_writer.py` uses pack-first retrieval when a pack is indexed, falls back to legacy `methodology_library` metadata transparently. No regression possible.
 
+## Startup & Deployment Notes
+
+- **FastAPI startup time**: The backend takes ~45 seconds on first boot to run schema migrations, country normalization, and registry seeding. Streamlit is ready immediately.
+- **Startup health check**: `streamlit_app.py` pings `GET /health` before rendering the UI. While FastAPI is initialising, a clean "Starting up..." screen is shown with auto-retry (every 3 s, up to 60 s). This prevents scattered connection errors from appearing throughout the UI.
+- **API base URL**: Controlled by `CARBONGPT_API_URL` env var (default: `http://localhost:3000`). Can be overridden in the deployment environment if needed.
+- **Deployment command**: `bash start_carbongpt.sh` — starts Streamlit (background, port 5000) and FastAPI via `exec uvicorn` (port 3000). Both run in the same VM.
+
 ## External Dependencies
 
 -   **PostgreSQL:** Primary relational database.

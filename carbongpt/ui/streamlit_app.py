@@ -1606,6 +1606,52 @@ SVG_ICONS = {
     "activity": '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
 }
 
+
+# ---------------------------------------------------------------------------
+# Startup health check — show a clean waiting screen while the AI backend
+# is still initialising (schema migration, country seeding, etc.)
+# ---------------------------------------------------------------------------
+def _api_healthy(timeout: int = 3) -> bool:
+    try:
+        r = requests.get(f"{API_BASE}/health", timeout=timeout)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+if "api_startup_ok" not in st.session_state:
+    if _api_healthy():
+        st.session_state["api_startup_ok"] = True
+    else:
+        _attempts = st.session_state.get("_api_startup_attempts", 0)
+        st.session_state["_api_startup_attempts"] = _attempts + 1
+        _max_attempts = 20  # 20 × 3 s = 60 s
+        if _attempts < _max_attempts:
+            st.markdown(
+                """
+                <div style="display:flex;flex-direction:column;align-items:center;
+                            justify-content:center;min-height:60vh;gap:1rem;">
+                  <div style="font-size:2rem;font-weight:700;color:#0d9488;">CarbonGPT</div>
+                  <div style="color:#475569;font-size:1rem;">
+                    AI backend is starting up — this takes about 30 seconds on first boot.
+                  </div>
+                  <div style="color:#94a3b8;font-size:0.85rem;">
+                    Attempt {attempt} of {total} &nbsp;&bull;&nbsp; page will reload automatically
+                  </div>
+                </div>
+                """.format(attempt=_attempts + 1, total=_max_attempts),
+                unsafe_allow_html=True,
+            )
+            time.sleep(3)
+            st.rerun()
+        else:
+            st.error(
+                "The AI backend could not be reached after 60 seconds. "
+                "Please refresh the page or restart the application."
+            )
+            st.stop()
+
+
 with st.sidebar:
     st.markdown("""
     <div class="brand-header">
@@ -4624,7 +4670,7 @@ def _render_import_document_wizard(existing_projects, step_key):
             try:
                 import requests as _req
                 resp = _req.post(
-                    "http://localhost:3000/projects/import-document",
+                    f"{API_BASE}/projects/import-document",
                     files={"file": (uploaded.name, uploaded.getvalue(), uploaded.type)},
                     timeout=60,
                 )
@@ -7026,10 +7072,9 @@ def _render_findings_upload(project):
                 with st.spinner("Parsing document and extracting findings with AI..."):
                     try:
                         import requests
-                        api_base = st.session_state.get("api_base", "http://localhost:3000")
                         files_payload = {"file": (uploaded.name, uploaded.getvalue())}
                         resp = requests.post(
-                            f"{api_base}/projects/{project_id}/parse-findings-document",
+                            f"{API_BASE}/projects/{project_id}/parse-findings-document",
                             files=files_payload,
                             timeout=120,
                         )
