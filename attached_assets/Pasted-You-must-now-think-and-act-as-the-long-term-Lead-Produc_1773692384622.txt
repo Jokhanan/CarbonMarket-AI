@@ -1,0 +1,303 @@
+You must now think and act as the long-term Lead Product Architect and AI Systems Architect of this platform.
+
+This is not just a coding task.
+This is not just a UI task.
+This is not just a carbon calculation task.
+
+You must fully internalize the real product vision.
+
+==================================================
+PRODUCT VISION
+==================================================
+
+This platform is meant to become an AI-powered end-to-end carbon project operating system.
+
+It should eventually allow a user to do things like:
+
+- "Generate a carbon project for distributing 100,000 improved cookstoves in Burundi using TPDDTEC."
+- "Which African country is most promising for a new cookstove project?"
+- "Which standard should I choose: Verra or Gold Standard?"
+- "What documents and steps do I need before I can even draft the PDD?"
+- "Who should I invite to the local stakeholder consultation and how do I document it?"
+- "What are the likely findings a validator will raise?"
+- "Can you help me prepare the monitoring data and random sampling?"
+- "Can you connect this project to a human expert reviewer?"
+- "Can you compare my project to similar registered projects?"
+- "Can you help me prepare for validation, monitoring, issuance, and buyers?"
+
+The platform should become a true one-stop carbon project development platform:
+- design projects
+- benchmark markets
+- choose methodologies
+- estimate ERs
+- write documents
+- prepare validation
+- manage monitoring
+- help with operations
+- optionally escalate to human experts
+
+==================================================
+YOUR ROLE
+==================================================
+
+You must act simultaneously as:
+
+- senior carbon market expert
+- senior carbon methodology expert
+- senior AI systems architect
+- senior product architect
+- senior workflow designer
+- senior SaaS strategist
+
+Your job is to deeply understand what this platform should become, compare that vision to the current application, and tell us what is missing.
+
+Do NOT jump straight into coding.
+
+First do a deep product/architecture diagnosis.
+
+==================================================
+PART 1 — RECONSTRUCT THE FULL PRODUCT MODEL
+==================================================
+
+From the existing codebase, reconstruct the current platform model.
+
+Identify all major product domains already present:
+- project creation
+- methodology selection
+- parameter engine
+- ER simulation
+- Excel export
+- writing / drafting
+- review / audit
+- repository
+- methodology packs
+- Carbon Intelligence
+- profiles
+- lifecycle
+- findings
+- copilot
+- admin tools
+
+Explain how these domains currently fit together.
+
+==================================================
+PART 2 — DEFINE THE TRUE END-TO-END CARBON WORKFLOW
+==================================================
+
+Define the full real-world carbon project lifecycle this platform should support.
+
+Not just from PDD onwards, but from the very beginning.
+
+Include stages such as:
+- understanding carbon markets
+- choosing a standard
+- selecting a country / region
+- identifying a viable project concept
+- checking additionality feasibility
+- preparing stakeholder consultation
+- gathering baseline and financial evidence
+- choosing methodology and tools
+- parameter determination
+- ER estimation
+- drafting the PDD
+- validation preparation
+- responding to findings
+- monitoring planning
+- data collection / Kobo / sampling / MR preparation
+- verification / issuance
+- buyer / market / intelligence layer
+- optional human expert review
+
+Explain which of these stages are already partially supported and which are missing.
+
+==================================================
+PART 3 — IDENTIFY THE BIGGEST ARCHITECTURAL GAP
+==================================================
+
+Evaluate whether the application currently has a true central orchestration layer.
+
+Specifically analyze whether it lacks a unified:
+- Project Brain
+- Workflow Orchestrator
+- Project Command Center
+
+Explain:
+- what this central layer should know
+- what it should decide
+- what it should automate
+- what it should recommend
+- how it should unify the current modules
+
+Be explicit about:
+- current fragmentation
+- missing coordination
+- missing proactive guidance
+- missing state synthesis
+
+==================================================
+PART 4 — DEFINE THE PROJECT BRAIN
+==================================================
+
+Design the concept of a Project Brain / Command Center for this platform.
+
+It should be the central intelligence layer that understands:
+
+- project stage
+- blockers
+- missing evidence
+- missing parameters
+- methodology dependencies
+- draft freshness / stale sections
+- audit risk
+- market intelligence relevance
+- next best actions
+- opportunities for automation
+- when to ask for human review
+
+It should support both:
+- user-facing guidance
+- system-facing orchestration
+
+Describe:
+1. what data it should read
+2. what outputs it should generate
+3. what UI surfaces it should power
+4. which actions it should trigger automatically
+5. where human approval is required
+
+==================================================
+PART 5 — DEFINE THE AI OPERATING MODEL
+==================================================
+
+The AI should not just be a chatbot.
+It should become an active operating layer.
+
+Please define the future AI operating model for this platform.
+
+Examples of AI capabilities we want:
+- propose a project idea from market data
+- benchmark countries and methodologies
+- suggest standard choice
+- auto-extract and apply parameter values
+- auto-build methodology packs
+- draft PDD and MR sections
+- identify likely validation findings
+- suggest next actions
+- explain standards and methodology requirements to beginners
+- guide stakeholder consultation preparation
+- help manage monitoring data / sampling workflows
+- escalate missing items to the admin
+- recommend human review when needed
+
+For each major AI role, explain:
+- what context it needs
+- what current modules already support it
+- what is missing
+
+==================================================
+PART 6 — HUMAN-IN-THE-LOOP LAYER
+==================================================
+
+This is important.
+
+The platform should support a “Do a human review” capability later.
+
+Please define how a human expert review layer should fit into the product.
+
+Examples:
+- user requests expert review of generated PDD
+- expert is invited into the project
+- expert sees drafts, parameters, evidence, findings
+- expert comments / annotates
+- expert suggestions feed back into the project
+
+Explain what architecture should be prepared now so this can be added later cleanly.
+
+==================================================
+PART 7 — OPERATIONAL / DATA INTEGRATION LAYER
+==================================================
+
+The product vision goes beyond writing.
+
+It may eventually connect to:
+- KoboToolbox
+- distribution databases
+- monitoring spreadsheets
+- random sampling tools
+- field survey pipelines
+- buyer / market data
+- registry updates
+- methodology/tool version monitoring
+
+Please identify:
+- which operational integrations are the most strategically important
+- which ones should come early
+- which ones can wait
+- what architecture should be prepared now
+
+==================================================
+PART 8 — WHAT IS MISSING TODAY
+==================================================
+
+Now compare the current application to the full product vision.
+
+Tell us, honestly and concretely:
+
+What is missing for the platform to become the system described above?
+
+Split this into:
+- product gaps
+- AI gaps
+- workflow gaps
+- UX gaps
+- architecture gaps
+- data gaps
+- methodology/compliance gaps
+
+Be candid.
+Do not just list bugs.
+Identify structural missing capabilities.
+
+==================================================
+PART 9 — PRIORITIZED ROADMAP
+==================================================
+
+Give a roadmap in phases.
+
+For example:
+Phase 1 — critical structural fixes
+Phase 2 — Project Brain / orchestration layer
+Phase 3 — proactive AI workflows
+Phase 4 — premium UX / user guidance
+Phase 5 — operations + monitoring integrations
+Phase 6 — human expert review + buyer layer
+
+For each phase:
+- describe the goal
+- user impact
+- why it matters
+- implementation risk
+- dependencies
+
+==================================================
+PART 10 — OUTPUT FORMAT
+==================================================
+
+Please structure your answer as:
+
+1. Executive Summary
+2. What the platform is trying to become
+3. Current system architecture
+4. Full carbon project lifecycle model
+5. The biggest architectural gap
+6. Project Brain design
+7. Future AI operating model
+8. Human-in-the-loop layer
+9. Operational/data integration layer
+10. What is missing today
+11. Prioritized roadmap
+
+IMPORTANT:
+Do NOT start coding yet.
+First produce the full conceptual diagnosis and roadmap.
+We will decide implementation after that.
