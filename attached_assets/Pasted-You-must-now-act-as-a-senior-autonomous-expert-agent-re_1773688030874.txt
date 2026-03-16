@@ -1,0 +1,217 @@
+You must now act as a senior autonomous expert agent responsible for deeply understanding and improving this entire platform.
+
+Your role is NOT only a programmer.
+
+You must act simultaneously as:
+
+• a senior carbon market expert
+• a senior AI product architect
+• a senior UX/product designer
+• a carbon project developer expert
+• a system architect
+
+Your goal is to fully understand this application at a conceptual level, not only a code level.
+
+This application is meant to become a high-level platform for carbon project developers, combining:
+
+1) CarbonGPT
+   → AI-assisted writing, reviewing, and auditing of carbon project documentation
+
+2) Carbon Intelligence
+   → market intelligence, registry analysis, methodology insights
+
+The platform must eventually function as a kind of **Bloomberg terminal for the carbon market + AI copilot for project development**.
+
+Before making more changes, you must first deeply understand the system.
+
+------------------------------------------------
+
+PHASE 1 — DEEP SYSTEM ORIENTATION
+
+You must read and analyze the full codebase and reconstruct the conceptual architecture.
+
+Identify:
+
+• all major modules
+• their responsibilities
+• how they interact
+• what data flows exist
+• how AI interacts with the system
+• where calculations happen
+• how methodologies are handled
+• how projects are structured
+
+Produce a clear architecture map.
+
+------------------------------------------------
+
+PHASE 2 — PRODUCT INTENT UNDERSTANDING
+
+Infer the product's real purpose.
+
+Ask yourself:
+
+What kind of product is this supposed to become?
+
+Think about:
+
+• carbon project development workflow
+• validation and verification workflows
+• carbon registries
+• methodologies
+• emission reduction calculations
+• monitoring reports
+• findings and audits
+• intelligence about markets and methodologies
+
+Explain how the platform is trying to support these workflows.
+
+------------------------------------------------
+
+PHASE 3 — END-TO-END USER JOURNEY ANALYSIS
+
+Simulate a real expert user.
+
+Example user types:
+
+• carbon project developer
+• consultant preparing a PDD
+• validation body reviewer
+• climate finance analyst
+
+Trace the full journey:
+
+1) create project
+2) choose methodology
+3) enter parameters
+4) simulate ER
+5) analyze results
+6) generate documentation
+7) review documents
+8) export evidence
+9) analyze market data
+
+Identify where the flow:
+
+• is clear
+• is confusing
+• asks things in the wrong order
+• duplicates information
+• misses automation opportunities
+
+------------------------------------------------
+
+PHASE 4 — AI INTEGRATION ANALYSIS
+
+Evaluate the current AI integration.
+
+Questions:
+
+• Is the AI acting as a real copilot or just a helper?
+• Where should AI proactively assist the user?
+• Where could AI reduce user effort dramatically?
+• Where could AI automatically discover missing information?
+• How should AI integrate with:
+  - methodology packs
+  - repository documents
+  - carbon intelligence data
+  - project parameters
+
+Identify the biggest missed AI opportunities.
+
+------------------------------------------------
+
+PHASE 5 — METHODOLOGY AND CALCULATION LOGIC REVIEW
+
+Audit the calculation logic.
+
+Verify:
+
+• methodology pathways
+• parameter dependencies
+• emission reduction calculations
+• scale detection
+• SDG derivation
+• ER Excel exports
+
+Identify:
+
+• simplifications that break methodology logic
+• missing traceability
+• wrong assumptions
+• duplicated calculations
+
+------------------------------------------------
+
+PHASE 6 — UX AND PRODUCT DESIGN REVIEW
+
+Evaluate the application like a premium SaaS product.
+
+Compare mentally with tools like:
+
+• Stripe
+• Linear
+• Notion
+• modern AI copilots
+
+Evaluate:
+
+• visual hierarchy
+• navigation clarity
+• dashboard usefulness
+• cognitive load
+• organization of features
+
+Identify what makes the product feel:
+
+• confusing
+• fragmented
+• unfinished
+• non-premium
+
+------------------------------------------------
+
+PHASE 7 — WHAT IS MISSING FOR AN EXCELLENT PRODUCT
+
+Now answer honestly:
+
+What is missing to make this platform truly excellent?
+
+Think about:
+
+• automation
+• AI intelligence
+• data integration
+• user guidance
+• workflow fluidity
+• auditability
+• market insights
+• premium UX
+
+------------------------------------------------
+
+PHASE 8 — PRIORITIZED IMPROVEMENT ROADMAP
+
+Provide a roadmap with:
+
+Top product improvements  
+Top UX improvements  
+Top AI improvements  
+Top architecture improvements  
+
+Then propose:
+
+Phase 1 — critical fixes  
+Phase 2 — workflow improvements  
+Phase 3 — premium UX  
+Phase 4 — advanced AI capabilities
+
+------------------------------------------------
+
+IMPORTANT
+
+Do NOT jump into coding immediately.
+
+First produce the full audit and system understanding report.
+
+Once the system is fully understood, we will decide the next improvements.
