@@ -562,15 +562,63 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
             "cumulative_er": round(cumulative_er, 2),
         })
 
+    # Full traceable per-unit emission chain (same canonical structure as calculate_cookstove_er)
+    pe_formula_str_cohort = (
+        f"EC_p × (EF_CO2_p + EF_nonCO2_p) [no fNRB, fuel switch] = {ec_p:.6f} × ({EF_CO2_p} + {EF_nonCO2_p})"
+        if is_method_3 else
+        f"EC_p × (fNRB × EF_CO2_p + EF_nonCO2_p) = {ec_p:.6f} × ({fNRB} × {EF_CO2_p} + {EF_nonCO2_p})"
+    )
+    if is_charcoal_baseline and CF > 1.0:
+        cf_formula_cohort = f"SFC_b × CF = {bl_consumption:.6f} × {CF}"
+    else:
+        cf_formula_cohort = f"SFC_b (wood, CF=1): {bl_consumption:.6f}"
     calculation_steps = [
-        {"step": 1, "name": "ER per unit per year (before leakage)", "formula": f"BE_unit - PE_unit = {be_per_unit:.6f} - {pe_per_unit:.6f}", "value": round(er_per_unit, 6), "unit": "tCO2e/unit/yr"},
-        {"step": 2, "name": "Deployment mode", "formula": deployment_mode, "value": deployment_mode, "unit": ""},
-        {"step": 3, "name": "Total units to deploy", "formula": f"num_households = {num_hh}", "value": num_hh, "unit": "units"},
-        {"step": 4, "name": "Technology lifetime", "formula": f"{tech_lifetime_years} years", "value": tech_lifetime_years, "unit": "years"},
-        {"step": 5, "name": "Drop-off model", "formula": f"{dropoff_mode}: {annual_dropoff_rate*100:.1f}%/yr" if dropoff_mode == "annual_rate" else f"{dropoff_mode}: custom curve", "value": annual_dropoff_rate if dropoff_mode == "annual_rate" else "custom", "unit": ""},
-        {"step": 6, "name": "Usage rate", "formula": f"{usage_rate_mode}: {usage_rate_fixed:.0%}" if usage_rate_mode == "fixed" else f"{usage_rate_mode}: custom curve", "value": usage_rate_fixed if usage_rate_mode == "fixed" else "custom", "unit": ""},
-        {"step": 7, "name": "Deployment timing", "formula": f"{deployment_timing} of period (factor: {timing_factor})", "value": timing_factor, "unit": ""},
+        {"step": 1, "canonical_key": "baseline_fuel_consumption",
+         "name": "Baseline fuel consumption per device",
+         "formula": f"baseline_fuel_consumption = {bl_consumption:.6f} t/device/yr",
+         "value": round(bl_consumption, 6), "unit": "t/device/yr"},
+        {"step": 2, "canonical_key": "project_fuel_consumption",
+         "name": "Project fuel consumption per device",
+         "formula": f"project_fuel_consumption = {pj_consumption:.6f} t/device/yr",
+         "value": round(pj_consumption, 6), "unit": "t/device/yr"},
+        {"step": 3, "canonical_key": "cf_adjustment",
+         "name": "CF-adjusted baseline wood-equivalent consumption",
+         "formula": cf_formula_cohort,
+         "value": round(bl_consumption_wood_equiv, 6), "unit": "t wood-equiv/device/yr"},
+        {"step": 4, "canonical_key": "baseline_energy_tj",
+         "name": "Baseline energy consumption",
+         "formula": f"EC_b = SFC_b,we × NCV_b / 1000 = {bl_consumption_wood_equiv:.6f} × {NCV_b} / 1000",
+         "value": round(ec_b, 6), "unit": "TJ/device/yr"},
+        {"step": 5, "canonical_key": "baseline_emissions_per_device",
+         "name": "Baseline emissions per device",
+         "formula": f"BE/device = EC_b × (fNRB × EF_CO2_b + EF_nonCO2_b) = {ec_b:.6f} × ({fNRB} × {EF_CO2_b} + {EF_nonCO2_b})",
+         "value": round(be_per_unit, 6), "unit": "tCO2e/device/yr"},
+        {"step": 6, "canonical_key": "project_energy_tj",
+         "name": "Project energy consumption",
+         "formula": f"EC_p = SFC_p × NCV_p / 1000 = {pj_consumption_wood_equiv:.6f} × {NCV_p} / 1000",
+         "value": round(ec_p, 6), "unit": "TJ/device/yr"},
+        {"step": 7, "canonical_key": "project_emissions_per_device",
+         "name": "Project emissions per device",
+         "formula": pe_formula_str_cohort,
+         "value": round(pe_per_unit, 6), "unit": "tCO2e/device/yr"},
+        {"step": 8, "canonical_key": "er_per_device_before_leakage",
+         "name": "ER per device per year (before leakage)",
+         "formula": f"ER/device = BE/device − PE/device = {be_per_unit:.6f} − {pe_per_unit:.6f}",
+         "value": round(er_per_unit, 6), "unit": "tCO2e/device/yr"},
+        # Deployment configuration info (non-formula steps)
+        {"step": 9, "name": "Deployment mode", "formula": deployment_mode, "value": deployment_mode, "unit": ""},
+        {"step": 10, "name": "Total units to deploy", "formula": f"num_households = {num_hh}", "value": num_hh, "unit": "units"},
+        {"step": 11, "name": "Technology lifetime", "formula": f"{tech_lifetime_years} years", "value": tech_lifetime_years, "unit": "years"},
+        {"step": 12, "name": "Drop-off model",
+         "formula": f"{dropoff_mode}: {annual_dropoff_rate*100:.1f}%/yr" if dropoff_mode == "annual_rate" else f"{dropoff_mode}: custom curve",
+         "value": annual_dropoff_rate if dropoff_mode == "annual_rate" else "custom", "unit": ""},
+        {"step": 13, "name": "Usage rate",
+         "formula": f"{usage_rate_mode}: {usage_rate_fixed:.0%}" if usage_rate_mode == "fixed" else f"{usage_rate_mode}: custom curve",
+         "value": usage_rate_fixed if usage_rate_mode == "fixed" else "custom", "unit": ""},
     ]
+    # Add active_households alias for year table compatibility (= effectively_used from cohort)
+    for yd in years:
+        yd["active_households"] = yd.get("effectively_used", yd.get("active_units", 0))
 
     return {
         "calculation_steps": calculation_steps,
@@ -592,17 +640,19 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
             "peak_surviving_units": max((y["surviving_units"] for y in years), default=0),
         },
         "parameters_used": {
-            "fNRB": {"value": fNRB, "unit": "fraction", "description": "Fraction of non-renewable biomass"},
+            "bl_consumption": {"value": round(bl_consumption, 6), "unit": "t/device/yr", "description": "Baseline specific fuel consumption per device"},
+            "pj_consumption": {"value": round(pj_consumption, 6), "unit": "t/device/yr", "description": "Project specific fuel consumption per device"},
+            "CF": {"value": CF, "unit": "kg wood/kg charcoal", "description": "Charcoal-to-wood conversion factor"},
             "NCV_baseline": {"value": NCV_b, "unit": "TJ/Gg", "description": "Net calorific value (baseline fuel)"},
+            "fNRB": {"value": fNRB, "unit": "fraction", "description": "Fraction of non-renewable biomass"},
             "EF_CO2_baseline": {"value": EF_CO2_b, "unit": "tCO2/TJ", "description": "CO2 emission factor (baseline)"},
             "EF_nonCO2_baseline": {"value": EF_nonCO2_b, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (baseline)"},
             "NCV_project": {"value": NCV_p, "unit": "TJ/Gg", "description": "Net calorific value (project fuel)"},
             "EF_CO2_project": {"value": EF_CO2_p, "unit": "tCO2/TJ", "description": "CO2 emission factor (project)"},
             "EF_nonCO2_project": {"value": EF_nonCO2_p, "unit": "tCO2e/TJ", "description": "Non-CO2 emission factor (project)"},
-            "CF": {"value": CF, "unit": "kg wood/kg charcoal", "description": "Charcoal-to-wood conversion factor"},
-            "baseline_fuel": {"value": baseline_fuel, "unit": "", "description": "Baseline fuel type"},
             "num_households": {"value": num_hh, "unit": "count", "description": "Total units to deploy"},
             "leakage_pct": {"value": leakage_pct, "unit": "fraction", "description": "Leakage deduction percentage"},
+            "baseline_fuel": {"value": baseline_fuel, "unit": "", "description": "Baseline fuel type"},
             "deployment_mode": {"value": deployment_mode, "unit": "", "description": "Deployment ramp-up mode"},
             "tech_lifetime_years": {"value": tech_lifetime_years, "unit": "years", "description": "Technology operational lifetime"},
             "annual_dropoff_rate": {"value": annual_dropoff_rate, "unit": "fraction", "description": "Annual technology drop-off rate"},
@@ -632,6 +682,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     calculation_steps = [
         {
             "step": 1,
+            "canonical_key": "electricity_generation",
             "name": "Net electricity generation (project activity)",
             "formula": f"EG_PJ_y = {eg_pj:,.0f} MWh/yr",
             "value": eg_pj,
@@ -639,6 +690,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
         },
         {
             "step": 2,
+            "canonical_key": "grid_emission_factor",
             "name": "Grid emission factor",
             "formula": f"EF_grid = {ef_grid} tCO2/MWh",
             "value": ef_grid,
@@ -649,6 +701,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     if subtype == "capacity_addition":
         calculation_steps.append({
             "step": 3,
+            "canonical_key": "historical_generation",
             "name": "Historical electricity generation (baseline)",
             "formula": f"EG_historical = {eg_hist:,.0f} MWh/yr",
             "value": eg_hist,
@@ -656,6 +709,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
         })
         calculation_steps.append({
             "step": 4,
+            "canonical_key": "baseline_emissions_annual",
             "name": "Baseline emissions (annual)",
             "formula": be_formula_desc,
             "value": round(be_annual, 2),
@@ -664,6 +718,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     else:
         calculation_steps.append({
             "step": 3,
+            "canonical_key": "baseline_emissions_annual",
             "name": "Baseline emissions (annual)",
             "formula": be_formula_desc,
             "value": round(be_annual, 2),
@@ -672,6 +727,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
 
     calculation_steps.append({
         "step": len(calculation_steps) + 1,
+        "canonical_key": "project_emissions_annual",
         "name": "Project emissions",
         "formula": "PE_y = 0 (renewable energy, zero direct emissions)",
         "value": 0.0,
@@ -679,6 +735,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     })
     calculation_steps.append({
         "step": len(calculation_steps) + 1,
+        "canonical_key": "leakage_annual",
         "name": "Leakage",
         "formula": "LE_y = 0 (no leakage for grid-connected renewable energy)",
         "value": 0.0,
@@ -686,6 +743,7 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     })
     calculation_steps.append({
         "step": len(calculation_steps) + 1,
+        "canonical_key": "net_er_annual",
         "name": "Net emission reductions (annual)",
         "formula": f"ER_y = BE_y - PE_y - LE_y = {be_annual:,.2f} - 0 - 0",
         "value": round(be_annual, 2),

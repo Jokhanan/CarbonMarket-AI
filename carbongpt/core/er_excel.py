@@ -231,6 +231,16 @@ def _build_param_rows(calc_result, meth_s):
         "leakage_pct":       ("Leakage_adj", "Leakage deduction fraction",
                                "TPDDTEC v4.0, §5.4",
                                "1", "Methodology-prescribed deduction"),
+        # Grid renewable energy (ACM0002 / AMS-I.D.)
+        "EG_PJ_y":           ("EG_PJ,y", "Net electricity generation (project activity)",
+                               "PPA or energy audit / metered generation report",
+                               "2", "Use conservative (lower-bound) generation estimate"),
+        "EF_grid":           ("EF_grid,y", "Grid emission factor (combined margin)",
+                               "National registry or approved CDM/GS grid EF study",
+                               "1", "Must use approved national/regional grid emission factor"),
+        "EG_historical":     ("EG_hist", "Historical electricity generation (baseline, capacity addition)",
+                               "Audited/metered records or PPA history",
+                               "1", "Use verified historical generation data"),
     }
 
     rows = []
@@ -241,7 +251,11 @@ def _build_param_rows(calc_result, meth_s):
     # Keys to exclude from the Parameters sheet (non-numeric flags / redundant derived values)
     skip_keys = {"is_method_3", "method_id", "baseline_fuel", "project_fuel",
                  "pj_consumption_wood_equiv",
-                 "bl_consumption_wood_equiv"}   # kept in calc-step sheet instead
+                 "bl_consumption_wood_equiv",    # kept in calc-step sheet instead
+                 "project_subtype",              # grid model operational text flag
+                 "deployment_mode",              # cohort model operational text flag
+                 "deployment_timing",            # cohort model timing text flag
+                 }
 
     for key, info in params.items():
         if key in skip_keys:
@@ -353,6 +367,52 @@ def _step_excel_formula(canonical_key, par_cell_map, step_row_map,
         step7 = _sr("project_emissions_per_device")
         if step5 and step7:
             return f"={step5}-{step7}"
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Grid renewable energy steps (ACM0002 / AMS-I.D.)                   #
+    # ------------------------------------------------------------------ #
+    if canonical_key == "electricity_generation":
+        eg = _pc("EG_PJ_y")
+        return f"={eg}" if eg else None
+
+    if canonical_key == "grid_emission_factor":
+        ef = _pc("EF_grid")
+        return f"={ef}" if ef else None
+
+    if canonical_key == "historical_generation":
+        hist = _pc("EG_historical")
+        return f"={hist}" if hist else None
+
+    if canonical_key == "baseline_emissions_annual":
+        eg = _sr("electricity_generation")
+        ef = _sr("grid_emission_factor")
+        hist = _sr("historical_generation")
+        if eg and ef:
+            if hist:
+                # Capacity addition: max(EG_PJ - EG_historical, 0) × EF_grid
+                return f"=MAX({eg}-{hist},0)*{ef}"
+            else:
+                # Greenfield: EG_PJ × EF_grid
+                return f"={eg}*{ef}"
+        return None
+
+    if canonical_key == "project_emissions_annual":
+        # Renewable energy — zero direct project emissions
+        return "=0"
+
+    if canonical_key == "leakage_annual":
+        # Grid renewable — no leakage
+        return "=0"
+
+    if canonical_key == "net_er_annual":
+        be = _sr("baseline_emissions_annual")
+        pe = _sr("project_emissions_annual")
+        le = _sr("leakage_annual")
+        if be and pe and le:
+            return f"={be}-{pe}-{le}"
+        elif be:
+            return f"={be}"
         return None
 
     return None
@@ -588,6 +648,7 @@ def generate_exante_workbook(project, calc_result=None):
         r += 1
 
     # Resolve formula components for the year table
+    # --- Cookstove (per-device) references ---
     be_per_dev_ref = f"D{step_row_map['baseline_emissions_per_device']}" if "baseline_emissions_per_device" in step_row_map else None
     pe_per_dev_ref = f"D{step_row_map['project_emissions_per_device']}" if "project_emissions_per_device" in step_row_map else None
     usage_rate_cell = par_cell_map.get("usage_rate")
@@ -595,6 +656,11 @@ def generate_exante_workbook(project, calc_result=None):
     usage_floor_cell = par_cell_map.get("usage_rate_floor")
     num_devices_cell = par_cell_map.get("num_devices")
     leakage_cell = par_cell_map.get("leakage_pct")
+    # --- Grid (annual) references ---
+    is_grid_project = "baseline_emissions_annual" in step_row_map
+    be_annual_ref = f"D{step_row_map['baseline_emissions_annual']}" if is_grid_project else None
+    pe_annual_ref = f"D{step_row_map['project_emissions_annual']}" if "project_emissions_annual" in step_row_map else None
+    eg_pj_cell = par_cell_map.get("EG_PJ_y")
 
     # Annual summary below steps
     r += 1
@@ -602,19 +668,36 @@ def generate_exante_workbook(project, calc_result=None):
     _hc(ws_calc, r, 1, "ANNUAL ER SUMMARY — ALL CREDITING YEARS", _EA_SUBHEAD, size=10)
     r += 1
     ws_calc.merge_cells(f"A{r}:H{r}")
-    _hc(ws_calc, r, 1,
-        "Active devices, Baseline, Project, and Leakage columns are live Excel formulas referencing "
-        "Parameters tab and the step results above — all values update if parameters change.",
-        _EA_SUBHEAD, size=8, wrap=True)
+    if is_grid_project:
+        summary_note = (
+            "Baseline emissions column references the step result above (= EG_PJ × EF_grid) "
+            "and updates automatically when Parameters change. "
+            "Project emissions and Leakage are zero for grid-connected renewable energy."
+        )
+    else:
+        summary_note = (
+            "Active devices, Baseline, Project, and Leakage columns are live Excel formulas referencing "
+            "Parameters tab and the step results above — all values update if parameters change."
+        )
+    _hc(ws_calc, r, 1, summary_note, _EA_SUBHEAD, size=8, wrap=True)
     r += 1
 
-    yr_headers = ["Year", "Calendar year",
-                  f"Active devices\n=MAX(UR-(Y-1)×decay,floor)×N",
-                  f"Baseline (tCO2e)\n=BE/dev × devices",
-                  f"Project (tCO2e)\n=PE/dev × devices",
-                  "Gross ER (tCO2e)\n=Baseline−Project",
-                  "Leakage (tCO2e)\n=Gross ER × L%",
-                  "Net ER (tCO2e)\n=Gross ER−Leakage"]
+    if is_grid_project:
+        yr_headers = ["Year", "Calendar year",
+                      "Electricity (MWh/yr)\n=EG_PJ,y (constant)",
+                      "Baseline (tCO2e)\n=EG_PJ × EF_grid",
+                      "Project (tCO2e)\n=0 (renewable)",
+                      "Gross ER (tCO2e)\n=Baseline−Project",
+                      "Leakage (tCO2e)\n=0 (no leakage)",
+                      "Net ER (tCO2e)\n=Gross ER−Leakage"]
+    else:
+        yr_headers = ["Year", "Calendar year",
+                      "Active devices\n=MAX(UR-(Y-1)×decay,floor)×N",
+                      "Baseline (tCO2e)\n=BE/dev × devices",
+                      "Project (tCO2e)\n=PE/dev × devices",
+                      "Gross ER (tCO2e)\n=Baseline−Project",
+                      "Leakage (tCO2e)\n=Gross ER × L%",
+                      "Net ER (tCO2e)\n=Gross ER−Leakage"]
     for ci, h in enumerate(yr_headers, 1):
         _hc(ws_calc, r, ci, h, _EA_HEADER, size=9, border=tb, wrap=True)
     r += 1
@@ -640,38 +723,68 @@ def generate_exante_workbook(project, calc_result=None):
         _dc(ws_calc, r, 1, year_num, bg=bg, halign="center", border=tb, size=9)
         _dc(ws_calc, r, 2, yd.get("calendar_year"), bg=bg, halign="center", border=tb, size=9)
 
-        # Col 3: Active devices
-        if usage_rate_cell and usage_decay_cell and usage_floor_cell and num_devices_cell:
-            y_minus_1 = year_num - 1
-            _formula_cell(ws_calc, r, 3,
-                f"=MAX({usage_rate_cell}-{y_minus_1}*{usage_decay_cell},{usage_floor_cell})*{num_devices_cell}",
-                bg, fmt="#,##0.0")
-        else:
-            _dc(ws_calc, r, 3, yd.get("active_households"), bg=bg, halign="right",
-                number_format="#,##0", border=tb, size=9)
+        if is_grid_project:
+            # Col 3: Electricity generated (constant, references Parameters)
+            if eg_pj_cell:
+                _formula_cell(ws_calc, r, 3, f"={eg_pj_cell}", bg, fmt="#,##0.0")
+            else:
+                _dc(ws_calc, r, 3, yd.get("baseline_emissions", 0) / max(yd.get("baseline_emissions", 0.01), 0.001),
+                    bg=bg, halign="right", number_format="#,##0", border=tb, size=9)
 
-        # Col 4: Baseline emissions
-        if be_per_dev_ref:
-            _formula_cell(ws_calc, r, 4, f"={be_per_dev_ref}*C{r}", bg)
-        else:
-            _dc(ws_calc, r, 4, yd.get("baseline_emissions"), bg=bg, halign="right",
-                number_format="#,##0.00", border=tb, size=9)
+            # Col 4: Baseline = reference to step result (constant each year)
+            if be_annual_ref:
+                _formula_cell(ws_calc, r, 4, f"={be_annual_ref}", bg)
+            else:
+                _dc(ws_calc, r, 4, yd.get("baseline_emissions"), bg=bg, halign="right",
+                    number_format="#,##0.00", border=tb, size=9)
 
-        # Col 5: Project emissions
-        if pe_per_dev_ref:
-            _formula_cell(ws_calc, r, 5, f"={pe_per_dev_ref}*C{r}", bg)
-        else:
-            _dc(ws_calc, r, 5, yd.get("project_emissions"), bg=bg, halign="right",
-                number_format="#,##0.00", border=tb, size=9)
+            # Col 5: Project = reference to step result (= 0)
+            if pe_annual_ref:
+                _formula_cell(ws_calc, r, 5, f"={pe_annual_ref}", bg)
+            else:
+                _dc(ws_calc, r, 5, 0.0, bg=bg, halign="right",
+                    number_format="#,##0.00", border=tb, size=9)
 
-        # Col 6: Gross ER = Baseline - Project
-        _formula_cell(ws_calc, r, 6, f"=D{r}-E{r}", bg)
+            # Col 6: Gross ER = Baseline - Project
+            _formula_cell(ws_calc, r, 6, f"=D{r}-E{r}", bg)
 
-        # Col 7: Leakage = Gross ER × leakage fraction
-        if leakage_cell:
-            _formula_cell(ws_calc, r, 7, f"=F{r}*{leakage_cell}", bg)
+            # Col 7: Leakage = 0 for grid renewable
+            _formula_cell(ws_calc, r, 7, "=0", bg)
+
         else:
-            _dc(ws_calc, r, 7, yd.get("leakage"), bg=bg, halign="right",
+            # Cookstove / per-device project
+            # Col 3: Active devices
+            if usage_rate_cell and usage_decay_cell and usage_floor_cell and num_devices_cell:
+                y_minus_1 = year_num - 1
+                _formula_cell(ws_calc, r, 3,
+                    f"=MAX({usage_rate_cell}-{y_minus_1}*{usage_decay_cell},{usage_floor_cell})*{num_devices_cell}",
+                    bg, fmt="#,##0.0")
+            else:
+                _dc(ws_calc, r, 3, yd.get("active_households"), bg=bg, halign="right",
+                    number_format="#,##0", border=tb, size=9)
+
+            # Col 4: Baseline emissions
+            if be_per_dev_ref:
+                _formula_cell(ws_calc, r, 4, f"={be_per_dev_ref}*C{r}", bg)
+            else:
+                _dc(ws_calc, r, 4, yd.get("baseline_emissions"), bg=bg, halign="right",
+                    number_format="#,##0.00", border=tb, size=9)
+
+            # Col 5: Project emissions
+            if pe_per_dev_ref:
+                _formula_cell(ws_calc, r, 5, f"={pe_per_dev_ref}*C{r}", bg)
+            else:
+                _dc(ws_calc, r, 5, yd.get("project_emissions"), bg=bg, halign="right",
+                    number_format="#,##0.00", border=tb, size=9)
+
+            # Col 6: Gross ER = Baseline - Project
+            _formula_cell(ws_calc, r, 6, f"=D{r}-E{r}", bg)
+
+            # Col 7: Leakage = Gross ER × leakage fraction
+            if leakage_cell:
+                _formula_cell(ws_calc, r, 7, f"=F{r}*{leakage_cell}", bg)
+            else:
+                _dc(ws_calc, r, 7, yd.get("leakage"), bg=bg, halign="right",
                 number_format="#,##0.00", border=tb, size=9)
 
         # Col 8: Net ER = Gross ER - Leakage
