@@ -6017,9 +6017,14 @@ def _build_next_steps(readiness):
 
 
 def _render_next_steps_panel(project, project_id):
-    from carbongpt.core.project_state import evaluate_project_state, SEVERITY_BLOCKER, SEVERITY_WARNING, SEVERITY_SUGGESTION, SEVERITY_INSIGHT
+    from carbongpt.core.project_state import SEVERITY_BLOCKER, SEVERITY_WARNING, SEVERITY_SUGGESTION, SEVERITY_INSIGHT
+    try:
+        from carbongpt.core.project_brain import evaluate_project_brain
+        state = evaluate_project_brain(project_id)
+    except Exception:
+        from carbongpt.core.project_state import evaluate_project_state
+        state = evaluate_project_state(project_id)
 
-    state = evaluate_project_state(project_id)
     if "error" in state:
         readiness = _get_project_readiness(project, project_id)
         steps = _build_next_steps(readiness)
@@ -6030,7 +6035,7 @@ def _render_next_steps_panel(project, project_id):
 
     TAB_LABEL_TO_INDEX = {
         "Setup": 0, "Documents": 1, "Parameters": 2, "ER Simulator": 3,
-        "Write / Draft": 4, "Review": 5, "Audit": 6, "Findings": 7,
+        "Write / Draft": 4, "Write": 4, "Review": 5, "Audit": 6, "Findings": 7,
         "Lifecycle": 8, "Monitoring": 9, "Export": 10,
     }
 
@@ -6050,40 +6055,106 @@ def _render_next_steps_panel(project, project_id):
 
     _render_state_dashboard(state, project_id)
 
-    items = state.get("items", [])
-    blockers = [i for i in items if i["severity"] == SEVERITY_BLOCKER]
-    warnings = [i for i in items if i["severity"] == SEVERITY_WARNING]
-    suggestions = [i for i in items if i["severity"] == SEVERITY_SUGGESTION]
-    insights = [i for i in items if i["severity"] == SEVERITY_INSIGHT]
+    # ── Project Brain outputs ──────────────────────────────────────────────
+    brain = state.get("brain", {})
 
-    if blockers:
-        for item in blockers:
-            st.error(f"**{item['message']}** -- {item['detail']}")
+    # Next best action CTA (prominent)
+    nba = brain.get("next_best_action")
+    if nba:
+        _priority_colors = {"high": "#ef4444", "medium": "#f59e0b", "low": "#3b82f6"}
+        nba_color = _priority_colors.get(nba.get("priority", "medium"), "#3b82f6")
+        st.markdown(
+            f'<div style="margin:8px 0;padding:10px 14px;border-radius:8px;'
+            f'border-left:4px solid {nba_color};background:rgba(0,0,0,0.04);">'
+            f'<div style="font-size:0.8rem;font-weight:700;color:{nba_color};text-transform:uppercase;letter-spacing:0.05em;">Recommended Action</div>'
+            f'<div style="font-size:0.9rem;font-weight:600;margin:4px 0;">{nba["label"]}</div>'
+            f'<div style="font-size:0.8rem;color:var(--text-secondary);">{nba.get("description","")}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        nba_tab = nba.get("action_tab")
+        if nba_tab and nba_tab in TAB_LABEL_TO_INDEX:
+            st.button(f"Go to {nba_tab}", key=f"nba_goto_{project_id}",
+                      on_click=_go_to_tab, args=(project_id, TAB_LABEL_TO_INDEX[nba_tab]))
 
-    actions = state.get("next_actions", [])
-    if actions:
-        st.markdown("**Next Actions**")
-        for i, action in enumerate(actions, 1):
-            priority_marker = {
-                "high": "!!",
-                "medium": "!",
-                "low": "",
-            }.get(action.get("priority", ""), "")
+    # Stale sections warning
+    stale = brain.get("stale_sections", [])
+    if stale:
+        stale_names = ", ".join(s["section_id"] for s in stale[:4])
+        st.warning(
+            f"{len(stale)} PDD section(s) may be outdated since the last parameter update: "
+            f"**{stale_names}**{'...' if len(stale) > 4 else ''}. "
+            "Consider re-drafting these sections."
+        )
 
-            cols = st.columns([0.4, 4, 1.2])
+    # Parameter outliers
+    outliers = brain.get("parameter_outliers", [])
+    if outliers:
+        with st.expander(f"{len(outliers)} parameter(s) outside expected range", expanded=False):
+            for out in outliers:
+                lo, hi = out.get("expected_range", (None, None))
+                direction_label = "too low" if out.get("direction") == "low" else "too high"
+                st.warning(
+                    f"**{out['param_name']}** = {out['value']:g} {out.get('unit','')} "
+                    f"({direction_label}; expected {lo:g}–{hi:g})"
+                )
+
+    # Automation opportunities
+    auto_opps = brain.get("automation_opportunities", [])
+    if auto_opps:
+        st.markdown("**Recommended Actions**")
+        for i, opp in enumerate(auto_opps, 1):
+            p = opp.get("priority", "low")
+            bg = "#ef4444" if p == "high" else "#f59e0b" if p == "medium" else "#3b82f6"
+            cols = st.columns([0.4, 4, 1.4])
             with cols[0]:
-                bg = "#ef4444" if action["priority"] == "high" else "#f59e0b" if action["priority"] == "medium" else "var(--brand-primary)"
-                st.markdown(f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:{bg};color:white;font-size:0.72rem;font-weight:700;text-align:center;line-height:24px;">{i}</span>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;'
+                    f'background:{bg};color:white;font-size:0.72rem;font-weight:700;'
+                    f'text-align:center;line-height:24px;">{i}</span>',
+                    unsafe_allow_html=True,
+                )
             with cols[1]:
-                st.markdown(f"**{action['text']}**")
-                st.caption(action["detail"])
+                st.markdown(f"**{opp['label']}**")
+                st.caption(opp.get("description", ""))
             with cols[2]:
-                tab_name = action.get("tab", "")
+                tab_name = opp.get("action_tab", "")
                 if tab_name and tab_name in TAB_LABEL_TO_INDEX:
-                    target_idx = TAB_LABEL_TO_INDEX[tab_name]
-                    st.button("Go", key=f"nextstep_{project_id}_{i}", use_container_width=True,
-                              on_click=_go_to_tab, args=(project_id, target_idx))
+                    st.button(
+                        "Go",
+                        key=f"brain_opp_{project_id}_{i}",
+                        use_container_width=True,
+                        on_click=_go_to_tab,
+                        args=(project_id, TAB_LABEL_TO_INDEX[tab_name]),
+                    )
 
+    # ── Fallback: base state next actions ─────────────────────────────────
+    elif not nba:
+        items = state.get("items", [])
+        blockers = [i for i in items if i["severity"] == SEVERITY_BLOCKER]
+        if blockers:
+            for item in blockers:
+                st.error(f"**{item['message']}** -- {item['detail']}")
+
+        actions = state.get("next_actions", [])
+        if actions:
+            st.markdown("**Next Actions**")
+            for i, action in enumerate(actions, 1):
+                cols = st.columns([0.4, 4, 1.2])
+                with cols[0]:
+                    bg = "#ef4444" if action["priority"] == "high" else "#f59e0b" if action["priority"] == "medium" else "var(--brand-primary)"
+                    st.markdown(f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:{bg};color:white;font-size:0.72rem;font-weight:700;text-align:center;line-height:24px;">{i}</span>', unsafe_allow_html=True)
+                with cols[1]:
+                    st.markdown(f"**{action['text']}**")
+                    st.caption(action["detail"])
+                with cols[2]:
+                    tab_name = action.get("tab", "")
+                    if tab_name and tab_name in TAB_LABEL_TO_INDEX:
+                        target_idx = TAB_LABEL_TO_INDEX[tab_name]
+                        st.button("Go", key=f"nextstep_{project_id}_{i}", use_container_width=True,
+                                  on_click=_go_to_tab, args=(project_id, target_idx))
+
+    insights = [i for i in state.get("items", []) if i["severity"] == SEVERITY_INSIGHT]
     if insights:
         with st.expander("Insights", expanded=False):
             for item in insights:
@@ -7729,6 +7800,28 @@ def _render_pending_evidence_review(project_id):
     st.markdown(f"#### Pending Evidence Review ({len(pending)} item{'s' if len(pending) != 1 else ''})")
     st.caption("Parameter values extracted from documents. Review and decide on each item.")
 
+    # Quick-apply: bulk accept high-confidence pending items (>= 0.80 confidence)
+    high_conf = [i for i in pending if (i.get("confidence") or 0) >= 0.80 and i.get("extracted_value")]
+    if high_conf:
+        qc1, qc2 = st.columns([4, 1])
+        with qc1:
+            st.caption(f"{len(high_conf)} item(s) have high confidence (>= 80%) and can be applied directly.")
+        with qc2:
+            if st.button(f"Apply all {len(high_conf)} high-confidence", key=f"ev_bulk_apply_{project_id}", type="primary"):
+                applied = 0
+                for item in high_conf:
+                    result = _fetch(
+                        f"/projects/{project_id}/evidence/{item['id']}/decide",
+                        method="POST",
+                        json={"decision": "accepted"},
+                    )
+                    if result and result.get("success"):
+                        applied += 1
+                st.success(f"Applied {applied} of {len(high_conf)} high-confidence values.")
+                import time as _time
+                _time.sleep(0.5)
+                st.rerun()
+
     for item in pending:
         link_id = item["id"]
         pk = item.get("param_key", "")
@@ -8564,6 +8657,20 @@ def _render_write_tab(project):
         _render_readiness_banner("info", f"{doc_count} supporting document{'s' if doc_count != 1 else ''} uploaded. The AI writer will use them as context for your drafts.")
     else:
         _render_readiness_banner("info", "Tip: Upload supporting documents in the Documents tab to give the AI writer more context.")
+
+    # Stale section indicator from Project Brain
+    try:
+        from carbongpt.core.project_brain import _detect_stale_sections
+        _stale = _detect_stale_sections(project_id)
+        if _stale:
+            _stale_ids = ", ".join(s["section_id"] for s in _stale[:4])
+            st.warning(
+                f"**{len(_stale)} section(s) may need updating** — parameters have changed since "
+                f"these were last drafted: {_stale_ids}{'...' if len(_stale) > 4 else ''}. "
+                "Re-drafting these sections will incorporate the latest parameter values."
+            )
+    except Exception:
+        pass
 
     available_doc_types = DOC_TYPES_FOR_STANDARD.get(standard, {})
     if not available_doc_types:

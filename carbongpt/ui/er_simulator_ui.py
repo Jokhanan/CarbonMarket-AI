@@ -36,9 +36,12 @@ def render_er_simulator(project):
     </span>
     """, unsafe_allow_html=True)
 
-    if methodology not in ("VM0050", "TPDDTEC", "ACM0002", "AMS-I.D.", "AMSID"):
+    _SUPPORTED_METHODOLOGIES = ("VM0050", "TPDDTEC", "ACM0002", "AMS-I.D.", "AMSID", "MECD", "GS-MECD")
+    if methodology not in _SUPPORTED_METHODOLOGIES:
         st.warning(f"ER simulation is not yet available for methodology: {methodology}")
         return
+
+    is_mecd = methodology in ("MECD", "GS-MECD")
 
     all_params = get_project_parameters(project_id)
     pending_count = sum(1 for p in all_params if p.get("value") is None)
@@ -355,6 +358,45 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                 ef = st.number_input("Grid EF (tCO2/MWh)", min_value=0.0, value=_safe_float(params, "EF_grid", 0.8), step=0.01, key="sim_ef")
                 overrides["EF_grid"] = ef
 
+    elif is_mecd:
+        with st.container(border=True):
+            st.markdown("**GS-MECD Project Values** (from Parameters tab)")
+            pv_col1, pv_col2 = st.columns(2)
+            with pv_col1:
+                _render_param_value_display("Baseline fuels", _safe_text(params, "baseline_fuels", ""), "", _safe_status(params, "baseline_fuels"), _safe_source(params, "baseline_fuels"))
+                _render_param_value_display("Project fuel type", _safe_text(params, "project_fuel_type", ""), "", _safe_status(params, "project_fuel_type"), _safe_source(params, "project_fuel_type"))
+                _render_param_value_display("Number of persons", _safe_float(params, "n_persons", None), "persons", _safe_status(params, "n_persons"), _safe_source(params, "n_persons"))
+            with pv_col2:
+                _render_param_value_display("Annual electricity (project)", _safe_float(params, "eg_p_mwh_annual", None), "MWh/yr", _safe_status(params, "eg_p_mwh_annual"), _safe_source(params, "eg_p_mwh_annual"))
+                _render_param_value_display("Project efficiency (eta_p)", _safe_float(params, "eta_p", None), "", _safe_status(params, "eta_p"), _safe_source(params, "eta_p"))
+                _render_param_value_display("Grid EF (EF_el)", _safe_float(params, "ef_el", None), "tCO2e/MWh", _safe_status(params, "ef_el"), _safe_source(params, "ef_el"))
+                _render_param_value_display("TDL", _safe_float(params, "tdl", None), "", _safe_status(params, "tdl"), _safe_source(params, "tdl"))
+
+        mecd_case_options = ["default", "case_a", "case_b", "case_c"]
+        mecd_case = st.selectbox("MECD calculation case", mecd_case_options, index=0, key=f"sim_mecd_case_{project_id}")
+        overrides["_mecd_case"] = mecd_case
+
+        enable_overrides_mecd = st.checkbox("Override MECD parameter values for this scenario", key=f"sim_override_toggle_mecd_{project_id}")
+        if enable_overrides_mecd:
+            st.markdown("**MECD Scenario Overrides**")
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                n_pers = st.number_input("Number of persons", min_value=1, value=int(_safe_float(params, "n_persons", 1000)), step=100, key="sim_mecd_n_persons")
+                overrides["n_persons"] = n_pers
+                eg_p = st.number_input("Annual electricity - project (MWh/yr)", min_value=0.0, value=_safe_float(params, "eg_p_mwh_annual", 0.0), step=0.01, key="sim_mecd_eg_p")
+                overrides["eg_p_mwh_annual"] = eg_p
+                eta_p = st.number_input("Project efficiency (eta_p)", min_value=0.0, max_value=1.0, value=_safe_float(params, "eta_p", 0.75), step=0.01, key="sim_mecd_eta_p")
+                overrides["eta_p"] = eta_p
+            with mc2:
+                ef_el = st.number_input("Grid EF (tCO2e/MWh)", min_value=0.0, value=_safe_float(params, "ef_el", 0.5), step=0.01, key="sim_mecd_ef_el")
+                overrides["ef_el"] = ef_el
+                tdl = st.number_input("Transmission & Distribution Loss (TDL)", min_value=0.0, max_value=0.5, value=_safe_float(params, "tdl", 0.05), step=0.005, key="sim_mecd_tdl")
+                overrides["tdl"] = tdl
+            baseline_fuels_input = st.text_input("Baseline fuels (comma-separated)", value=_safe_text(params, "baseline_fuels", "charcoal,kerosene"), key="sim_mecd_bl_fuels")
+            overrides["baseline_fuels"] = baseline_fuels_input
+            proj_fuel_type = st.text_input("Project fuel type", value=_safe_text(params, "project_fuel_type", "electric"), key="sim_mecd_pj_fuel")
+            overrides["project_fuel_type"] = proj_fuel_type
+
     if st.button("Calculate", key="run_sim", type="primary"):
         with st.spinner("Calculating emission reductions..."):
             result = run_scenario(project_id, parameter_overrides=overrides,
@@ -412,6 +454,23 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                 else:
                     purpose_label = purpose_labels.get(saved.get("scenario_purpose", ""), "")
                     st.success(f"Scenario '{scenario_name}' saved ({purpose_label})")
+                    st.session_state[f"scenario_just_saved_{project_id}"] = True
+
+        # Proactive post-save CTA: draft ER section
+        if st.session_state.get(f"scenario_just_saved_{project_id}"):
+            st.info(
+                "Scenario saved. Ready to draft the quantification section of your PDD?",
+                icon=None,
+            )
+            if st.button(
+                "Draft ER quantification section now",
+                key=f"draft_er_after_save_{project_id}",
+                type="primary",
+            ):
+                # Navigate to Write tab (index 4)
+                st.session_state[f"ws_tab_{project_id}"] = 4
+                st.session_state[f"scenario_just_saved_{project_id}"] = False
+                st.rerun()
 
         st.markdown("---")
         st.markdown(

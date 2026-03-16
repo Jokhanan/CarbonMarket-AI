@@ -9,6 +9,7 @@ from carbongpt.core.parameter_engine import (
     FUEL_CANONICAL_OPTIONS,
     get_fuel_display_label,
     normalize_fuel_type,
+    PARAMETER_DEFINITIONS,
 )
 from carbongpt.core.evidence_engine import get_evidence_links, get_evidence_counts_by_param
 
@@ -353,6 +354,11 @@ def _render_parameter_row(project_id, param, evidence_by_param):
         st.caption(f"Status: {p_status} | Source: {source_label} | {source_ref}")
         if param_key == "fNRB":
             st.caption(f"ℹ️  {FNRB_GUIDANCE}")
+        # Show extraction hint from PARAMETER_DEFINITIONS if available
+        _param_def = PARAMETER_DEFINITIONS.get(param_key, {})
+        _extraction_hint = _param_def.get("extraction_hint", "")
+        if _extraction_hint:
+            st.caption(f"Extraction hint: {_extraction_hint}")
 
     with col2:
         current_val = param["value"] if param["value"] is not None else ""

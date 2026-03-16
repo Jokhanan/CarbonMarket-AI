@@ -728,7 +728,13 @@ def generate_exante_workbook(project, calc_result=None):
             if eg_pj_cell:
                 _formula_cell(ws_calc, r, 3, f"={eg_pj_cell}", bg, fmt="#,##0.0")
             else:
-                _dc(ws_calc, r, 3, yd.get("baseline_emissions", 0) / max(yd.get("baseline_emissions", 0.01), 0.001),
+                # Fallback: use static EG_PJ value from parameters_used when cell ref unavailable
+                _eg_pj_static = (
+                    calc_result.get("parameters_used", {})
+                    .get("EG_PJ_y", {})
+                    .get("value") or yd.get("electricity_generated", 0)
+                )
+                _dc(ws_calc, r, 3, _eg_pj_static,
                     bg=bg, halign="right", number_format="#,##0", border=tb, size=9)
 
             # Col 4: Baseline = reference to step result (constant each year)

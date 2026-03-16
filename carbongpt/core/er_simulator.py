@@ -117,7 +117,26 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
 
     be_per_hh = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
-    if is_method_3:
+
+    # Detect electric project device path (VM0050 Eq. 8)
+    # Electric pressure cooker projects: PE = EC_elec (MWh/device/yr) × EF_el (tCO2e/MWh) × (1+TDL)
+    _electric_fuels = ("electric", "electricity", "electric_pressure_cooker", "epc")
+    is_electric_project = project_fuel.lower() in _electric_fuels
+    ec_elec = _pval(params, "EC_electricity_project", None)
+    ef_el = _pval(params, "EF_electricity", None)
+    tdl = _pval(params, "TDL", 0.0)
+
+    if is_electric_project and ec_elec is not None and ef_el is not None:
+        # VM0050 Eq. 8: project emissions from electric devices
+        # EC_electricity_project is in MWh/device/yr; EF_electricity in tCO2e/MWh
+        pe_per_hh = ec_elec * ef_el * (1.0 + tdl)
+        pe_formula_str = (
+            f"VM0050 Eq. 8 (electric device): EC_elec × EF_el × (1+TDL) = "
+            f"{ec_elec:.4f} MWh × {ef_el:.4f} tCO2e/MWh × (1+{tdl:.4f}) = {pe_per_hh:.6f} tCO2e/device/yr"
+        )
+        # Override ec_p for the calculation_steps display
+        ec_p = ec_elec * 0.0036  # approximate TJ equivalent for display only
+    elif is_method_3:
         pe_per_hh = ec_p * (EF_CO2_p + EF_nonCO2_p)
         pe_formula_str = (
             f"EC_p × (EF_CO2_p + EF_nonCO2_p) [no fNRB on project fuel] = "
@@ -849,11 +868,43 @@ def _normalize_mecd_result(raw, crediting_years, start_year):
     if yearly:
         first = yearly[0]
         ef_b = raw.get("baseline_ef", {}).get("ef_b", 0.0)
-        calc_steps.append({"label": "Baseline EF (tCO2e/TJ)", "value": ef_b, "unit": "tCO2e/TJ", "formula": raw.get("baseline_ef", {}).get("formula", "")})
-        calc_steps.append({"label": "Baseline emissions (tCO2e/yr)", "value": first.get("BE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("be_formula", "")})
-        calc_steps.append({"label": "Project emissions (tCO2e/yr)", "value": first.get("PE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("pe_formula", "")})
-        calc_steps.append({"label": "Leakage (tCO2e/yr)", "value": first.get("LE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("le_formula", "")})
-        calc_steps.append({"label": "Net ER (tCO2e/yr)", "value": first.get("ER_y", 0.0), "unit": "tCO2e/yr", "formula": "BE_y - PE_y - LE_y"})
+        calc_steps.append({
+            "step": 1, "canonical_key": "mecd_baseline_ef",
+            "name": "Baseline emission factor (EF_b)", "label": "Baseline EF (tCO2e/TJ)",
+            "value": ef_b, "unit": "tCO2e/TJ",
+            "formula": raw.get("baseline_ef", {}).get("formula", ""),
+        })
+        calc_steps.append({
+            "step": 2, "canonical_key": "mecd_baseline_emissions",
+            "name": "Baseline emissions (BE_y)", "label": "Baseline emissions (tCO2e/yr)",
+            "value": first.get("BE_y", 0.0), "unit": "tCO2e/yr",
+            "formula": first.get("be_formula", ""),
+        })
+        if first.get("useful_energy_formula"):
+            calc_steps.append({
+                "step": 3, "canonical_key": "mecd_useful_energy",
+                "name": "Useful project energy (EG_p,useful)", "label": "Useful project energy (TJ/yr)",
+                "value": None, "unit": "TJ/yr",
+                "formula": first.get("useful_energy_formula", ""),
+            })
+        calc_steps.append({
+            "step": 4, "canonical_key": "mecd_project_emissions",
+            "name": "Project emissions (PE_y)", "label": "Project emissions (tCO2e/yr)",
+            "value": first.get("PE_y", 0.0), "unit": "tCO2e/yr",
+            "formula": first.get("pe_formula", ""),
+        })
+        calc_steps.append({
+            "step": 5, "canonical_key": "mecd_leakage",
+            "name": "Leakage (LE_y)", "label": "Leakage (tCO2e/yr)",
+            "value": first.get("LE_y", 0.0), "unit": "tCO2e/yr",
+            "formula": first.get("le_formula", ""),
+        })
+        calc_steps.append({
+            "step": 6, "canonical_key": "mecd_net_er",
+            "name": "Net emission reductions (ER_y)", "label": "Net ER (tCO2e/yr)",
+            "value": first.get("ER_y", 0.0), "unit": "tCO2e/yr",
+            "formula": "BE_y - PE_y - LE_y",
+        })
 
     return {
         "methodology": "GS-MECD",

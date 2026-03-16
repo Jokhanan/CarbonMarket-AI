@@ -1,0 +1,140 @@
+We will implement this in two stages.
+
+Right now, I want you to implement ONLY the core foundation phases, not the later expansion phases.
+
+Your scope for this pass is:
+
+PHASE 1 — critical structural / methodology fixes
+PHASE 2 — Project Brain / Project Command Center
+PHASE 3 — proactive AI workflows
+PHASE 4 — premium workflow / UX restructuring
+
+Do NOT implement yet:
+- benchmarking expansion beyond what is needed for Project Brain
+- TOOL30 / TOOL33 / TOOL07 full calculator suite
+- KoboToolbox integration
+- monitoring operations integrations
+- human expert review system
+- buyer / market / pricing layer
+- portfolio AI manager
+- broader operations integrations
+
+Those must be preserved for a later second-stage implementation.
+
+--------------------------------------------------
+GOAL OF THIS PASS
+--------------------------------------------------
+
+The goal is to turn the platform from a collection of strong modules into a coherent, intelligent, premium product core.
+
+That means:
+
+1. existing critical bugs and incomplete methodology logic must be fixed
+2. the app must gain a central orchestration layer (Project Brain)
+3. AI must become more proactive in the user workflow
+4. the workspace must become clearer, more fluid, and less fragmented
+
+--------------------------------------------------
+PHASE 1 — CRITICAL FIXES
+--------------------------------------------------
+
+Implement the critical fixes already identified in the audit, including where applicable:
+
+- VM0050 electric/LPG pathway gaps
+- MECD workbook traceability gaps
+- grid/year-table fallback issues
+- methodology/pathway inconsistencies that break correctness
+- any remaining high-risk calculation or export inconsistencies
+- make parameter extraction hints visible in the UI where useful
+
+Only fix issues that are clearly understood and safe to implement.
+
+--------------------------------------------------
+PHASE 2 — PROJECT BRAIN / COMMAND CENTER
+--------------------------------------------------
+
+Design and implement a first working version of a Project Brain.
+
+It should read project state from across the system and produce:
+
+- current project stage
+- blockers
+- missing evidence
+- missing critical parameters
+- stale drafted sections
+- next best action
+- automation opportunities
+
+Add a Project Command Center surface to the project UI so that when a user opens a project, they immediately understand:
+
+- where the project is
+- what is blocking progress
+- what to do next
+- what the AI can do now
+
+This must be methodology-aware where possible.
+
+--------------------------------------------------
+PHASE 3 — PROACTIVE AI WORKFLOWS
+--------------------------------------------------
+
+Implement safe proactive AI actions such as:
+
+- offer to apply extracted parameter values from uploaded documents
+- after an ER scenario is saved, offer to draft the ER section immediately
+- flag stale sections when parameters materially change
+- surface parameter anomalies or obvious outliers where possible
+- make Copilot more connected to project state and next actions
+
+Do not try to build the full long-term AI vision yet.
+Implement the highest-value proactive loops that can be done safely now.
+
+--------------------------------------------------
+PHASE 4 — PREMIUM WORKFLOW / UX RESTRUCTURING
+--------------------------------------------------
+
+Improve the overall project workflow and UI structure.
+
+Focus on:
+- reducing fragmentation
+- reducing cognitive load
+- improving visual hierarchy
+- making next actions clearer
+- making the project feel more premium and guided
+
+If appropriate, consolidate tabs or reorganize surfaces safely.
+Do not do cosmetic-only changes; prioritize workflow clarity.
+
+--------------------------------------------------
+SAFETY RULES
+--------------------------------------------------
+
+- Do not break existing functionality
+- Keep all changes backward compatible where possible
+- Prefer additive or safe refactors
+- If a change is too risky, do not guess — report it
+- Keep the app running throughout
+
+--------------------------------------------------
+REQUIRED FINAL OUTPUT
+--------------------------------------------------
+
+At the end, provide:
+
+1. files changed
+2. critical fixes implemented
+3. Project Brain design and what it reads/outputs
+4. proactive AI workflows implemented
+5. UX/workflow changes made
+6. what was intentionally deferred to the later stage
+7. a clearly labeled DEFERRED BACKLOG for Phase 5–9, including:
+   - benchmarking expansion
+   - tool calculators
+   - Kobo / monitoring integrations
+   - expert review
+   - buyer layer
+   - market / pricing integrations
+   - portfolio manager
+8. confirmation that the app still starts and works cleanly
+
+This pass must focus on building the product core first.

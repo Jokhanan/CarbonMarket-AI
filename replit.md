@@ -39,6 +39,7 @@ CarbonGPT leverages OpenAI's GPT models (gpt-4o, gpt-4o-mini) for language infer
 - **Evidence Engine:** (`carbongpt/core/evidence_engine.py`) A methodology-agnostic engine for extracting and linking claims/parameters to source documents. It includes dynamic parameter selection, evidence decision-making, and robust extraction quality features like anti-hallucination prompts and quote validation.
 - **Audit Simulator:** (`carbongpt/core/audit_simulator.py`) Simulates VVB audits, performing parameter validation, evidence gap analysis, section consistency checks, and compliance verification with risk scoring.
 - **Project State Engine:** (`carbongpt/core/project_state.py`) Provides comprehensive project health assessments, including readiness scores, stage evaluation, and detailed breakdowns of project components.
+- **Project Brain:** (`carbongpt/core/project_brain.py`) Orchestration layer that extends project_state with: stale section detection (compares write session timestamps vs last parameter update), automation opportunities (prioritized list), next-best-action (single highest priority CTA), parameter outlier analysis against methodology benchmarks, and evidence auto-apply opportunity counts. Wired into the Command Center / Next Steps panel in streamlit_app.py.
 
 **Wizard (Project Creation Flow):**
 The New Project wizard in `_render_new_project_wizard` (streamlit_app.py) is project-first, not document-first. Step 1 presents 3 paths:
