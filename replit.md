@@ -102,6 +102,30 @@ The Methodology Pack Manager provides a curated knowledge infrastructure for gro
 
 **AI fallback**: `_get_methodology_context()` in `ai_writer.py` uses pack-first retrieval when a pack is indexed, falls back to legacy `methodology_library` metadata transparently. No regression possible.
 
+## Deep Implementation Audit Findings & Fixes (2026-03)
+
+### Bugs Fixed
+
+**1. `run_scenario` never passed `method_id` to cookstove calculators** (`carbongpt/core/er_simulator.py`)
+- Root cause: DB query only read `methodology, crediting_period_years, crediting_period_start`; `methodology_settings` was never fetched.
+- Impact: For TPDDTEC projects, Method 2 (locked defaults) and Method 3 (fuel-switch, no fNRB on PE) were silently ignored. All TPDDTEC scenarios ran as Method 1 regardless of what was set in the wizard.
+- Fix: Extended DB query to also `SELECT methodology_settings`; parses `calculation_method` or `method_id` from the JSON blob; passes `method_id=method_id` to both `calculate_cookstove_er` and `calculate_cookstove_er_cohort`.
+
+**2. TPDDTEC ER simulator override used wrong key and wrong unit label** (`carbongpt/ui/er_simulator_ui.py`)
+- Root cause: Override stored `overrides["SFC_baseline"]` (with label "kg/person/yr"), but the calculator reads `params["baseline_fuel_consumption"]` (in t/device/yr). SFC_baseline is kg/device/day; baseline_fuel_consumption = SFC_baseline × 365 / 1000.
+- Impact: Any TPDDTEC scenario override for fuel consumption was silently discarded; the stored parameter value was used instead, making the override non-functional.
+- Fix: Override now sets both `SFC_baseline` (raw measurement) AND computes `baseline_fuel_consumption = sfc_b × 365 / 1000` (what the calculator reads). Unit label corrected to "kg/device/day". Display value is back-derived from `baseline_fuel_consumption` if available. Same fix applied to SFC_project → project_fuel_consumption.
+
+**3. MECD `run_scenario` output had no standard envelope** (`carbongpt/core/er_simulator.py`)
+- Root cause: `calculate_mecd_er` returns `{yearly, total_er_tCO2e, avg_annual_er_tCO2e, …}`; `save_scenario` expects `result["summary"]` and `result["years"]`; `_render_er_results` expects `result["summary"]` with specific keys.
+- Impact: Calling `save_scenario` on any GS-MECD project would crash with `KeyError: 'summary'`.
+- Fix: Added `_normalize_mecd_result()` which wraps the raw MECD output into the standard envelope: `summary{total_er, average_annual_er, crediting_years, deployment_mode}`, `years` list with `year_number/calendar_year/baseline_emissions/…`, `year_by_year` (alias for charts), and `calculation_steps` for the Excel workbook.
+
+### Known Open Items
+- **MECD ER Simulator UI**: GS-MECD projects still show "ER simulation not yet available" warning in the simulator tab. The backend fully supports MECD simulation; enabling the UI tab requires adding MECD-specific parameter override inputs (case, baseline_fuels, project_fuel_type, etc.).
+- **LPG/electric VM0050 params**: `EC_electricity_project`, `EF_electricity`, `TDL` are defined in the parameter engine for electric cookstove projects but the `calculate_cookstove_er` calculator does not currently use them (it uses `project_fuel_consumption` regardless). These params are extracted from documents but do not influence the ER calculation.
+- **Grid year-table col 3 fallback**: In `er_excel.py`, if `eg_pj_cell` is None for a grid project, the formula fallback divides `baseline_emissions_annual / itself`, which would produce 1.0 instead of the static EG_PJ value.
+
 ## ER Excel Workbook — Formula Traceability (Deep Audit 2026-03)
 
 The `generate_exante_workbook()` function in `carbongpt/core/er_excel.py` now produces a **fully traceable workbook** with no hardcoded values:

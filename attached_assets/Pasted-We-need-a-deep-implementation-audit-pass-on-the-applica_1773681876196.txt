@@ -1,0 +1,172 @@
+We need a deep implementation + audit pass on the application.
+
+This is NOT only about minor UX polish.
+
+There are two main goals:
+
+1. Make the ER sheet fully methodology-traceable and auditable
+2. Audit the whole application end-to-end for flow, duplication, missing logic, and pathway consistency
+
+IMPORTANT RULES
+
+- Do not break the application
+- Do not simplify methodology formulas into generic spreadsheet summaries
+- Do not hardcode calculated outputs
+- Every calculated value must be traceable to source inputs and explicit formulas
+- If a change is too risky to implement directly, implement the safe subset and clearly report what remains
+
+--------------------------------------------------
+PART 1 — ER SHEET MUST REFLECT REAL METHODOLOGY FORMULAS
+--------------------------------------------------
+
+Current issue:
+The ER Excel export is still too simplified.
+
+It is not enough to show:
+- Gross ER = Baseline ER - Project ER
+- Net ER = Gross ER - Leakage
+
+I need the workbook to reflect the actual methodology logic.
+
+The principle is:
+
+Every calculated number in the ER sheet must come from either:
+1. a methodology equation
+2. a user-entered parameter
+3. a clearly referenced derived value
+
+There should be NO unexplained hardcoded calculated values.
+
+For example:
+If BE = A × B × C × D
+then the Excel sheet must show:
+- A in its own source/input cell
+- B in its own source/input cell
+- C in its own source/input cell
+- D in its own source/input cell
+- the BE result cell must contain the actual Excel formula referencing those cells
+
+If one intermediate result is 15 because 3 × 5,
+the ER sheet must show the 3 cell and the 5 cell,
+and the 15 cell must be a formula, not a static value.
+
+Requirements:
+
+1. Audit the current ER export structure.
+2. For each supported cookstove methodology/pathway currently implemented
+   (TPDDTEC, VM0050, GS-MECD / other implemented cookstove pathways),
+   identify the actual calculation chain used in the code.
+3. Redesign the ER workbook so it contains:
+   - Inputs sheet
+   - Methodology calculation sheet(s)
+   - Intermediates sheet if needed
+   - Summary sheet
+4. The workbook must make the full calculation chain visible.
+5. Every major result must be linked to source cells via Excel formulas.
+6. Include methodology labels and equation labels where helpful.
+7. Make it readable for auditors:
+   - clear sections
+   - clear parameter names
+   - units shown
+   - formulas preserved
+8. Keep compatibility with the current app flow.
+
+The objective is:
+An auditor opens the workbook and can trace every ER result to the methodology logic and the source assumptions.
+
+--------------------------------------------------
+PART 2 — FULL APPLICATION FLOW AUDIT
+--------------------------------------------------
+
+I want you to do a complete end-to-end review of the application from the perspective of a real user.
+
+Please audit the app flow from beginning to end:
+
+- project creation
+- methodology selection
+- parameter entry
+- SDG handling
+- ER simulation
+- writing
+- review
+- audit
+- export
+- packs / repository / methodology context if relevant
+
+Focus especially on the currently implemented cookstove methodologies and pathways.
+
+Please review whether the system is coherent for the different cookstove pathways we currently support.
+
+Check:
+
+1. Are the flows clear from start to finish?
+2. Are there duplicated inputs?
+3. Are there misplaced parameters?
+4. Are there values asked too early?
+5. Are there values that should be auto-derived but are still manually requested?
+6. Are there hardcoded assumptions still hidden in the system?
+7. Are different methodology pathways cleanly separated?
+8. Are there UX inconsistencies between methodologies?
+9. Are the right things shown in the right order?
+10. Is the app fluid and understandable for a project developer?
+
+--------------------------------------------------
+PART 3 — PATHWAY / METHODOLOGY CONSISTENCY REVIEW
+--------------------------------------------------
+
+Please specifically review the implemented cookstove methodology logic and pathways.
+
+We currently care especially about the cookstove methodologies/pathways already in the app.
+
+Check whether the application correctly handles:
+- the different fuel/pathway branches
+- same fuel vs different fuel logic
+- biomass vs LPG/electric pathways if implemented
+- the required parameter sets for each pathway
+- the correct visibility of parameters depending on pathway
+- scale handling
+- SDG derivation logic
+- ER export logic
+
+Identify where:
+- fields are duplicated
+- fields are shown when not needed
+- fields are missing when needed
+- pathway logic is inconsistent
+- methodology logic is not reflected properly in the UI
+
+--------------------------------------------------
+PART 4 — IMPLEMENT SAFE IMPROVEMENTS WHERE POSSIBLE
+--------------------------------------------------
+
+After the audit, implement the safe improvements you can confidently make now, especially for:
+
+1. ER workbook traceability
+2. parameter / calculation flow cleanup
+3. pathway-specific visibility or ordering improvements
+4. removal of remaining obvious duplication
+5. improvement of end-to-end coherence
+
+If some changes are too risky to implement immediately, do NOT guess.
+Instead:
+- leave them unchanged
+- report them clearly as recommended next fixes
+
+--------------------------------------------------
+PART 5 — FINAL REPORT
+--------------------------------------------------
+
+At the end, provide a structured report with:
+
+1. Files changed
+2. ER workbook changes
+3. Which methodology formulas are now traceable in Excel
+4. What remains simplified vs fully traceable
+5. End-to-end app flow issues found
+6. Duplications / misplaced inputs / missing logic found
+7. Which issues were fixed now
+8. Which issues remain and why
+9. Confirmation that the application still starts and works cleanly
+
+The goal is not cosmetic improvement.
+The goal is to make the application methodology-consistent, auditable, and fluid from beginning to end.

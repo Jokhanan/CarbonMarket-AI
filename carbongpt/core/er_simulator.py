@@ -799,11 +799,87 @@ def calculate_grid_er(params, crediting_years=7, start_year=2025, methodology="A
     }
 
 
+def _read_method_id(project_id):
+    """Read method_id from methodology_settings stored in user_projects."""
+    try:
+        import json as _json
+        with get_cursor() as cur:
+            cur.execute("SELECT methodology_settings FROM user_projects WHERE id = %s", (project_id,))
+            row = cur.fetchone()
+        if not row or not row.get("methodology_settings"):
+            return None
+        raw = row["methodology_settings"]
+        if isinstance(raw, str):
+            raw = _json.loads(raw)
+        if isinstance(raw, dict):
+            return raw.get("calculation_method") or raw.get("method_id")
+    except Exception as _exc:
+        logger.warning("Could not read method_id for project %s: %s", project_id, _exc)
+    return None
+
+
+def _normalize_mecd_result(raw, crediting_years, start_year):
+    """Wrap calculate_mecd_er output into the standard result envelope.
+
+    Ensures all keys expected by save_scenario and _render_er_results are present:
+    - summary        : {total_er, average_annual_er, crediting_years, deployment_mode}
+    - years          : list for er_scenario_years DB inserts (year_number, calendar_year, …)
+    - year_by_year   : same list (alias used by UI charts)
+    - calculation_steps : list for workbook generation
+    - parameters_used   : dict (empty for MECD — parameters are embedded in the raw data)
+    """
+    yearly = raw.get("yearly", [])
+    total_er = raw.get("total_er_tCO2e", 0.0)
+    avg_er = raw.get("avg_annual_er_tCO2e", 0.0)
+
+    years = []
+    for i, row in enumerate(yearly):
+        years.append({
+            "year_number": i + 1,
+            "calendar_year": row.get("year", start_year + i),
+            "baseline_emissions": row.get("BE_y", 0.0),
+            "project_emissions": row.get("PE_y", 0.0),
+            "leakage": row.get("LE_y", 0.0),
+            "net_er": row.get("ER_y", 0.0),
+            # aliases used by UI
+            "year": row.get("year", start_year + i),
+        })
+
+    calc_steps = []
+    if yearly:
+        first = yearly[0]
+        ef_b = raw.get("baseline_ef", {}).get("ef_b", 0.0)
+        calc_steps.append({"label": "Baseline EF (tCO2e/TJ)", "value": ef_b, "unit": "tCO2e/TJ", "formula": raw.get("baseline_ef", {}).get("formula", "")})
+        calc_steps.append({"label": "Baseline emissions (tCO2e/yr)", "value": first.get("BE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("be_formula", "")})
+        calc_steps.append({"label": "Project emissions (tCO2e/yr)", "value": first.get("PE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("pe_formula", "")})
+        calc_steps.append({"label": "Leakage (tCO2e/yr)", "value": first.get("LE_y", 0.0), "unit": "tCO2e/yr", "formula": first.get("le_formula", "")})
+        calc_steps.append({"label": "Net ER (tCO2e/yr)", "value": first.get("ER_y", 0.0), "unit": "tCO2e/yr", "formula": "BE_y - PE_y - LE_y"})
+
+    return {
+        "methodology": "GS-MECD",
+        "summary": {
+            "total_er": total_er,
+            "average_annual_er": avg_er,
+            "crediting_years": crediting_years,
+            "deployment_mode": "instant",
+        },
+        "years": years,
+        "year_by_year": years,
+        "calculation_steps": calc_steps,
+        "parameters_used": {},
+        "_mecd_raw": raw,
+    }
+
+
 def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deployment_config=None):
     params = get_parameters_as_dict(project_id)
 
     with get_cursor() as cur:
-        cur.execute("SELECT methodology, crediting_period_years, crediting_period_start FROM user_projects WHERE id = %s", (project_id,))
+        cur.execute(
+            "SELECT methodology, crediting_period_years, crediting_period_start, methodology_settings "
+            "FROM user_projects WHERE id = %s",
+            (project_id,),
+        )
         project = cur.fetchone()
         if not project:
             return {"error": "Project not found"}
@@ -814,6 +890,19 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
     if project.get("crediting_period_start"):
         start_year = project["crediting_period_start"].year
 
+    # Resolve method_id from stored methodology_settings
+    method_id = None
+    raw_settings = project.get("methodology_settings")
+    if raw_settings:
+        import json as _json
+        if isinstance(raw_settings, str):
+            try:
+                raw_settings = _json.loads(raw_settings)
+            except Exception:
+                raw_settings = {}
+        if isinstance(raw_settings, dict):
+            method_id = raw_settings.get("calculation_method") or raw_settings.get("method_id")
+
     if parameter_overrides:
         for key, val in parameter_overrides.items():
             if key in params:
@@ -823,12 +912,19 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
 
     if methodology in ("VM0050", "TPDDTEC"):
         if deployment_config and deployment_config.get("deployment_mode") != "instant_legacy":
-            result = calculate_cookstove_er_cohort(params, crediting_years, start_year, methodology, deployment_config)
+            result = calculate_cookstove_er_cohort(
+                params, crediting_years, start_year, methodology, deployment_config,
+                method_id=method_id,
+            )
         else:
-            result = calculate_cookstove_er(params, crediting_years, start_year, methodology)
+            result = calculate_cookstove_er(
+                params, crediting_years, start_year, methodology,
+                method_id=method_id,
+            )
     elif methodology in ("MECD", "GS-MECD"):
         from carbongpt.core.mecd_simulator import calculate_mecd_er
-        result = calculate_mecd_er(params, crediting_years=crediting_years, start_year=start_year)
+        raw = calculate_mecd_er(params, crediting_years=crediting_years, start_year=start_year)
+        result = _normalize_mecd_result(raw, crediting_years, start_year)
     elif methodology in ("ACM0002", "AMS-I.D.", "AMSID"):
         result = calculate_grid_er(params, crediting_years, start_year, methodology)
     else:

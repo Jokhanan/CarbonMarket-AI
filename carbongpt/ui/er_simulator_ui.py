@@ -178,15 +178,38 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                     bl_cons = st.number_input("Baseline Fuel (t/hh/yr)", min_value=0.01, value=_safe_float(params, "baseline_fuel_consumption", 2.0), step=0.1, key="sim_bl_cons")
                     overrides["baseline_fuel_consumption"] = bl_cons
                 else:
-                    sfc_b = st.number_input("Baseline SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_baseline", 400.0), step=10.0, key="sim_sfc_b")
+                    # TPDDTEC: SFC_baseline is stored as kg/device/day in the parameter engine.
+                    # The calculator uses baseline_fuel_consumption in t/device/yr.
+                    # Default display value: read baseline_fuel_consumption first; fall back to
+                    # converting SFC_baseline (kg/device/day × 365 / 1000).
+                    _bl_fc = _safe_float(params, "baseline_fuel_consumption", None)
+                    _sfc_b_raw = _safe_float(params, "SFC_baseline", None)
+                    if _bl_fc is not None:
+                        _sfc_b_display = _bl_fc * 1000 / 365  # convert back to kg/device/day
+                    elif _sfc_b_raw is not None:
+                        _sfc_b_display = _sfc_b_raw
+                    else:
+                        _sfc_b_display = 1.37  # ≈ 0.5 t/device/yr ÷ 365 × 1000
+                    sfc_b = st.number_input("Baseline SFC (kg/device/day)", min_value=0.01, value=float(_sfc_b_display), step=0.05, key="sim_sfc_b")
                     overrides["SFC_baseline"] = sfc_b
+                    overrides["baseline_fuel_consumption"] = sfc_b * 365 / 1000
             with fc_col2:
                 if methodology == "VM0050":
                     pj_cons = st.number_input("Project Fuel (t/hh/yr)", min_value=0.0, value=_safe_float(params, "project_fuel_consumption", 1.0), step=0.1, key="sim_pj_cons")
                     overrides["project_fuel_consumption"] = pj_cons
                 else:
-                    sfc_p = st.number_input("Project SFC (kg/person/yr)", min_value=0.0, value=_safe_float(params, "SFC_project", 200.0), step=10.0, key="sim_sfc_p")
+                    # TPDDTEC: SFC_project (kg/device/day) → project_fuel_consumption (t/device/yr)
+                    _pj_fc = _safe_float(params, "project_fuel_consumption", None)
+                    _sfc_p_raw = _safe_float(params, "SFC_project", None)
+                    if _pj_fc is not None:
+                        _sfc_p_display = _pj_fc * 1000 / 365
+                    elif _sfc_p_raw is not None:
+                        _sfc_p_display = _sfc_p_raw
+                    else:
+                        _sfc_p_display = 0.68  # ≈ 0.25 t/device/yr ÷ 365 × 1000
+                    sfc_p = st.number_input("Project SFC (kg/device/day)", min_value=0.0, value=float(_sfc_p_display), step=0.05, key="sim_sfc_p")
                     overrides["SFC_project"] = sfc_p
+                    overrides["project_fuel_consumption"] = sfc_p * 365 / 1000
 
             st.markdown("**Emission Factors & Fuel Properties**")
             ef_col1, ef_col2 = st.columns(2)
