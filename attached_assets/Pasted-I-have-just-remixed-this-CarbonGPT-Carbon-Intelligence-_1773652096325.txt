@@ -1,0 +1,102 @@
+I have just remixed this CarbonGPT / Carbon Intelligence application from another account.
+
+All files including the database backup (carbongpt_restore_clean.sql) are already present in the workspace.
+
+Your task is to restore the database, verify the migration, and start the application.
+
+STEP 1 — Restore the PostgreSQL database
+
+Run in the shell:
+
+cd /home/runner/workspace
+psql "$DATABASE_URL" < carbongpt_restore_clean.sql
+
+Wait until the restore finishes. This may take several minutes.
+
+STEP 2 — Verify the database tables and row counts
+
+Run:
+
+psql "$DATABASE_URL" -c "
+SELECT 'documents' AS table_name, COUNT(*) AS rows FROM documents
+UNION ALL SELECT 'document_chunks', COUNT(*) FROM document_chunks
+UNION ALL SELECT 'document_sections', COUNT(*) FROM document_sections
+UNION ALL SELECT 'carbon_projects', COUNT(*) FROM carbon_projects
+UNION ALL SELECT 'methodology_packs', COUNT(*) FROM methodology_packs
+UNION ALL SELECT 'pack_findings', COUNT(*) FROM pack_findings
+UNION ALL SELECT 'methodology_pack_document_links', COUNT(*) FROM methodology_pack_document_links
+UNION ALL SELECT 'ref_methodologies', COUNT(*) FROM ref_methodologies
+ORDER BY rows DESC;
+"
+
+Expected values approximately:
+
+documents ≈ 529  
+document_chunks ≈ 24601  
+document_sections ≈ 35468  
+carbon_projects ≈ 8913  
+methodology_packs ≈ 6  
+
+STEP 3 — Verify pgvector and embeddings
+
+Run:
+
+psql "$DATABASE_URL" -c "SELECT extname, extversion FROM pg_extension WHERE extname='vector';"
+
+Then verify embeddings exist:
+
+psql "$DATABASE_URL" -c "
+SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL;
+"
+
+Expected result: about 24,601 rows.
+
+STEP 4 — Verify repository files exist
+
+Run:
+
+ls /home/runner/workspace/document_repository | wc -l
+
+Expected result: about 512 files.
+
+STEP 5 — Verify the application configuration
+
+Confirm the following environment variables exist in Secrets:
+
+OPENAI_API_KEY
+SERPER_API_KEY (optional)
+
+Do not modify DATABASE_URL.
+
+STEP 6 — Start the application
+
+Run the startup script:
+
+bash start_carbongpt.sh
+
+The application should start:
+
+FastAPI on port 3000  
+Streamlit on port 5000
+
+Wait about 45 seconds for full startup.
+
+STEP 7 — Health check
+
+Verify the API:
+
+curl http://localhost:3000/health
+
+Then verify the Streamlit interface loads.
+
+STEP 8 — Final confirmation
+
+Confirm that:
+
+• Repository shows about 529 documents  
+• Carbon Intelligence shows about 8,900 projects  
+• Methodology Packs page shows 6 packs  
+• Repository search returns results (confirming embeddings work)
+
+Do not modify the code unless something is broken.
+Only restore the database and verify the system.
