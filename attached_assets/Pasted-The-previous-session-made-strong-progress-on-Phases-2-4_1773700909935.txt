@@ -1,0 +1,135 @@
+The previous session made strong progress on Phases 2–4 (Project Brain, proactive workflows, and workspace restructuring).
+
+However these phases are not yet fully complete.
+
+Before moving to any later roadmap phases (integrations, monitoring, buyer layer, etc.), we must FINISH and STABILIZE Phases 2–4 properly.
+
+Your task is to perform a deep consolidation pass and complete the architecture for these phases.
+
+Do NOT add new product domains. Focus only on strengthening and completing what already exists.
+
+--------------------------------
+PHASE 2 — Project Brain V2
+--------------------------------
+
+The current Project Brain is a good foundation but must be expanded into a stronger orchestration layer.
+
+Extend the Project Brain so it:
+
+1. Integrates additional knowledge sources
+   - methodology_packs
+   - methodology_kb
+   - Carbon Intelligence data
+   - project documents
+   - parameter values
+   - ER scenarios
+   - audit results
+   - evidence links
+
+2. Adds deeper diagnostics:
+   - parameter benchmarking vs comparable projects
+   - methodology-version awareness
+   - parameter-source confidence analysis
+   - pack benchmark comparison (flag outliers vs real projects)
+
+3. Improves the situation model:
+   The brain should produce a richer object including:
+
+   project_stage
+   pipeline_phase
+   blockers
+   next_best_action
+   parameter_outliers
+   stale_sections
+   missing_evidence
+   benchmark_warnings
+   audit_risk_signals
+   automation_opportunities
+
+4. Improve next-best-action logic
+   The system should prioritize actions based on:
+   - blocking severity
+   - methodology requirements
+   - stage progression
+
+5. Ensure the brain runs efficiently
+   - cached per workspace render
+   - minimal database calls
+   - reusable across tabs
+
+--------------------------------
+PHASE 3 — Proactive AI Workflow Expansion
+--------------------------------
+
+Extend the proactive system so that the AI becomes a true assistant rather than a reactive tool.
+
+Implement additional safe automation triggers such as:
+
+1. Parameter benchmarking suggestions
+   When a parameter is outside typical pack ranges.
+
+2. Document intelligence proposals
+   When extracted evidence strongly matches a parameter.
+
+3. Scenario-driven drafting prompts
+   When a scenario is saved or updated.
+
+4. Section staleness regeneration suggestion
+   When parameter changes invalidate draft sections.
+
+5. Audit-risk alerts
+   When parameters or missing evidence would likely trigger VVB findings.
+
+These workflows should always be:
+
+- explainable
+- optional (user approval)
+- surfaced in the Project Intelligence panel.
+
+--------------------------------
+PHASE 4 — Premium UX Completion
+--------------------------------
+
+The UX improvements started in the last session must be finalized.
+
+Focus on:
+
+1. Improving visual hierarchy
+   - pipeline strip clarity
+   - stage visibility
+   - Command Center readability
+
+2. Reducing cognitive overload
+   - simplify workspace header
+   - ensure tabs show clear state (ok / warning / blocking)
+
+3. Improve guidance
+   - empty states should suggest concrete actions
+   - show why parameters matter (use extraction_hint or context)
+
+4. Improve discoverability of AI
+   - Copilot should feel integrated with the project brain
+   - show contextual suggestions when relevant
+
+Do NOT radically rewrite the UI framework. Instead refine the current structure so it becomes more guided and intuitive.
+
+--------------------------------
+DELIVERABLE
+--------------------------------
+
+After implementing the improvements:
+
+Provide a structured report including:
+
+1. What changed in Project Brain (architecture + new diagnostics)
+2. What new proactive workflows exist
+3. What UX improvements were implemented
+4. What parts of phases 2–4 are now fully complete
+5. What small items remain before moving to phases 5–9
+
+--------------------------------
+
+Important constraint:
+Do NOT begin Phase 5 or later roadmap items.
+
+This session is strictly for finishing and stabilizing phases 2–4.

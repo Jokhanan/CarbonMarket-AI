@@ -6189,13 +6189,19 @@ def _render_next_steps_panel(project, project_id):
         st.session_state[f"ws_tab_{pid}"] = idx
 
     brain = state.get("brain", {})
-    nba         = brain.get("next_best_action")
-    auto_opps   = brain.get("automation_opportunities", [])
-    stale       = brain.get("stale_sections", [])
-    outliers    = brain.get("parameter_outliers", [])
-    meth_blks   = brain.get("methodology_blockers", [])
-    cross       = brain.get("cross", {})
-    derived_stage_label = brain.get("derived_stage_label", "")
+    nba                  = brain.get("next_best_action")
+    auto_opps            = brain.get("automation_opportunities", [])
+    stale                = brain.get("stale_sections", [])
+    outliers             = brain.get("parameter_outliers", [])
+    meth_blks            = brain.get("methodology_blockers", [])
+    cross                = brain.get("cross", {})
+    derived_stage_label  = brain.get("derived_stage_label", "")
+    pack_ctx             = brain.get("pack_context", {})
+    comparable           = brain.get("comparable_projects", {})
+    param_conf           = brain.get("parameter_confidence", {})
+    audit_risks          = brain.get("audit_risk_signals", [])
+    missing_evidence     = brain.get("missing_evidence", [])
+    meth_version         = brain.get("methodology_version", {})
 
     readiness_score = state.get("readiness_score", 0)
     score_color = (
@@ -6205,17 +6211,35 @@ def _render_next_steps_panel(project, project_id):
         "#059669"
     )
 
-    # ── Stage guidance card with NBA ──────────────────────────────────────
+    # ── Stage guidance card with NBA + pack context ────────────────────────
     if nba:
         priority_colors = {"high": "#ef4444", "medium": "#f59e0b", "low": "#10b981"}
         nba_color = priority_colors.get(nba.get("priority", "medium"), "#3b82f6")
         nba_tab   = nba.get("action_tab", "")
         stage_line = f'<div class="stage-guidance-stage">{derived_stage_label} Stage</div>' if derived_stage_label else ""
+
+        # Pack context line
+        pack_context_parts = []
+        if pack_ctx.get("has_pack") and pack_ctx.get("pdd_count", 0) > 0:
+            pack_context_parts.append(f'{pack_ctx["pdd_count"]} PDDs in knowledge base')
+        if comparable.get("has_peers") and comparable.get("comparable_count", 0) > 0:
+            cmp_n = comparable["comparable_count"]
+            cntry_n = comparable.get("same_country_count", 0)
+            country_str = f" ({cntry_n} same country)" if cntry_n > 0 else ""
+            pack_context_parts.append(f'{cmp_n} comparable projects{country_str}')
+        pack_context_html = ""
+        if pack_context_parts:
+            pack_context_html = (
+                f'<div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:5px;">'
+                + " &bull; ".join(pack_context_parts) + "</div>"
+            )
+
         st.markdown(
             f'<div class="stage-guidance-card" style="border-left:4px solid {nba_color};">'
             f'  {stage_line}'
             f'  <div class="stage-guidance-action">{nba["label"]}</div>'
             f'  <div class="stage-guidance-desc">{nba.get("description","")}</div>'
+            f'  {pack_context_html}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -6230,7 +6254,7 @@ def _render_next_steps_panel(project, project_id):
     # ── Two-column detail area ────────────────────────────────────────────
     left_col, right_col = st.columns([3, 2])
 
-    # LEFT: Automation Opportunities
+    # LEFT: Automation Opportunities + Missing Evidence
     with left_col:
         if auto_opps:
             st.markdown(
@@ -6245,7 +6269,6 @@ def _render_next_steps_panel(project, project_id):
                 cnt = opp.get("count", 0)
                 cnt_html = f'<span style="margin-left:6px;font-size:0.72rem;color:{bg};font-weight:600;">({cnt})</span>' if cnt else ""
                 tab_name = opp.get("action_tab", "")
-                go_btn_html = ""
                 opp_cols = st.columns([0.3, 4.5, 1.2])
                 with opp_cols[0]:
                     st.markdown(
@@ -6278,6 +6301,23 @@ def _render_next_steps_panel(project, project_id):
                 for item in blockers:
                     st.error(f"**{item['message']}** -- {item['detail']}")
 
+        # Missing evidence with extraction hints
+        if missing_evidence:
+            with st.expander(f"{len(missing_evidence)} parameter(s) need evidence links", expanded=False):
+                for ev in missing_evidence:
+                    hint = ev.get("extraction_hint", "")
+                    unit = ev.get("unit", "")
+                    st.markdown(
+                        f'<div class="issue-row">'
+                        f'  <div class="issue-severity-dot issue-sev-warning"></div>'
+                        f'  <div style="font-size:0.82rem;">'
+                        f'    <strong>{ev["param_name"]}</strong>'
+                        + (f' <span style="color:var(--text-tertiary);font-size:0.75rem;">({ev["param_key"]})</span>' if unit else '')
+                        + (f'<br><span style="color:var(--text-secondary);font-size:0.77rem;">{hint}</span>' if hint else '')
+                        + '</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
         # Stale sections (inline, no expander)
         if stale:
             stale_names = ", ".join(s["section_id"] for s in stale[:4])
@@ -6287,7 +6327,7 @@ def _render_next_steps_panel(project, project_id):
                 f"**{stale_names}{extra}**"
             )
 
-    # RIGHT: Readiness + Blockers + Cross signals
+    # RIGHT: Readiness + Audit Risks + Pack Context + Confidence
     with right_col:
         # Readiness score
         st.markdown(
@@ -6299,18 +6339,70 @@ def _render_next_steps_panel(project, project_id):
         )
         st.progress(readiness_score / 100)
 
-        # Cross signals
-        sev_icons = {"blocker": "!", "warning": "~", "caution": "i", "info": "i"}
+        # Audit risk signals (highest priority in right panel)
+        if audit_risks:
+            sev_dot = {"critical": "issue-sev-blocker", "high": "issue-sev-warning", "medium": "issue-sev-caution"}
+            critical_or_high = [r for r in audit_risks if r["severity"] in ("critical", "high")]
+            if critical_or_high:
+                with st.expander(f"{len(critical_or_high)} audit risk signal(s)", expanded=True):
+                    for risk in critical_or_high[:4]:
+                        dot_cls = sev_dot.get(risk["severity"], "issue-sev-caution")
+                        st.markdown(
+                            f'<div class="issue-row">'
+                            f'  <div class="issue-severity-dot {dot_cls}"></div>'
+                            f'  <div style="font-size:0.8rem;"><strong>{risk["title"]}</strong><br>'
+                            f'  <span style="color:var(--text-secondary);">{risk["message"][:120]}{"..." if len(risk["message"])>120 else ""}</span></div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
+        # Parameter confidence bar
+        total_conf = param_conf.get("total_with_value", 0)
+        if total_conf > 0:
+            measured_pct = param_conf.get("measured_pct", 0)
+            default_pct  = param_conf.get("default_pct", 0)
+            conf_color   = "#10b981" if measured_pct >= 60 else "#f59e0b" if measured_pct >= 30 else "#ef4444"
+            st.markdown(
+                f'<div style="margin-top:8px;">'
+                f'<div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:3px;">Source Confidence</div>'
+                f'<div style="height:6px;background:var(--border-subtle);border-radius:3px;overflow:hidden;">'
+                f'  <div style="height:100%;width:{measured_pct}%;background:{conf_color};border-radius:3px;"></div>'
+                f'</div>'
+                f'<div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:2px;">'
+                f'{measured_pct}% measured/extracted &bull; {default_pct}% default</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Pack context
+        if pack_ctx.get("has_pack"):
+            p_score  = pack_ctx.get("readiness_score", 0)
+            p_pdds   = pack_ctx.get("pdd_count", 0)
+            p_vers   = pack_ctx.get("version", "")
+            p_status = pack_ctx.get("status", "")
+            p_cars   = pack_ctx.get("car_count", 0)
+            status_color = "#10b981" if p_status == "indexed" else "#f59e0b"
+            st.markdown(
+                f'<div style="margin-top:8px;font-size:0.78rem;font-weight:600;color:var(--text-secondary);">Methodology Pack</div>'
+                f'<div style="font-size:0.77rem;color:var(--text-secondary);line-height:1.6;">'
+                f'  <span style="color:{status_color};font-weight:600;">{p_status.replace("_"," ").title()}</span>'
+                + (f' &bull; v{p_vers}' if p_vers else '')
+                + f'<br>{p_pdds} PDDs indexed'
+                + (f' &bull; {p_cars} CAR patterns' if p_cars > 0 else '')
+                + f'<br>Pack readiness: {p_score}%'
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Cross signals (compact row format)
         drift = cross.get("scenario_param_drift", False)
         if drift:
             drift_h = cross.get("scenario_param_drift_hours", 0)
             st.markdown(
-                f'<div class="issue-row">'
+                f'<div class="issue-row" style="margin-top:6px;">'
                 f'  <div class="issue-severity-dot issue-sev-warning"></div>'
-                f'  <div style="font-size:0.8rem;"><strong>Parameter drift detected</strong><br>'
-                f'  Selected scenario is {drift_h:.0f}h older than the latest parameter update.</div>'
-                f'</div>',
+                f'  <div style="font-size:0.79rem;"><strong>Param drift</strong> &mdash; '
+                f'scenario is {drift_h:.0f}h behind.</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -6320,9 +6412,8 @@ def _render_next_steps_panel(project, project_id):
             st.markdown(
                 f'<div class="issue-row">'
                 f'  <div class="issue-severity-dot issue-sev-warning"></div>'
-                f'  <div style="font-size:0.8rem;"><strong>Audit re-run needed</strong><br>'
-                f'  Parameters updated {rerun_h:.0f}h after the last audit run.</div>'
-                f'</div>',
+                f'  <div style="font-size:0.79rem;"><strong>Audit re-run needed</strong> &mdash; '
+                f'{rerun_h:.0f}h since last run.</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -6332,13 +6423,21 @@ def _render_next_steps_panel(project, project_id):
             st.markdown(
                 f'<div class="issue-row">'
                 f'  <div class="issue-severity-dot" style="background:{ev_color};"></div>'
-                f'  <div style="font-size:0.8rem;"><strong>Evidence coverage: {ev_rate}%</strong><br>'
-                f'  of numeric parameters backed by document evidence.</div>'
-                f'</div>',
+                f'  <div style="font-size:0.79rem;"><strong>Evidence: {ev_rate}%</strong> of numeric params backed.</div></div>',
                 unsafe_allow_html=True,
             )
 
-        # Methodology blockers (hard blockers only in right panel)
+        # Methodology version alert
+        if meth_version.get("update_available"):
+            st.markdown(
+                f'<div class="issue-row">'
+                f'  <div class="issue-severity-dot issue-sev-caution"></div>'
+                f'  <div style="font-size:0.79rem;"><strong>New methodology version</strong>: '
+                f'{meth_version.get("latest_version","")} available.</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        # Hard methodology blockers
         hard_blks = [b for b in meth_blks if b["severity"] == "blocker"]
         if hard_blks:
             with st.expander(f"{len(hard_blks)} methodology blocker(s)", expanded=False):
@@ -6495,17 +6594,31 @@ def _get_recommended_tab_index(project, project_id, total_params, missing_params
     return 5
 
 
+_STAGE_DESCRIPTIONS = {
+    "setup":             "Define your project — set standard, methodology, country and dates.",
+    "parameterization":  "Configure required parameters for your methodology.",
+    "simulation":        "Run an ER simulation and select an approved scenario.",
+    "drafting":          "Draft your PDD sections using the AI writer.",
+    "review":            "Review drafts for completeness and consistency.",
+    "audit_prep":        "Resolve audit findings and prepare for VVB submission.",
+    "submission_ready":  "Project is ready — export the final PDD document.",
+}
+
+
 def _render_pipeline_strip(brain: dict) -> None:
-    """Render the 5-phase progress strip above the tab navigation."""
+    """Render the 5-phase progress strip with active stage description."""
     from carbongpt.core.project_brain import PIPELINE_PHASES
-    phase_idx = brain.get("pipeline_phase_index", 0)
+    phase_idx   = brain.get("pipeline_phase_index", 0)
+    stage_key   = brain.get("derived_stage", "setup")
+    stage_label = brain.get("derived_stage_label", "")
+    stage_desc  = _STAGE_DESCRIPTIONS.get(stage_key, "")
 
     phase_items = []
     for i, (label, _stages) in enumerate(PIPELINE_PHASES):
         if i < phase_idx:
             dot_cls   = "pipeline-phase-dot pipeline-phase-dot-complete"
             label_cls = "pipeline-phase-label pipeline-phase-label-complete"
-            dot_inner = "&#10003;"  # checkmark
+            dot_inner = "&#10003;"
         elif i == phase_idx:
             dot_cls   = "pipeline-phase-dot pipeline-phase-dot-active"
             label_cls = "pipeline-phase-label pipeline-phase-label-active"
@@ -6527,8 +6640,20 @@ def _render_pipeline_strip(brain: dict) -> None:
             phase_html += f'<div class="{conn_cls}"></div>'
         phase_items.append(phase_html)
 
+    stage_line = ""
+    if stage_label:
+        stage_line = (
+            f'<div style="padding-top:6px;padding-left:2px;font-size:0.75rem;color:var(--text-secondary);border-top:1px solid var(--border-subtle);margin-top:8px;">'
+            f'<span style="font-weight:600;color:var(--brand-primary);">{stage_label}</span>'
+            + (f' &mdash; {stage_desc}' if stage_desc else '')
+            + '</div>'
+        )
+
     st.markdown(
-        f'<div class="pipeline-strip">{"".join(phase_items)}</div>',
+        f'<div class="pipeline-strip" style="flex-direction:column;align-items:stretch;">'
+        f'  <div style="display:flex;align-items:center;gap:0;">{"".join(phase_items)}</div>'
+        f'  {stage_line}'
+        f'</div>',
         unsafe_allow_html=True,
     )
 

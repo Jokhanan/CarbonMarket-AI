@@ -144,20 +144,34 @@ def evaluate_project_brain(project_id: int) -> dict[str, Any]:
         return state
 
     methodology = _resolve_methodology(state, project_id)
+    country     = state.get("country", "") or _get_project_field(project_id, "country")
 
-    # ── Sub-evaluations ────────────────────────────────────────────────────
+    # ── Core sub-evaluations ───────────────────────────────────────────────
     derived_stage  = _derive_project_stage(state)
     meth_blockers  = _methodology_blockers(project_id, methodology, state)
     cross          = _cross_module_synthesis(project_id, state)
     stale          = _detect_stale_sections(project_id)
     outliers       = _detect_parameter_outliers(project_id, methodology)
     evidence_opps  = _detect_evidence_opportunities(project_id)
-    tab_badges     = _compute_tab_badges(state, meth_blockers, stale, outliers, cross)
-    automation     = _build_automation_opportunities(
-        state, derived_stage, stale, outliers, evidence_opps, meth_blockers, cross
+
+    # ── V2: deeper knowledge-source diagnostics ────────────────────────────
+    pack_context        = _fetch_pack_context(methodology)
+    comparable          = _benchmark_comparable_projects(methodology, country)
+    param_confidence    = _parameter_source_confidence(project_id)
+    pack_warnings       = _pack_benchmark_warnings(project_id, methodology, pack_context)
+    meth_version        = _methodology_version_check(methodology, pack_context)
+    audit_risks         = _audit_risk_signals(state, meth_blockers, cross, pack_warnings, evidence_opps)
+    missing_evidence    = _build_missing_evidence_list(project_id, cross)
+
+    tab_badges = _compute_tab_badges(
+        state, meth_blockers, stale, outliers, cross, audit_risks, pack_warnings
     )
-    next_best      = _compute_next_best_action(state, derived_stage, automation)
-    pipeline_pos   = _compute_pipeline_position(derived_stage)
+    automation = _build_automation_opportunities(
+        state, derived_stage, stale, outliers, evidence_opps,
+        meth_blockers, cross, pack_warnings, audit_risks, meth_version, param_confidence
+    )
+    next_best    = _compute_next_best_action(state, derived_stage, automation)
+    pipeline_pos = _compute_pipeline_position(derived_stage)
 
     return {
         **state,
@@ -169,6 +183,7 @@ def evaluate_project_brain(project_id: int) -> dict[str, Any]:
             # Methodology
             "methodology": methodology,
             "methodology_blockers": meth_blockers,
+            "methodology_version": meth_version,
             # Cross-module
             "cross": cross,
             # Per-detector outputs
@@ -177,6 +192,13 @@ def evaluate_project_brain(project_id: int) -> dict[str, Any]:
             "evidence_auto_apply_count": evidence_opps["auto_apply_count"],
             "evidence_pending_count": evidence_opps["pending_count"],
             "evidence_coverage_rate": cross.get("evidence_coverage_rate", 0),
+            "missing_evidence": missing_evidence,
+            # V2 knowledge diagnostics
+            "pack_context": pack_context,
+            "comparable_projects": comparable,
+            "parameter_confidence": param_confidence,
+            "pack_benchmark_warnings": pack_warnings,
+            "audit_risk_signals": audit_risks,
             # Orchestration
             "automation_opportunities": automation,
             "next_best_action": next_best,
@@ -659,6 +681,450 @@ def _detect_evidence_opportunities(project_id: int) -> dict[str, Any]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# V2: Knowledge-source diagnostics
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fetch_pack_context(methodology: str) -> dict[str, Any]:
+    """
+    Fetch methodology pack status and quality metrics.
+    Returns metadata about the Pack Manager's knowledge base for this methodology.
+    """
+    if not methodology:
+        return {"has_pack": False}
+    try:
+        with get_cursor() as cur:
+            # Find the best (most recent indexed) pack for this methodology
+            cur.execute(
+                """
+                SELECT id, methodology_code, methodology_version, indexing_status,
+                       pdd_count, mr_count, validation_count, tool_doc_count,
+                       target_pdd_count, readiness_score, readiness_gates_passed,
+                       last_updated
+                FROM methodology_packs
+                WHERE UPPER(methodology_code) = UPPER(%s)
+                ORDER BY
+                    CASE indexing_status WHEN 'indexed' THEN 0 WHEN 'ready_for_indexing' THEN 1 ELSE 2 END,
+                    last_updated DESC
+                LIMIT 1
+                """,
+                (methodology.strip(),),
+            )
+            pack = cur.fetchone()
+            if not pack:
+                return {"has_pack": False, "methodology": methodology}
+
+            pack_id = pack["id"]
+
+            # Count pack findings
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE finding_type = 'CAR') AS car_count,
+                    COUNT(*) FILTER (WHERE finding_type = 'CL')  AS cl_count,
+                    COUNT(*) FILTER (WHERE finding_type = 'FAR') AS far_count
+                FROM pack_findings WHERE pack_id = %s
+                """,
+                (pack_id,),
+            )
+            findings = cur.fetchone()
+
+            return {
+                "has_pack": True,
+                "pack_id": pack_id,
+                "methodology": pack["methodology_code"],
+                "version": pack["methodology_version"],
+                "status": pack["indexing_status"],
+                "pdd_count": pack["pdd_count"] or 0,
+                "mr_count": pack["mr_count"] or 0,
+                "validation_count": pack["validation_count"] or 0,
+                "target_pdd_count": pack["target_pdd_count"] or 30,
+                "readiness_score": pack["readiness_score"] or 0,
+                "car_count": int(findings["car_count"]) if findings else 0,
+                "cl_count": int(findings["cl_count"]) if findings else 0,
+                "far_count": int(findings["far_count"]) if findings else 0,
+                "last_updated": str(pack["last_updated"] or ""),
+            }
+    except Exception:
+        return {"has_pack": False}
+
+
+def _benchmark_comparable_projects(methodology: str, country: str) -> dict[str, Any]:
+    """
+    Count comparable registered projects (Carbon Intelligence) for peer context.
+    """
+    if not methodology:
+        return {"comparable_count": 0, "same_country_count": 0}
+    try:
+        with get_cursor() as cur:
+            # Projects with this methodology code
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT cp.id) AS total,
+                       COUNT(DISTINCT cp.id) FILTER (
+                           WHERE LOWER(cp.country) = LOWER(%s)
+                       ) AS same_country
+                FROM carbon_projects cp
+                JOIN project_methodology_codes pmc ON pmc.project_id = cp.id
+                WHERE UPPER(pmc.methodology_code) = UPPER(%s)
+                  AND cp.status IN ('registered', 'under_validation', 'active')
+                """,
+                (country or "", methodology),
+            )
+            row = cur.fetchone()
+            total   = int(row["total"])   if row else 0
+            country_n = int(row["same_country"]) if row else 0
+
+            # Also check freeform methodology field (handles TPDDTEC which uses it)
+            if total == 0:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS total,
+                           COUNT(*) FILTER (WHERE LOWER(country) = LOWER(%s)) AS same_country
+                    FROM carbon_projects
+                    WHERE UPPER(methodology) LIKE UPPER(%s)
+                      AND status IN ('registered', 'under_validation', 'active')
+                    """,
+                    (country or "", f"%{methodology}%"),
+                )
+                row2 = cur.fetchone()
+                if row2:
+                    total     = max(total,     int(row2["total"]))
+                    country_n = max(country_n, int(row2["same_country"]))
+
+        return {
+            "comparable_count": total,
+            "same_country_count": country_n,
+            "has_peers": total > 0,
+        }
+    except Exception:
+        return {"comparable_count": 0, "same_country_count": 0, "has_peers": False}
+
+
+def _parameter_source_confidence(project_id: int) -> dict[str, Any]:
+    """
+    Analyse the quality distribution of parameter sources.
+    Returns a breakdown of how many parameters use each source type,
+    and highlights the lowest-confidence numeric parameters.
+    """
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    source_type,
+                    COUNT(*) AS cnt,
+                    AVG(CASE
+                        WHEN source_type = 'measured'            THEN 1.0
+                        WHEN source_type = 'document_extracted'  THEN 0.9
+                        WHEN source_type = 'calculated'          THEN 0.8
+                        WHEN source_type = 'national_inventory'  THEN 0.75
+                        WHEN source_type = 'ipcc'                THEN 0.7
+                        WHEN source_type = 'methodology'         THEN 0.65
+                        WHEN source_type = 'user_override'       THEN 0.6
+                        ELSE 0.4
+                    END) AS avg_conf
+                FROM project_parameters
+                WHERE project_id = %s AND value IS NOT NULL
+                GROUP BY source_type
+                """,
+                (project_id,),
+            )
+            rows = cur.fetchall()
+
+            source_dist: dict[str, int] = {}
+            weighted_sum = 0.0
+            total = 0
+            for r in rows:
+                source_dist[r["source_type"]] = int(r["cnt"])
+                weighted_sum += float(r["avg_conf"] or 0) * int(r["cnt"])
+                total += int(r["cnt"])
+
+            avg_confidence = round(weighted_sum / total, 3) if total else 0.0
+
+            # Find low-confidence parameters (default or estimated with no evidence)
+            cur.execute(
+                """
+                SELECT pp.param_key, pp.param_name, pp.source_type
+                FROM project_parameters pp
+                LEFT JOIN evidence_links el
+                    ON el.project_id = pp.project_id
+                   AND el.param_key   = pp.param_key
+                   AND el.evidence_decision IN ('accepted', 'accepted_as_reference')
+                WHERE pp.project_id = %s
+                  AND pp.source_type IN ('default', 'user_override')
+                  AND pp.data_type = 'number'
+                  AND pp.value IS NOT NULL
+                  AND el.id IS NULL
+                ORDER BY pp.param_key
+                LIMIT 10
+                """,
+                (project_id,),
+            )
+            low_conf_rows = cur.fetchall()
+            low_confidence_params = [
+                {"param_key": r["param_key"], "param_name": r["param_name"], "source_type": r["source_type"]}
+                for r in low_conf_rows
+            ]
+
+        measured = source_dist.get("measured", 0) + source_dist.get("document_extracted", 0)
+        default_n = source_dist.get("default", 0)
+
+        return {
+            "total_with_value": total,
+            "source_distribution": source_dist,
+            "avg_confidence": avg_confidence,
+            "measured_count": measured,
+            "measured_pct": round(measured / total * 100) if total else 0,
+            "default_count": default_n,
+            "default_pct": round(default_n / total * 100) if total else 0,
+            "low_confidence_params": low_confidence_params,
+        }
+    except Exception:
+        return {
+            "total_with_value": 0, "source_distribution": {},
+            "avg_confidence": 0.0, "measured_count": 0, "measured_pct": 0,
+            "default_count": 0, "default_pct": 0, "low_confidence_params": [],
+        }
+
+
+def _pack_benchmark_warnings(
+    project_id: int, methodology: str, pack_context: dict
+) -> list[dict[str, Any]]:
+    """
+    Cross-reference project parameter keys against recurring CAR/CL patterns
+    from the methodology pack's findings database.
+    Returns a list of params that match known high-frequency finding patterns.
+    """
+    warnings: list[dict[str, Any]] = []
+    if not pack_context.get("has_pack") or pack_context.get("car_count", 0) == 0:
+        return warnings
+
+    pack_id = pack_context["pack_id"]
+    try:
+        # Get the top recurring finding patterns
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT finding_text, finding_type, section_reference, finding_reference
+                FROM pack_findings
+                WHERE pack_id = %s AND finding_type IN ('CAR', 'CL')
+                ORDER BY id DESC
+                LIMIT 50
+                """,
+                (pack_id,),
+            )
+            findings = [dict(r) for r in cur.fetchall()]
+
+            # Get current project params (keys + names)
+            cur.execute(
+                "SELECT param_key, param_name, value, source_type, param_status FROM project_parameters WHERE project_id = %s",
+                (project_id,),
+            )
+            params = {r["param_key"]: dict(r) for r in cur.fetchall()}
+
+        if not params or not findings:
+            return warnings
+
+        # Match: for each finding, check if any param_key appears in the finding text
+        for finding in findings:
+            text = (finding.get("finding_text") or "").lower()
+            for key, param in params.items():
+                if key.lower() in text or (param["param_name"] or "").lower()[:20] in text:
+                    # Only warn if the param has a suspicious status
+                    if param.get("param_status") in ("default", "estimated", "missing") or param.get("value") is None:
+                        # Avoid duplicate param_key warnings
+                        if not any(w["param_key"] == key for w in warnings):
+                            warnings.append({
+                                "param_key": key,
+                                "param_name": param.get("param_name", key),
+                                "finding_type": finding["finding_type"],
+                                "finding_text": (finding["finding_text"] or "")[:200],
+                                "section_reference": finding.get("section_reference", ""),
+                                "severity": "blocker" if finding["finding_type"] == "CAR" else "warning",
+                                "message": (
+                                    f"{param.get('param_name', key)} has been flagged in a {finding['finding_type']} "
+                                    f"pattern from comparable {methodology} audits. "
+                                    f"Current status: {param.get('param_status', 'unknown')}."
+                                ),
+                            })
+                        if len(warnings) >= 8:
+                            break
+            if len(warnings) >= 8:
+                break
+    except Exception:
+        pass
+    return warnings
+
+
+def _methodology_version_check(methodology: str, pack_context: dict) -> dict[str, Any]:
+    """
+    Check if the methodology version in use is current.
+    Uses version_history table and pack context.
+    """
+    result: dict[str, Any] = {
+        "version_current": True,
+        "latest_version": None,
+        "current_version": pack_context.get("version"),
+        "update_available": False,
+    }
+    if not methodology:
+        return result
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT version, supersedes_version, valid_from, valid_to
+                FROM methodology_version_history
+                WHERE UPPER(methodology_code) = UPPER(%s)
+                ORDER BY valid_from DESC NULLS LAST
+                LIMIT 3
+                """,
+                (methodology,),
+            )
+            versions = cur.fetchall()
+
+        if not versions:
+            return result
+
+        latest = versions[0]
+        result["latest_version"] = latest["version"]
+        current = pack_context.get("version") or ""
+
+        if current and latest["version"] and current.strip() != latest["version"].strip():
+            result["version_current"] = False
+            result["update_available"] = True
+            result["update_message"] = (
+                f"Methodology {methodology} has a newer version ({latest['version']}) available. "
+                f"Currently using: {current}. Review if your project is affected."
+            )
+    except Exception:
+        pass
+    return result
+
+
+def _audit_risk_signals(
+    state: dict,
+    meth_blockers: list,
+    cross: dict,
+    pack_warnings: list,
+    evidence_opps: dict,
+) -> list[dict[str, Any]]:
+    """
+    Generate pre-emptive VVB audit risk signals based on:
+    - Hard methodology blockers
+    - Parameters with zero evidence in audit-sensitive categories
+    - Pack CAR patterns matching current params
+    - Evidence coverage gaps
+    - Open audit CARs from previous simulation
+    """
+    risks: list[dict[str, Any]] = []
+
+    # 1. Hard methodology blockers = certain audit failure
+    hard_blks = [b for b in meth_blockers if b["severity"] == "blocker"]
+    if hard_blks:
+        risks.append({
+            "risk_type": "methodology_blocker",
+            "severity": "critical",
+            "title": f"{len(hard_blks)} required parameter(s) missing",
+            "message": (
+                f"{len(hard_blks)} parameter(s) required by your methodology have no value. "
+                "A VVB would issue CARs for each missing required parameter."
+            ),
+            "param_keys": [b["param_key"] for b in hard_blks],
+            "action_tab": "Parameters",
+        })
+
+    # 2. Pack CAR patterns
+    high_risk_pack = [w for w in pack_warnings if w["severity"] == "blocker"]
+    if high_risk_pack:
+        risks.append({
+            "risk_type": "pack_car_pattern",
+            "severity": "high",
+            "title": f"{len(high_risk_pack)} parameter(s) match known CAR patterns",
+            "message": (
+                f"{len(high_risk_pack)} of your parameters match recurring CARs from comparable "
+                f"projects in the methodology pack. Address these before VVB review."
+            ),
+            "param_keys": [w["param_key"] for w in high_risk_pack],
+            "action_tab": "Parameters",
+        })
+
+    # 3. Evidence coverage below VVB threshold
+    ev_rate = cross.get("evidence_coverage_rate", 100)
+    if ev_rate < 60:
+        risks.append({
+            "risk_type": "evidence_gap",
+            "severity": "high",
+            "title": f"Evidence coverage at {ev_rate}% — likely VVB CL",
+            "message": (
+                f"Only {ev_rate}% of numeric parameters are backed by document evidence. "
+                "VVBs typically issue CLs for parameters without traceable source documents."
+            ),
+            "param_keys": cross.get("evidence_uncovered_params", [])[:5],
+            "action_tab": "Documents",
+        })
+
+    # 4. Unresolved audit CARs
+    audit = state.get("audit", {})
+    open_cars = audit.get("cars", 0)
+    if open_cars > 0:
+        risks.append({
+            "risk_type": "open_audit_cars",
+            "severity": "critical",
+            "title": f"{open_cars} open CAR(s) from previous audit simulation",
+            "message": (
+                f"{open_cars} corrective action request(s) from the audit simulation are unresolved. "
+                "These must be addressed before VVB submission."
+            ),
+            "param_keys": cross.get("audit_car_params", []),
+            "action_tab": "Findings",
+        })
+
+    # 5. High-confidence evidence pending (missed opportunity)
+    high_conf = evidence_opps.get("high_confidence_count", 0)
+    if high_conf >= 3:
+        risks.append({
+            "risk_type": "pending_evidence_risk",
+            "severity": "medium",
+            "title": f"{high_conf} high-confidence extractions pending review",
+            "message": (
+                f"{high_conf} parameter values were extracted from your documents with high confidence "
+                "but have not yet been accepted. Unreviewed evidence weakens the audit trail."
+            ),
+            "param_keys": [],
+            "action_tab": "Documents",
+        })
+
+    # Sort: critical first, then high, then medium
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    risks.sort(key=lambda r: sev_order.get(r.get("severity", "low"), 9))
+    return risks
+
+
+def _build_missing_evidence_list(project_id: int, cross: dict) -> list[dict[str, Any]]:
+    """
+    Build a richer list of uncovered parameters including extraction hints.
+    """
+    uncovered_keys = cross.get("evidence_uncovered_params", [])
+    if not uncovered_keys:
+        return []
+    try:
+        result = []
+        for key in uncovered_keys[:8]:
+            defn = PARAMETER_DEFINITIONS.get(key, {})
+            result.append({
+                "param_key": key,
+                "param_name": defn.get("param_name", key),
+                "unit": defn.get("unit", ""),
+                "extraction_hint": defn.get("extraction_hint", ""),
+                "category": defn.get("category", "other"),
+            })
+        return result
+    except Exception:
+        return []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Tab badge computation
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -668,12 +1134,16 @@ def _compute_tab_badges(
     stale: list,
     outliers: list,
     cross: dict,
+    audit_risks: list | None = None,
+    pack_warnings: list | None = None,
 ) -> dict[str, Any]:
     """
     Return a dict mapping tab index → badge dict {count, severity}.
     Tab indices correspond to BASE_TAB_LABELS order.
     """
     badges: dict[int, dict] = {}
+    audit_risks   = audit_risks   or []
+    pack_warnings = pack_warnings or []
 
     def _add(tab_idx: int, count: int, sev: str):
         existing = badges.get(tab_idx)
@@ -684,10 +1154,9 @@ def _compute_tab_badges(
             new_sev = sev if sev_order.get(sev, 9) < sev_order.get(existing["severity"], 9) else existing["severity"]
             badges[tab_idx] = {"count": existing["count"] + count, "severity": new_sev}
 
-    params = state.get("parameters", {})
+    params   = state.get("parameters", {})
     evidence = state.get("evidence", {})
-    drafts = state.get("drafts", {})
-    audit = state.get("audit", {})
+    audit    = state.get("audit", {})
 
     # Tab 2: Parameters
     missing = params.get("missing", 0)
@@ -701,6 +1170,10 @@ def _compute_tab_badges(
         _add(2, warning_count, "warning")
     if outliers:
         _add(2, len(outliers), "caution")
+    # Pack benchmark warnings on Parameters tab
+    pack_blocker_params = {w["param_key"] for w in pack_warnings if w.get("severity") == "blocker"}
+    if pack_blocker_params:
+        _add(2, len(pack_blocker_params), "warning")
 
     # Tab 1: Documents (pending evidence)
     pending_ev = evidence.get("pending", 0)
@@ -711,11 +1184,14 @@ def _compute_tab_badges(
     if stale:
         _add(4, len(stale), "warning")
 
-    # Tab 6: Audit (needs re-run or has open CARs)
+    # Tab 6: Audit (needs re-run, open CARs, or audit risk signals)
     if cross.get("audit_rerun_needed"):
         _add(6, 1, "warning")
     if audit.get("cars", 0) > 0:
         _add(6, audit["cars"], "blocker")
+    critical_risks = [r for r in audit_risks if r.get("severity") == "critical"]
+    if critical_risks:
+        _add(6, len(critical_risks), "blocker")
 
     # Tab 7: Findings (open CARs)
     cars = audit.get("cars", 0)
@@ -737,8 +1213,16 @@ def _build_automation_opportunities(
     evidence_opps: dict,
     meth_blockers: list,
     cross: dict,
+    pack_warnings: list | None = None,
+    audit_risks: list | None = None,
+    meth_version: dict | None = None,
+    param_confidence: dict | None = None,
 ) -> list[dict[str, Any]]:
     opps: list[dict[str, Any]] = []
+    pack_warnings    = pack_warnings    or []
+    audit_risks      = audit_risks      or []
+    meth_version     = meth_version     or {}
+    param_confidence = param_confidence or {}
 
     params_state = state.get("parameters", {})
     scenario      = state.get("scenario", {})
@@ -906,6 +1390,96 @@ def _build_automation_opportunities(
             "action_type": "fill_parameters",
             "action_tab": "Parameters",
             "count": default_count,
+        })
+
+    # ── V2: Pack CAR pattern warnings ────────────────────────────────────────
+    car_pattern_hits = [w for w in pack_warnings if w.get("finding_type") == "CAR"]
+    if car_pattern_hits:
+        sample = ", ".join(w["param_key"] for w in car_pattern_hits[:3])
+        opps.append({
+            "id": "pack_car_pattern_warning",
+            "label": f"Resolve {len(car_pattern_hits)} parameter(s) matching known CAR patterns",
+            "description": (
+                f"Parameters ({sample}{'...' if len(car_pattern_hits) > 3 else ''}) match "
+                "recurring corrective action patterns from comparable projects in the methodology pack. "
+                "Review and update these before VVB audit."
+            ),
+            "priority": "high",
+            "action_type": "review_parameters",
+            "action_tab": "Parameters",
+            "count": len(car_pattern_hits),
+        })
+
+    # ── V2: Audit pre-emptive risk signals ───────────────────────────────────
+    critical_risks = [r for r in audit_risks if r.get("severity") == "critical"]
+    high_risks     = [r for r in audit_risks if r.get("severity") == "high"]
+    if critical_risks:
+        risk = critical_risks[0]
+        opps.append({
+            "id": "audit_critical_risk",
+            "label": f"Critical audit risk: {risk['title']}",
+            "description": risk["message"],
+            "priority": "high",
+            "action_type": "navigate",
+            "action_tab": risk.get("action_tab", "Audit"),
+            "count": len(critical_risks),
+        })
+    elif high_risks:
+        opps.append({
+            "id": "audit_high_risk",
+            "label": f"{len(high_risks)} pre-emptive audit risk(s) detected",
+            "description": high_risks[0]["message"],
+            "priority": "medium",
+            "action_type": "navigate",
+            "action_tab": high_risks[0].get("action_tab", "Audit"),
+            "count": len(high_risks),
+        })
+
+    # ── V2: Methodology version update ───────────────────────────────────────
+    if meth_version.get("update_available"):
+        opps.append({
+            "id": "methodology_version_update",
+            "label": "New methodology version available",
+            "description": meth_version.get("update_message", "A newer version of your methodology has been released. Check if your project is affected."),
+            "priority": "medium",
+            "action_type": "navigate",
+            "action_tab": "Setup",
+            "count": 0,
+        })
+
+    # ── V2: High-confidence evidence quick-apply (specific signal) ───────────
+    n_high_conf = evidence_opps.get("high_confidence_count", 0)
+    n_apply = evidence_opps.get("auto_apply_count", 0)
+    if n_high_conf > 0 and n_apply == 0:
+        opps.append({
+            "id": "evidence_high_confidence_pending",
+            "label": f"{n_high_conf} high-confidence parameter extraction(s) pending review",
+            "description": (
+                f"{n_high_conf} parameter value(s) were extracted with ≥80% confidence from your documents. "
+                "Review and accept them to strengthen your evidence trail."
+            ),
+            "priority": "medium",
+            "action_type": "evidence_apply",
+            "action_tab": "Documents",
+            "count": n_high_conf,
+        })
+
+    # ── V2: Low source confidence — suggest improvements ─────────────────────
+    low_conf_params = param_confidence.get("low_confidence_params", [])
+    measured_pct    = param_confidence.get("measured_pct", 100)
+    if low_conf_params and measured_pct < 40 and derived_stage in (STAGE_REVIEW, STAGE_AUDIT_PREP):
+        sample_names = ", ".join(p["param_key"] for p in low_conf_params[:3])
+        opps.append({
+            "id": "improve_source_confidence",
+            "label": f"Improve evidence quality for {len(low_conf_params)} default/override parameter(s)",
+            "description": (
+                f"Only {measured_pct}% of your parameters use measured or document-extracted values. "
+                f"Consider adding source references for: {sample_names}."
+            ),
+            "priority": "medium",
+            "action_type": "fill_parameters",
+            "action_tab": "Parameters",
+            "count": len(low_conf_params),
         })
 
     # ── Stage-based forward suggestions ───────────────────────────────────
