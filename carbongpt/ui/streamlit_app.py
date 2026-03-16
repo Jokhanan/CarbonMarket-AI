@@ -1258,6 +1258,137 @@ st.markdown("""
         font-weight: 500;
     }
 
+    /* ── Pipeline progress strip ── */
+    .pipeline-strip {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 10px 16px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        margin: 10px 0;
+        overflow-x: auto;
+    }
+    .pipeline-phase {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex: 1;
+        min-width: 0;
+    }
+    .pipeline-phase-dot {
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.7rem; font-weight: 700;
+        flex-shrink: 0;
+        background: var(--border-subtle);
+        color: var(--text-secondary);
+        border: 2px solid var(--border-subtle);
+    }
+    .pipeline-phase-dot-complete {
+        background: #10b981;
+        border-color: #10b981;
+        color: white;
+    }
+    .pipeline-phase-dot-active {
+        background: var(--brand-primary);
+        border-color: var(--brand-primary);
+        color: white;
+        box-shadow: 0 0 0 3px rgba(13,148,136,0.2);
+    }
+    .pipeline-phase-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .pipeline-phase-label-active {
+        color: var(--brand-primary);
+    }
+    .pipeline-phase-label-complete {
+        color: #10b981;
+    }
+    .pipeline-connector {
+        flex: 1;
+        height: 2px;
+        background: var(--border-subtle);
+        margin: 0 4px;
+        min-width: 16px;
+    }
+    .pipeline-connector-complete {
+        background: #10b981;
+    }
+
+    /* ── Tab badge ── */
+    .tab-badge-pill {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 18px; height: 18px;
+        border-radius: 9px;
+        font-size: 0.65rem; font-weight: 700;
+        padding: 0 5px;
+        margin-left: 5px;
+        vertical-align: middle;
+        line-height: 1;
+    }
+    .tab-badge-blocker { background: #ef4444; color: white; }
+    .tab-badge-warning { background: #f59e0b; color: white; }
+    .tab-badge-caution { background: #3b82f6; color: white; }
+
+    /* ── Stage guidance card ── */
+    .stage-guidance-card {
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-subtle);
+        background: linear-gradient(135deg, var(--brand-primary-50) 0%, rgba(255,255,255,0.9) 100%);
+        margin: 8px 0;
+    }
+    .stage-guidance-stage {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--brand-primary-dark);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+    }
+    .stage-guidance-action {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+    .stage-guidance-desc {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    /* ── Issue row ── */
+    .issue-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        margin: 4px 0;
+        background: var(--surface-base);
+        border: 1px solid var(--border-subtle);
+        font-size: 0.82rem;
+    }
+    .issue-severity-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 4px;
+    }
+    .issue-sev-blocker { background: #ef4444; }
+    .issue-sev-warning { background: #f59e0b; }
+    .issue-sev-caution { background: #3b82f6; }
+    .issue-sev-info    { background: #10b981; }
+
     /* ── Project card hover elevation ── */
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div {
         transition: box-shadow var(--transition-base), transform var(--transition-base);
@@ -6017,20 +6148,35 @@ def _build_next_steps(readiness):
 
 
 def _render_next_steps_panel(project, project_id):
-    from carbongpt.core.project_state import SEVERITY_BLOCKER, SEVERITY_WARNING, SEVERITY_SUGGESTION, SEVERITY_INSIGHT
-    try:
-        from carbongpt.core.project_brain import evaluate_project_brain
-        state = evaluate_project_brain(project_id)
-    except Exception:
-        from carbongpt.core.project_state import evaluate_project_state
-        state = evaluate_project_state(project_id)
+    """
+    Project Intelligence panel — two-column layout:
+    Left (60%): NBA + automation opportunities
+    Right (40%): readiness metrics + methodology blockers + cross signals
+    """
+    from carbongpt.core.project_state import SEVERITY_BLOCKER, SEVERITY_INSIGHT
+
+    # Re-use brain state computed at workspace level if available
+    brain_cache_key = f"brain_state_{project_id}"
+    state = st.session_state.get(brain_cache_key)
+    if not state:
+        try:
+            from carbongpt.core.project_brain import evaluate_project_brain
+            state = evaluate_project_brain(project_id)
+            st.session_state[brain_cache_key] = state
+        except Exception:
+            pass
+    if not state:
+        try:
+            from carbongpt.core.project_state import evaluate_project_state
+            state = evaluate_project_state(project_id)
+        except Exception:
+            state = {}
 
     if "error" in state:
         readiness = _get_project_readiness(project, project_id)
         steps = _build_next_steps(readiness)
-        if not steps:
-            return
-        _render_next_steps_fallback(project_id, steps)
+        if steps:
+            _render_next_steps_fallback(project_id, steps)
         return
 
     TAB_LABEL_TO_INDEX = {
@@ -6042,119 +6188,175 @@ def _render_next_steps_panel(project, project_id):
     def _go_to_tab(pid, idx):
         st.session_state[f"ws_tab_{pid}"] = idx
 
-    readiness_score = state.get("readiness_score", 0)
-    score_color = "#ef4444" if readiness_score < 30 else "#f59e0b" if readiness_score < 60 else "#10b981" if readiness_score < 85 else "#059669"
-
-    st.markdown(
-        f'<span style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">'
-        f'Project Readiness: <span style="color:{score_color};font-size:1.1rem;">{readiness_score}%</span>'
-        f'</span>',
-        unsafe_allow_html=True,
-    )
-    st.progress(readiness_score / 100)
-
-    _render_state_dashboard(state, project_id)
-
-    # ── Project Brain outputs ──────────────────────────────────────────────
     brain = state.get("brain", {})
+    nba         = brain.get("next_best_action")
+    auto_opps   = brain.get("automation_opportunities", [])
+    stale       = brain.get("stale_sections", [])
+    outliers    = brain.get("parameter_outliers", [])
+    meth_blks   = brain.get("methodology_blockers", [])
+    cross       = brain.get("cross", {})
+    derived_stage_label = brain.get("derived_stage_label", "")
 
-    # Next best action CTA (prominent)
-    nba = brain.get("next_best_action")
+    readiness_score = state.get("readiness_score", 0)
+    score_color = (
+        "#ef4444" if readiness_score < 30 else
+        "#f59e0b" if readiness_score < 60 else
+        "#10b981" if readiness_score < 85 else
+        "#059669"
+    )
+
+    # ── Stage guidance card with NBA ──────────────────────────────────────
     if nba:
-        _priority_colors = {"high": "#ef4444", "medium": "#f59e0b", "low": "#3b82f6"}
-        nba_color = _priority_colors.get(nba.get("priority", "medium"), "#3b82f6")
+        priority_colors = {"high": "#ef4444", "medium": "#f59e0b", "low": "#10b981"}
+        nba_color = priority_colors.get(nba.get("priority", "medium"), "#3b82f6")
+        nba_tab   = nba.get("action_tab", "")
+        stage_line = f'<div class="stage-guidance-stage">{derived_stage_label} Stage</div>' if derived_stage_label else ""
         st.markdown(
-            f'<div style="margin:8px 0;padding:10px 14px;border-radius:8px;'
-            f'border-left:4px solid {nba_color};background:rgba(0,0,0,0.04);">'
-            f'<div style="font-size:0.8rem;font-weight:700;color:{nba_color};text-transform:uppercase;letter-spacing:0.05em;">Recommended Action</div>'
-            f'<div style="font-size:0.9rem;font-weight:600;margin:4px 0;">{nba["label"]}</div>'
-            f'<div style="font-size:0.8rem;color:var(--text-secondary);">{nba.get("description","")}</div>'
+            f'<div class="stage-guidance-card" style="border-left:4px solid {nba_color};">'
+            f'  {stage_line}'
+            f'  <div class="stage-guidance-action">{nba["label"]}</div>'
+            f'  <div class="stage-guidance-desc">{nba.get("description","")}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
-        nba_tab = nba.get("action_tab")
         if nba_tab and nba_tab in TAB_LABEL_TO_INDEX:
-            st.button(f"Go to {nba_tab}", key=f"nba_goto_{project_id}",
-                      on_click=_go_to_tab, args=(project_id, TAB_LABEL_TO_INDEX[nba_tab]))
+            st.button(
+                f"Go to {nba_tab}",
+                key=f"nba_goto_{project_id}",
+                on_click=_go_to_tab,
+                args=(project_id, TAB_LABEL_TO_INDEX[nba_tab]),
+            )
 
-    # Stale sections warning
-    stale = brain.get("stale_sections", [])
-    if stale:
-        stale_names = ", ".join(s["section_id"] for s in stale[:4])
-        st.warning(
-            f"{len(stale)} PDD section(s) may be outdated since the last parameter update: "
-            f"**{stale_names}**{'...' if len(stale) > 4 else ''}. "
-            "Consider re-drafting these sections."
-        )
+    # ── Two-column detail area ────────────────────────────────────────────
+    left_col, right_col = st.columns([3, 2])
 
-    # Parameter outliers
-    outliers = brain.get("parameter_outliers", [])
-    if outliers:
-        with st.expander(f"{len(outliers)} parameter(s) outside expected range", expanded=False):
-            for out in outliers:
-                lo, hi = out.get("expected_range", (None, None))
-                direction_label = "too low" if out.get("direction") == "low" else "too high"
-                st.warning(
-                    f"**{out['param_name']}** = {out['value']:g} {out.get('unit','')} "
-                    f"({direction_label}; expected {lo:g}–{hi:g})"
-                )
-
-    # Automation opportunities
-    auto_opps = brain.get("automation_opportunities", [])
-    if auto_opps:
-        st.markdown("**Recommended Actions**")
-        for i, opp in enumerate(auto_opps, 1):
-            p = opp.get("priority", "low")
-            bg = "#ef4444" if p == "high" else "#f59e0b" if p == "medium" else "#3b82f6"
-            cols = st.columns([0.4, 4, 1.4])
-            with cols[0]:
-                st.markdown(
-                    f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;'
-                    f'background:{bg};color:white;font-size:0.72rem;font-weight:700;'
-                    f'text-align:center;line-height:24px;">{i}</span>',
-                    unsafe_allow_html=True,
-                )
-            with cols[1]:
-                st.markdown(f"**{opp['label']}**")
-                st.caption(opp.get("description", ""))
-            with cols[2]:
+    # LEFT: Automation Opportunities
+    with left_col:
+        if auto_opps:
+            st.markdown(
+                '<div style="font-size:0.82rem;font-weight:700;color:var(--text-secondary);'
+                'text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">'
+                'Recommended Actions</div>',
+                unsafe_allow_html=True,
+            )
+            for i, opp in enumerate(auto_opps, 1):
+                p   = opp.get("priority", "low")
+                bg  = "#ef4444" if p == "high" else "#f59e0b" if p == "medium" else "#3b82f6"
+                cnt = opp.get("count", 0)
+                cnt_html = f'<span style="margin-left:6px;font-size:0.72rem;color:{bg};font-weight:600;">({cnt})</span>' if cnt else ""
                 tab_name = opp.get("action_tab", "")
-                if tab_name and tab_name in TAB_LABEL_TO_INDEX:
-                    st.button(
-                        "Go",
-                        key=f"brain_opp_{project_id}_{i}",
-                        use_container_width=True,
-                        on_click=_go_to_tab,
-                        args=(project_id, TAB_LABEL_TO_INDEX[tab_name]),
+                go_btn_html = ""
+                opp_cols = st.columns([0.3, 4.5, 1.2])
+                with opp_cols[0]:
+                    st.markdown(
+                        f'<span style="display:inline-flex;width:22px;height:22px;border-radius:50%;'
+                        f'align-items:center;justify-content:center;'
+                        f'background:{bg};color:white;font-size:0.68rem;font-weight:700;">{i}</span>',
+                        unsafe_allow_html=True,
+                    )
+                with opp_cols[1]:
+                    st.markdown(
+                        f'<div style="font-size:0.83rem;font-weight:600;line-height:1.35;">'
+                        f'{opp["label"]}{cnt_html}</div>'
+                        f'<div style="font-size:0.77rem;color:var(--text-secondary);line-height:1.4;">'
+                        f'{opp.get("description","")}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with opp_cols[2]:
+                    if tab_name and tab_name in TAB_LABEL_TO_INDEX:
+                        st.button(
+                            "Go",
+                            key=f"brain_opp_{project_id}_{i}",
+                            use_container_width=True,
+                            on_click=_go_to_tab,
+                            args=(project_id, TAB_LABEL_TO_INDEX[tab_name]),
+                        )
+        else:
+            items = state.get("items", [])
+            blockers = [x for x in items if x["severity"] == SEVERITY_BLOCKER]
+            if blockers:
+                for item in blockers:
+                    st.error(f"**{item['message']}** -- {item['detail']}")
+
+        # Stale sections (inline, no expander)
+        if stale:
+            stale_names = ", ".join(s["section_id"] for s in stale[:4])
+            extra = f"... +{len(stale)-4}" if len(stale) > 4 else ""
+            st.warning(
+                f"{len(stale)} draft section(s) may be outdated after recent parameter changes: "
+                f"**{stale_names}{extra}**"
+            )
+
+    # RIGHT: Readiness + Blockers + Cross signals
+    with right_col:
+        # Readiness score
+        st.markdown(
+            f'<div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:2px;">'
+            f'Project Readiness</div>'
+            f'<div style="font-size:1.5rem;font-weight:800;color:{score_color};line-height:1.2;">'
+            f'{readiness_score}%</div>',
+            unsafe_allow_html=True,
+        )
+        st.progress(readiness_score / 100)
+
+        # Cross signals
+        sev_icons = {"blocker": "!", "warning": "~", "caution": "i", "info": "i"}
+
+        drift = cross.get("scenario_param_drift", False)
+        if drift:
+            drift_h = cross.get("scenario_param_drift_hours", 0)
+            st.markdown(
+                f'<div class="issue-row">'
+                f'  <div class="issue-severity-dot issue-sev-warning"></div>'
+                f'  <div style="font-size:0.8rem;"><strong>Parameter drift detected</strong><br>'
+                f'  Selected scenario is {drift_h:.0f}h older than the latest parameter update.</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        rerun = cross.get("audit_rerun_needed", False)
+        if rerun:
+            rerun_h = cross.get("audit_rerun_hours_since", 0)
+            st.markdown(
+                f'<div class="issue-row">'
+                f'  <div class="issue-severity-dot issue-sev-warning"></div>'
+                f'  <div style="font-size:0.8rem;"><strong>Audit re-run needed</strong><br>'
+                f'  Parameters updated {rerun_h:.0f}h after the last audit run.</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        ev_rate = cross.get("evidence_coverage_rate", None)
+        if ev_rate is not None:
+            ev_color = "#ef4444" if ev_rate < 30 else "#f59e0b" if ev_rate < 70 else "#10b981"
+            st.markdown(
+                f'<div class="issue-row">'
+                f'  <div class="issue-severity-dot" style="background:{ev_color};"></div>'
+                f'  <div style="font-size:0.8rem;"><strong>Evidence coverage: {ev_rate}%</strong><br>'
+                f'  of numeric parameters backed by document evidence.</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Methodology blockers (hard blockers only in right panel)
+        hard_blks = [b for b in meth_blks if b["severity"] == "blocker"]
+        if hard_blks:
+            with st.expander(f"{len(hard_blks)} methodology blocker(s)", expanded=False):
+                for blk in hard_blks:
+                    st.error(blk["message"])
+
+        # Parameter outliers
+        if outliers:
+            with st.expander(f"{len(outliers)} outlier parameter(s)", expanded=False):
+                for out in outliers:
+                    lo, hi = out.get("expected_range", (None, None))
+                    direction_label = "too low" if out.get("direction") == "low" else "too high"
+                    st.warning(
+                        f"**{out['param_name']}** = {out['value']:g} {out.get('unit','')} "
+                        f"({direction_label}; expected {lo:g}\u2013{hi:g})"
                     )
 
-    # ── Fallback: base state next actions ─────────────────────────────────
-    elif not nba:
-        items = state.get("items", [])
-        blockers = [i for i in items if i["severity"] == SEVERITY_BLOCKER]
-        if blockers:
-            for item in blockers:
-                st.error(f"**{item['message']}** -- {item['detail']}")
-
-        actions = state.get("next_actions", [])
-        if actions:
-            st.markdown("**Next Actions**")
-            for i, action in enumerate(actions, 1):
-                cols = st.columns([0.4, 4, 1.2])
-                with cols[0]:
-                    bg = "#ef4444" if action["priority"] == "high" else "#f59e0b" if action["priority"] == "medium" else "var(--brand-primary)"
-                    st.markdown(f'<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:{bg};color:white;font-size:0.72rem;font-weight:700;text-align:center;line-height:24px;">{i}</span>', unsafe_allow_html=True)
-                with cols[1]:
-                    st.markdown(f"**{action['text']}**")
-                    st.caption(action["detail"])
-                with cols[2]:
-                    tab_name = action.get("tab", "")
-                    if tab_name and tab_name in TAB_LABEL_TO_INDEX:
-                        target_idx = TAB_LABEL_TO_INDEX[tab_name]
-                        st.button("Go", key=f"nextstep_{project_id}_{i}", use_container_width=True,
-                                  on_click=_go_to_tab, args=(project_id, target_idx))
-
-    insights = [i for i in state.get("items", []) if i["severity"] == SEVERITY_INSIGHT]
+    insights = [x for x in state.get("items", []) if x["severity"] == SEVERITY_INSIGHT]
     if insights:
         with st.expander("Insights", expanded=False):
             for item in insights:
@@ -6293,6 +6495,81 @@ def _get_recommended_tab_index(project, project_id, total_params, missing_params
     return 5
 
 
+def _render_pipeline_strip(brain: dict) -> None:
+    """Render the 5-phase progress strip above the tab navigation."""
+    from carbongpt.core.project_brain import PIPELINE_PHASES
+    phase_idx = brain.get("pipeline_phase_index", 0)
+
+    phase_items = []
+    for i, (label, _stages) in enumerate(PIPELINE_PHASES):
+        if i < phase_idx:
+            dot_cls   = "pipeline-phase-dot pipeline-phase-dot-complete"
+            label_cls = "pipeline-phase-label pipeline-phase-label-complete"
+            dot_inner = "&#10003;"  # checkmark
+        elif i == phase_idx:
+            dot_cls   = "pipeline-phase-dot pipeline-phase-dot-active"
+            label_cls = "pipeline-phase-label pipeline-phase-label-active"
+            dot_inner = str(i + 1)
+        else:
+            dot_cls   = "pipeline-phase-dot"
+            label_cls = "pipeline-phase-label"
+            dot_inner = str(i + 1)
+
+        conn_cls = "pipeline-connector pipeline-connector-complete" if i < phase_idx else "pipeline-connector"
+
+        phase_html = (
+            f'<div class="pipeline-phase">'
+            f'  <div class="{dot_cls}">{dot_inner}</div>'
+            f'  <span class="{label_cls}">{label}</span>'
+            f'</div>'
+        )
+        if i < len(PIPELINE_PHASES) - 1:
+            phase_html += f'<div class="{conn_cls}"></div>'
+        phase_items.append(phase_html)
+
+    st.markdown(
+        f'<div class="pipeline-strip">{"".join(phase_items)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _build_tab_label_with_badge(base_label: str, tab_idx: int, badges: dict) -> str:
+    """Append a badge count to a tab label when issues are present."""
+    badge = badges.get(tab_idx)
+    if not badge or badge.get("count", 0) == 0:
+        return base_label
+    count = badge["count"]
+    sev = badge.get("severity", "info")
+    sev_class = {
+        "blocker": "tab-badge-blocker",
+        "warning": "tab-badge-warning",
+        "caution": "tab-badge-caution",
+    }.get(sev, "tab-badge-caution")
+    # Streamlit radio doesn't render HTML — we'll use unicode bullet + count
+    marker = " !" if sev == "blocker" else " *" if sev == "warning" else ""
+    return f"{base_label} ({count}){marker}"
+
+
+def _get_stage_quick_actions(derived_stage: str, nba: dict | None) -> list[tuple[str, str, int]]:
+    """
+    Return [(button_label, key_suffix, tab_idx), ...] based on derived project stage.
+    """
+    from carbongpt.core.project_brain import (
+        STAGE_SETUP, STAGE_PARAMETERIZATION, STAGE_SIMULATION,
+        STAGE_DRAFTING, STAGE_REVIEW, STAGE_AUDIT_PREP, STAGE_SUBMISSION_READY,
+    )
+    stage_actions = {
+        STAGE_SETUP:            [("Complete Setup", "setup",  0), ("Upload Docs",    "docs",   1), ("AI Copilot",  "chat", -1)],
+        STAGE_PARAMETERIZATION: [("Set Parameters",  "params", 2), ("Upload Docs",    "docs",   1), ("AI Copilot",  "chat", -1)],
+        STAGE_SIMULATION:       [("Run Simulation",  "sim",    3), ("Check Params",   "params", 2), ("AI Copilot",  "chat", -1)],
+        STAGE_DRAFTING:         [("Draft Sections",  "write",  4), ("Run Simulation", "sim",    3), ("AI Copilot",  "chat", -1)],
+        STAGE_REVIEW:           [("Run Audit",       "audit",  6), ("Draft Sections", "write",  4), ("AI Copilot",  "chat", -1)],
+        STAGE_AUDIT_PREP:       [("View Findings",   "find",   7), ("Run Audit",      "audit",  6), ("AI Copilot",  "chat", -1)],
+        STAGE_SUBMISSION_READY: [("Export PDD",      "export", 10), ("Run Audit",      "audit",  6), ("AI Copilot",  "chat", -1)],
+    }
+    return stage_actions.get(derived_stage, [("Write Section", "write", 4), ("Run Audit", "audit", 6), ("AI Copilot", "chat", -1)])
+
+
 def _build_activity_feed(project):
     items = []
     documents = project.get("documents", [])
@@ -6382,19 +6659,40 @@ def _render_project_workspace(project_id):
         unsafe_allow_html=True,
     )
 
+    # ── Evaluate brain once and cache ────────────────────────────────────
+    brain_cache_key = f"brain_state_{project_id}"
+    try:
+        from carbongpt.core.project_brain import evaluate_project_brain
+        brain_state = evaluate_project_brain(project_id)
+        st.session_state[brain_cache_key] = brain_state
+    except Exception:
+        brain_state = st.session_state.get(brain_cache_key, {})
+
+    brain = brain_state.get("brain", {})
+    tab_badges = brain.get("tab_badges", {})
+    derived_stage = brain.get("derived_stage", "setup")
+    nba_from_brain = brain.get("next_best_action")
+
+    # ── Pipeline progress strip ───────────────────────────────────────────
+    if brain:
+        _render_pipeline_strip(brain)
+
     def _nav_to_tab(pid, idx):
         st.session_state[f"ws_tab_{pid}"] = idx
 
+    # ── Stage-aware quick actions ─────────────────────────────────────────
+    stage_actions = _get_stage_quick_actions(derived_stage, nba_from_brain)
     qa_col1, qa_col2, qa_col3, qa_divider, qa_col4 = st.columns([1, 1, 1, 0.05, 1])
-    with qa_col1:
-        st.button("Write Section", key=f"qa_write_{project_id}", use_container_width=True,
-                  on_click=_nav_to_tab, args=(project_id, 4))
-    with qa_col2:
-        st.button("Run Audit", key=f"qa_audit_{project_id}", use_container_width=True,
-                  on_click=_nav_to_tab, args=(project_id, 6))
-    with qa_col3:
-        st.button("ER Simulator", key=f"qa_er_{project_id}", use_container_width=True,
-                  on_click=_nav_to_tab, args=(project_id, 3))
+    qa_cols = [qa_col1, qa_col2, qa_col3]
+    for col_i, (col, (btn_label, key_sfx, tab_idx)) in enumerate(zip(qa_cols, stage_actions[:3])):
+        with col:
+            if tab_idx == -1:
+                if st.button(btn_label, key=f"qa_{key_sfx}_{project_id}", use_container_width=True):
+                    st.session_state.chat_open = True
+                    st.rerun()
+            else:
+                st.button(btn_label, key=f"qa_{key_sfx}_{project_id}", use_container_width=True,
+                          on_click=_nav_to_tab, args=(project_id, tab_idx))
     with qa_col4:
         if st.button("AI Copilot", key=f"qa_chat_{project_id}", type="primary", use_container_width=True):
             st.session_state.chat_open = True
@@ -6548,10 +6846,13 @@ def _render_project_workspace(project_id):
     recommended_idx = _get_recommended_tab_index(project, project_id, total_params, missing_params, doc_count, projected_er, audit_score)
     tab_labels = []
     for i, label in enumerate(BASE_TAB_LABELS):
-        if i == recommended_idx:
+        # Brain badge takes priority over (Next) tag; only add (Next) if no badge present
+        badge_label = _build_tab_label_with_badge(label, i, tab_badges)
+        has_badge = badge_label != label
+        if i == recommended_idx and not has_badge:
             tab_labels.append(f"{label} (Next)")
         else:
-            tab_labels.append(label)
+            tab_labels.append(badge_label)
 
     tab_state_key = f"ws_tab_{project_id}"
     radio_key = f"tab_radio_{project_id}"
@@ -8658,10 +8959,14 @@ def _render_write_tab(project):
     else:
         _render_readiness_banner("info", "Tip: Upload supporting documents in the Documents tab to give the AI writer more context.")
 
-    # Stale section indicator from Project Brain
+    # Stale section indicator — use cached brain state if available
     try:
-        from carbongpt.core.project_brain import _detect_stale_sections
-        _stale = _detect_stale_sections(project_id)
+        _brain_state = st.session_state.get(f"brain_state_{project_id}", {})
+        _brain = _brain_state.get("brain", {})
+        _stale = _brain.get("stale_sections")
+        if _stale is None:
+            from carbongpt.core.project_brain import _detect_stale_sections
+            _stale = _detect_stale_sections(project_id)
         if _stale:
             _stale_ids = ", ".join(s["section_id"] for s in _stale[:4])
             st.warning(
