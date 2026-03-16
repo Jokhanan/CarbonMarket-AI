@@ -12,7 +12,7 @@ from carbongpt.core.parameter_engine import (
 )
 from carbongpt.core.evidence_engine import get_evidence_links, get_evidence_counts_by_param
 
-DERIVED_PARAMS = {"num_beneficiaries", "num_households"}
+DERIVED_PARAMS = {"num_beneficiaries", "num_households", "bl_consumption_wood_equiv"}
 
 CHARCOAL_ONLY_PARAMS = {"CF"}
 
@@ -54,10 +54,21 @@ def _get_project_fuels(project_id, all_params):
     return bl, pj
 
 
+FNRB_GUIDANCE = (
+    "fNRB must be country/region-specific. Default sources: "
+    "CDM/GS approved country studies, IPCC default (0.73 for sub-Saharan Africa), "
+    "or a project-specific survey following TPDDTEC Annex 2 / VM0050 §5.3. "
+    "Using a conservative (higher) value increases ER credibility."
+)
+
+
 def _should_show_param(param_key, baseline_fuel, project_fuel, method_id=None):
     if param_key in CHARCOAL_ONLY_PARAMS:
         return baseline_fuel == "charcoal" or project_fuel == "charcoal"
     if method_id in ("method_1", "method_2") and param_key in METHOD3_ONLY_PARAMS:
+        return False
+    # Method 2: SFC_baseline is fixed by the methodology default — hide from editable list
+    if method_id == "method_2" and param_key in METHOD2_LOCKED_PARAMS:
         return False
     return True
 
@@ -169,10 +180,14 @@ def render_parameter_dashboard(project):
         hh_size = next((float(p["value"]) for p in all_params if p["param_key"] == "household_size" and p["value"]), 5.0)
         devices_per_hh = next((float(p["value"]) for p in all_params if p["param_key"] == "devices_per_household" and p["value"]), 1.0)
         sfc_b_locked = 0.5 * hh_size / devices_per_hh / 365.0 * 1000.0
-        st.caption(
-            f"Method 2: SFC_b is locked at {sfc_b_locked:.4f} kg/technology-day "
-            f"(0.5 t/capita/yr × {hh_size:.0f} persons / {devices_per_hh:.0f} device / 365 days). "
-            "NCV and EF are locked to wood defaults."
+        st.info(
+            f"**Method 2 — Methodology-locked baseline:**  \n"
+            f"SFC_baseline is fixed at the TPDDTEC/VM0050 default: "
+            f"**{sfc_b_locked:.4f} kg/technology-day** "
+            f"(= 0.5 t/capita/yr × {hh_size:.0f} persons ÷ {devices_per_hh:.0f} device ÷ 365 days).  \n"
+            f"This value is not user-editable under Method 2. To use field-measured baseline consumption, "
+            f"switch to **Method 1 (BFT)** in the Methodology wizard.",
+            icon="🔒",
         )
 
     evidence = get_evidence_links(project_id, target_type="parameter")
@@ -336,6 +351,8 @@ def _render_parameter_row(project_id, param, evidence_by_param):
         source_label = param.get("source_type", "default")
         source_ref = param.get("source_reference", "")
         st.caption(f"Status: {p_status} | Source: {source_label} | {source_ref}")
+        if param_key == "fNRB":
+            st.caption(f"ℹ️  {FNRB_GUIDANCE}")
 
     with col2:
         current_val = param["value"] if param["value"] is not None else ""

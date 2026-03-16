@@ -102,6 +102,38 @@ The Methodology Pack Manager provides a curated knowledge infrastructure for gro
 
 **AI fallback**: `_get_methodology_context()` in `ai_writer.py` uses pack-first retrieval when a pack is indexed, falls back to legacy `methodology_library` metadata transparently. No regression possible.
 
+## ER Excel Workbook — Formula Traceability (Deep Audit 2026-03)
+
+The `generate_exante_workbook()` function in `carbongpt/core/er_excel.py` now produces a **fully traceable workbook** with no hardcoded values:
+
+**Parameters tab**: All input parameters in column C (source, tier, conservativeness). Now includes `UR_decay` and `UR_floor` which were previously skipped. `bl_consumption_wood_equiv` is excluded (it's a derived intermediate shown in calc steps).
+
+**ER Calculation tab**: Every Result cell (col D) in the step-by-step section is a live Excel formula:
+- D6: `=Parameters!C{row}` — baseline fuel consumption (SFC_b)
+- D7: `=Parameters!C{row}` — project fuel consumption (SFC_p)
+- D8: CF-adjusted baseline (wood = D6 directly; charcoal = D6 × CF)
+- D9: `=D8 × NCV_b / 1000` — baseline energy (TJ)
+- D10: `=D9 × (fNRB × EF_CO2_b + EF_nonCO2_b)` — BE per device
+- D11: `=D7 × NCV_p / 1000` — project energy (Method 3 adds CF)
+- D12: `=D11 × (fNRB × EF_CO2_p + EF_nonCO2_p)` (Method 1/2), or `×(EF_CO2_p + EF_nonCO2_p)` (Method 3, no fNRB on PE)
+- D13: `=D10-D12` — ER per device before leakage
+
+Annual year table cells are all formulas:
+- Active devices: `=MAX(UR − (Y−1)×decay, floor) × N` — references Parameters decay and floor
+- Baseline: `=D10 × C{row}` — BE_per_device × active_devices
+- Project: `=D12 × C{row}` — PE_per_device × active_devices
+- Gross ER: `=Baseline − Project`
+- Leakage: `=Gross_ER × leakage_pct` — references Parameters leakage cell
+- Net ER: `=Gross_ER − Leakage`
+
+**Vintage Table tab**: All values are cross-sheet references to ER Calculation (`='ER Calculation'!D{row}`, etc.).
+
+**Parameter UI improvements (`carbongpt/ui/parameter_ui.py`)**:
+- Method 2: SFC_baseline now hidden from editable Parameters list (locked by methodology default); shown in an `st.info` banner with the computed value
+- `bl_consumption_wood_equiv` added to `DERIVED_PARAMS` (shows as derived, not editable)
+- `fNRB` parameter renders a guidance caption about country-specific sources (IPCC defaults, GS/CDM approved studies)
+- `_should_show_param()` updated to hide Method 2 locked params
+
 ## Startup & Deployment Notes
 
 - **FastAPI startup time**: The backend takes ~45 seconds on first boot to run schema migrations, country normalization, and registry seeding. Streamlit is ready immediately.

@@ -219,9 +219,15 @@ def _build_param_rows(calc_result, meth_s):
         "household_size":    ("Np/HH", "Average household size",
                                "National census or survey",
                                "2", "National average"),
-        "usage_rate":        ("pop_stoves,y", "Device usage / activity rate",
+        "usage_rate":        ("pop_stoves,y", "Device usage / activity rate (year 1)",
                                "End-user survey (Tier 2 default if no survey)",
                                "2", "Conservative lower-bound survey result"),
+        "usage_rate_decay":  ("UR_decay", "Annual usage-rate decay (fraction/yr)",
+                               "Project monitoring plan / methodology default",
+                               "2", "Conservative annual drop-off assumption"),
+        "usage_rate_floor":  ("UR_floor", "Minimum usage-rate floor",
+                               "Project monitoring plan / methodology default",
+                               "2", "Conservative minimum device-retention assumption"),
         "leakage_pct":       ("Leakage_adj", "Leakage deduction fraction",
                                "TPDDTEC v4.0, §5.4",
                                "1", "Methodology-prescribed deduction"),
@@ -232,7 +238,14 @@ def _build_param_rows(calc_result, meth_s):
     if isinstance(params, list):
         params = {p.get("parameter", f"p{i}"): p for i, p in enumerate(params)}
 
+    # Keys to exclude from the Parameters sheet (non-numeric flags / redundant derived values)
+    skip_keys = {"is_method_3", "method_id", "baseline_fuel", "project_fuel",
+                 "pj_consumption_wood_equiv",
+                 "bl_consumption_wood_equiv"}   # kept in calc-step sheet instead
+
     for key, info in params.items():
+        if key in skip_keys:
+            continue
         if isinstance(info, dict):
             val = info.get("value", "")
             unit = info.get("unit", "")
@@ -250,11 +263,6 @@ def _build_param_rows(calc_result, meth_s):
             tier = "2"
             cons = ""
 
-        skip_keys = {"is_method_3", "method_id", "baseline_fuel", "project_fuel",
-                     "usage_rate_decay", "usage_rate_floor", "pj_consumption_wood_equiv"}
-        if key in skip_keys:
-            continue
-
         rows.append({
             "key": key,
             "symbol": symbol,
@@ -266,6 +274,88 @@ def _build_param_rows(calc_result, meth_s):
             "conservativeness": cons,
         })
     return rows
+
+
+def _step_excel_formula(canonical_key, par_cell_map, step_row_map,
+                        is_method_3=False, is_charcoal_baseline=False,
+                        is_charcoal_project=False):
+    """
+    Return an Excel formula string for the Result column (col D) of a calculation step,
+    or None if the step cannot be expressed as a cell-reference formula.
+
+    par_cell_map : dict  key -> "Parameters!C{r}" address
+    step_row_map : dict  canonical_key -> worksheet row number (filled as steps are written)
+    """
+    def _pc(key):
+        return par_cell_map.get(key)
+
+    def _sr(ckey):
+        row = step_row_map.get(ckey)
+        return f"D{row}" if row else None
+
+    if canonical_key == "baseline_fuel_consumption":
+        bl = _pc("bl_consumption")
+        return f"={bl}" if bl else None
+
+    if canonical_key == "project_fuel_consumption":
+        pj = _pc("pj_consumption")
+        return f"={pj}" if pj else None
+
+    if canonical_key == "cf_adjustment":
+        bl = _pc("bl_consumption") or _sr("baseline_fuel_consumption")
+        cf = _pc("CF")
+        if bl and cf and is_charcoal_baseline:
+            return f"={bl}*{cf}"
+        elif bl:
+            return f"={bl}"
+        return None
+
+    if canonical_key == "baseline_energy_tj":
+        step3 = _sr("cf_adjustment")
+        ncv = _pc("NCV_baseline")
+        if step3 and ncv:
+            return f"={step3}*{ncv}/1000"
+        return None
+
+    if canonical_key == "baseline_emissions_per_device":
+        step4 = _sr("baseline_energy_tj")
+        fnrb = _pc("fNRB")
+        ef_co2 = _pc("EF_CO2_baseline")
+        ef_nco2 = _pc("EF_nonCO2_baseline")
+        if step4 and fnrb and ef_co2 and ef_nco2:
+            return f"={step4}*({fnrb}*{ef_co2}+{ef_nco2})"
+        return None
+
+    if canonical_key == "project_energy_tj":
+        step2 = _sr("project_fuel_consumption")
+        cf = _pc("CF")
+        ncv = _pc("NCV_project")
+        if step2 and ncv:
+            if is_charcoal_project and cf and not is_method_3:
+                return f"={step2}*{cf}*{ncv}/1000"
+            return f"={step2}*{ncv}/1000"
+        return None
+
+    if canonical_key == "project_emissions_per_device":
+        step6 = _sr("project_energy_tj")
+        fnrb = _pc("fNRB")
+        ef_co2 = _pc("EF_CO2_project")
+        ef_nco2 = _pc("EF_nonCO2_project")
+        if step6 and ef_co2 and ef_nco2:
+            if is_method_3:
+                return f"={step6}*({ef_co2}+{ef_nco2})"
+            elif fnrb:
+                return f"={step6}*({fnrb}*{ef_co2}+{ef_nco2})"
+        return None
+
+    if canonical_key == "er_per_device_before_leakage":
+        step5 = _sr("baseline_emissions_per_device")
+        step7 = _sr("project_emissions_per_device")
+        if step5 and step7:
+            return f"={step5}-{step7}"
+        return None
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -405,90 +495,188 @@ def generate_exante_workbook(project, calc_result=None):
     _freeze(ws_par, 5, 1)
 
     # ------------------------------------------------------------------
+    # Derive pathway flags for Excel formula building
+    # ------------------------------------------------------------------
+    params_used = calc_result.get("parameters_used", {})
+    _is_method_3 = False
+    _is_charcoal_baseline = False
+    _is_charcoal_project = False
+    if isinstance(params_used, dict):
+        _m3_raw = params_used.get("is_method_3", {})
+        _is_method_3 = _m3_raw.get("value", False) if isinstance(_m3_raw, dict) else bool(_m3_raw)
+        _bl_fuel = (meth_s.get("baseline_fuel") or
+                    (params_used.get("baseline_fuel", {}).get("value", "") if isinstance(params_used.get("baseline_fuel"), dict) else "")).lower()
+        _pj_fuel = (meth_s.get("project_fuel") or
+                    (params_used.get("project_fuel", {}).get("value", "") if isinstance(params_used.get("project_fuel"), dict) else "")).lower()
+        _is_charcoal_baseline = _bl_fuel in ("charcoal", "charbon")
+        _is_charcoal_project = _pj_fuel in ("charcoal", "charbon")
+
+    # ------------------------------------------------------------------
     # Sheet 3 — ER Calculation
     # ------------------------------------------------------------------
     ws_calc = wb.create_sheet("ER Calculation")
     ws_calc.column_dimensions["A"].width = 6
     ws_calc.column_dimensions["B"].width = 42
-    ws_calc.column_dimensions["C"].width = 65
-    ws_calc.column_dimensions["D"].width = 16
+    ws_calc.column_dimensions["C"].width = 68
+    ws_calc.column_dimensions["D"].width = 18
     ws_calc.column_dimensions["E"].width = 18
 
     r = 1
-    ws_calc.merge_cells(f"A{r}:E{r}")
+    ws_calc.merge_cells(f"A{r}:H{r}")
     _hc(ws_calc, r, 1, "STEP-BY-STEP ER CALCULATION (EX-ANTE)", _EA_HEADER, size=12, halign="center")
     r += 1
-    ws_calc.merge_cells(f"A{r}:E{r}")
+    ws_calc.merge_cells(f"A{r}:H{r}")
+    pathway_note = (
+        f"Methodology: {methodology} | Baseline fuel: {baseline_fuel} | Project fuel: {project_fuel} | "
+        f"Method: {'3 (fuel switch — no fNRB on PE)' if _is_method_3 else '1/2 (same fuel)'}"
+    )
+    _hc(ws_calc, r, 1, pathway_note, _EA_SUBHEAD, size=9, halign="center", wrap=True)
+    r += 1
+    ws_calc.merge_cells(f"A{r}:H{r}")
     _hc(ws_calc, r, 1,
-        "Formulas reference the Parameters tab. Calculated values shown for verification — do not edit this sheet.",
-        _EA_SUBHEAD, size=9, halign="center", wrap=True)
+        "Result cells (col D) contain Excel formulas referencing the Parameters tab — every value is traceable. "
+        "Formula text in col C shows the methodology equation for audit verification.",
+        _EA_SUBHEAD, size=8, halign="center", wrap=True, fg="FFFFFF")
     r += 2
 
-    steps_headers = ["Step", "Description", "Formula / derivation", "Result", "Unit"]
+    steps_headers = ["Step", "Description", "Methodology equation (audit reference)", "Result (formula)", "Unit"]
     for ci, h in enumerate(steps_headers, 1):
         _hc(ws_calc, r, ci, h, _EA_HEADER, size=9, border=tb)
     r += 1
 
     steps = calc_result.get("calculation_steps", [])
+    step_row_map = {}   # canonical_key -> worksheet row number (col D lives here)
+
     for s in steps:
         bg = _EA_LIGHT if r % 2 == 0 else None
         step_num = s.get("step", "")
+        canonical_key = s.get("canonical_key", "")
         name = s.get("name", "")
-        formula = s.get("formula", "")
-        val = s.get("value", s.get("value_baseline", ""))
+        formula_text = s.get("formula", "")
+        fallback_val = s.get("value", s.get("value_baseline", ""))
         unit = s.get("unit", "")
+
+        excel_formula = _step_excel_formula(
+            canonical_key, par_cell_map, step_row_map,
+            is_method_3=_is_method_3,
+            is_charcoal_baseline=_is_charcoal_baseline,
+            is_charcoal_project=_is_charcoal_project,
+        )
 
         _dc(ws_calc, r, 1, step_num, bg=bg, bold=True, halign="center", border=tb, size=9)
         _dc(ws_calc, r, 2, name, bg=bg, bold=True, border=tb, size=9)
-        _dc(ws_calc, r, 3, formula, bg=bg, border=tb, size=8,
-            color="555555")
-        vc = _dc(ws_calc, r, 4, val, bg=bg, border=tb, size=9, halign="right")
-        if isinstance(val, float):
+        _dc(ws_calc, r, 3, formula_text, bg=bg, border=tb, size=8, color="555555")
+
+        if excel_formula:
+            from openpyxl.styles import Font as _Font2, PatternFill as _Fill2, Alignment as _Align2
+            vc = ws_calc.cell(row=r, column=4, value=excel_formula)
             vc.number_format = "#,##0.000000"
+            vc.alignment = _Align2(horizontal="right", vertical="center")
+            if bg:
+                vc.fill = _Fill2("solid", fgColor=bg.lstrip("#"))
+            vc.border = tb
+            vc.font = _Font2(name="Calibri", size=9, color=_DARK)
+        else:
+            vc = _dc(ws_calc, r, 4, fallback_val, bg=bg, border=tb, size=9, halign="right")
+            if isinstance(fallback_val, float):
+                vc.number_format = "#,##0.000000"
+
         _dc(ws_calc, r, 5, unit, bg=bg, border=tb, size=9)
+
+        if canonical_key:
+            step_row_map[canonical_key] = r
         r += 1
+
+    # Resolve formula components for the year table
+    be_per_dev_ref = f"D{step_row_map['baseline_emissions_per_device']}" if "baseline_emissions_per_device" in step_row_map else None
+    pe_per_dev_ref = f"D{step_row_map['project_emissions_per_device']}" if "project_emissions_per_device" in step_row_map else None
+    usage_rate_cell = par_cell_map.get("usage_rate")
+    usage_decay_cell = par_cell_map.get("usage_rate_decay")
+    usage_floor_cell = par_cell_map.get("usage_rate_floor")
+    num_devices_cell = par_cell_map.get("num_devices")
+    leakage_cell = par_cell_map.get("leakage_pct")
 
     # Annual summary below steps
     r += 1
-    ws_calc.merge_cells(f"A{r}:E{r}")
+    ws_calc.merge_cells(f"A{r}:H{r}")
     _hc(ws_calc, r, 1, "ANNUAL ER SUMMARY — ALL CREDITING YEARS", _EA_SUBHEAD, size=10)
     r += 1
+    ws_calc.merge_cells(f"A{r}:H{r}")
+    _hc(ws_calc, r, 1,
+        "Active devices, Baseline, Project, and Leakage columns are live Excel formulas referencing "
+        "Parameters tab and the step results above — all values update if parameters change.",
+        _EA_SUBHEAD, size=8, wrap=True)
+    r += 1
 
-    yr_headers = ["Year", "Calendar year", "Active devices", "Baseline (tCO2e)",
-                  "Project (tCO2e)", "Gross ER (tCO2e)", "Leakage (tCO2e)", "Net ER (tCO2e)"]
+    yr_headers = ["Year", "Calendar year",
+                  f"Active devices\n=MAX(UR-(Y-1)×decay,floor)×N",
+                  f"Baseline (tCO2e)\n=BE/dev × devices",
+                  f"Project (tCO2e)\n=PE/dev × devices",
+                  "Gross ER (tCO2e)\n=Baseline−Project",
+                  "Leakage (tCO2e)\n=Gross ER × L%",
+                  "Net ER (tCO2e)\n=Gross ER−Leakage"]
     for ci, h in enumerate(yr_headers, 1):
         _hc(ws_calc, r, ci, h, _EA_HEADER, size=9, border=tb, wrap=True)
     r += 1
 
     from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Align
+
+    def _formula_cell(ws, row, col, formula, bg, fmt="#,##0.00", size=9):
+        c = ws.cell(row=row, column=col, value=formula)
+        c.number_format = fmt
+        c.alignment = _Align(horizontal="right", vertical="center")
+        if bg:
+            c.fill = _Fill("solid", fgColor=bg.lstrip("#"))
+        c.border = tb
+        c.font = _Font(name="Calibri", size=size)
+        return c
+
     year_data = calc_result.get("years", [])
     data_start = r
     for yd in year_data:
         bg = _EA_LIGHT if r % 2 == 0 else None
-        _dc(ws_calc, r, 1, yd.get("year_number"), bg=bg, halign="center", border=tb, size=9)
+        year_num = yd.get("year_number", 1)
+
+        _dc(ws_calc, r, 1, year_num, bg=bg, halign="center", border=tb, size=9)
         _dc(ws_calc, r, 2, yd.get("calendar_year"), bg=bg, halign="center", border=tb, size=9)
-        _dc(ws_calc, r, 3, yd.get("active_households"), bg=bg, halign="right",
-            number_format="#,##0", border=tb, size=9)
-        _dc(ws_calc, r, 4, yd.get("baseline_emissions"), bg=bg, halign="right",
-            number_format="#,##0.00", border=tb, size=9)
-        _dc(ws_calc, r, 5, yd.get("project_emissions"), bg=bg, halign="right",
-            number_format="#,##0.00", border=tb, size=9)
-        _gross_er_cell = ws_calc.cell(row=r, column=6, value=f"=D{r}-E{r}")
-        _gross_er_cell.number_format = "#,##0.00"
-        _gross_er_cell.alignment = _Align(horizontal="right", vertical="center")
-        if bg:
-            _gross_er_cell.fill = _Fill("solid", fgColor=bg.lstrip("#"))
-        _gross_er_cell.border = tb
-        _gross_er_cell.font = _Font(name="Calibri", size=9)
-        _dc(ws_calc, r, 7, yd.get("leakage"), bg=bg, halign="right",
-            number_format="#,##0.00", border=tb, size=9)
-        _net_er_cell = ws_calc.cell(row=r, column=8, value=f"=F{r}-G{r}")
-        _net_er_cell.number_format = "#,##0.00"
-        _net_er_cell.alignment = _Align(horizontal="right", vertical="center")
-        if bg:
-            _net_er_cell.fill = _Fill("solid", fgColor=bg.lstrip("#"))
-        _net_er_cell.border = tb
-        _net_er_cell.font = _Font(name="Calibri", size=9)
+
+        # Col 3: Active devices
+        if usage_rate_cell and usage_decay_cell and usage_floor_cell and num_devices_cell:
+            y_minus_1 = year_num - 1
+            _formula_cell(ws_calc, r, 3,
+                f"=MAX({usage_rate_cell}-{y_minus_1}*{usage_decay_cell},{usage_floor_cell})*{num_devices_cell}",
+                bg, fmt="#,##0.0")
+        else:
+            _dc(ws_calc, r, 3, yd.get("active_households"), bg=bg, halign="right",
+                number_format="#,##0", border=tb, size=9)
+
+        # Col 4: Baseline emissions
+        if be_per_dev_ref:
+            _formula_cell(ws_calc, r, 4, f"={be_per_dev_ref}*C{r}", bg)
+        else:
+            _dc(ws_calc, r, 4, yd.get("baseline_emissions"), bg=bg, halign="right",
+                number_format="#,##0.00", border=tb, size=9)
+
+        # Col 5: Project emissions
+        if pe_per_dev_ref:
+            _formula_cell(ws_calc, r, 5, f"={pe_per_dev_ref}*C{r}", bg)
+        else:
+            _dc(ws_calc, r, 5, yd.get("project_emissions"), bg=bg, halign="right",
+                number_format="#,##0.00", border=tb, size=9)
+
+        # Col 6: Gross ER = Baseline - Project
+        _formula_cell(ws_calc, r, 6, f"=D{r}-E{r}", bg)
+
+        # Col 7: Leakage = Gross ER × leakage fraction
+        if leakage_cell:
+            _formula_cell(ws_calc, r, 7, f"=F{r}*{leakage_cell}", bg)
+        else:
+            _dc(ws_calc, r, 7, yd.get("leakage"), bg=bg, halign="right",
+                number_format="#,##0.00", border=tb, size=9)
+
+        # Col 8: Net ER = Gross ER - Leakage
+        _formula_cell(ws_calc, r, 8, f"=F{r}-G{r}", bg)
+
         r += 1
 
     data_end = r - 1
@@ -502,8 +690,10 @@ def generate_exante_workbook(project, calc_result=None):
         c.number_format = "#,##0.00"
         c.border = tb
 
-    _freeze(ws_calc, 5, 1)
-    ws_calc.column_dimensions["C"].width = 65
+    _freeze(ws_calc, 7, 1)
+    ws_calc.column_dimensions["C"].width = 68
+    ws_calc.column_dimensions["F"].width = 16
+    ws_calc.column_dimensions["G"].width = 16
     ws_calc.column_dimensions["H"].width = 16
 
     # ------------------------------------------------------------------
@@ -539,17 +729,26 @@ def generate_exante_workbook(project, calc_result=None):
     for i, yd in enumerate(year_data, 1):
         bg = _EA_LIGHT if r % 2 == 0 else None
         cal_y = yd.get("calendar_year", cp_start_year + i - 1)
-        net = yd.get("net_er", 0)
-        base = yd.get("baseline_emissions", 0)
-        proj = yd.get("project_emissions", 0)
-        total_net += net
-        total_base += base
-        total_proj += proj
+        # Accumulate totals for summary box fallback
+        total_net += yd.get("net_er", 0)
+        total_base += yd.get("baseline_emissions", 0)
+        total_proj += yd.get("project_emissions", 0)
+        # Row in ER Calculation where this year lives
+        er_row = data_start + i - 1
         _dc(ws_vint, r, 1, cal_y, bg=bg, bold=True, halign="center", border=tb, size=9)
         _dc(ws_vint, r, 2, f"CP{i}", bg=bg, halign="center", border=tb, size=9)
-        _dc(ws_vint, r, 3, base, bg=bg, halign="right", number_format="#,##0.00", border=tb, size=9)
-        _dc(ws_vint, r, 4, proj, bg=bg, halign="right", number_format="#,##0.00", border=tb, size=9)
-        _dc(ws_vint, r, 5, net, bg=bg, halign="right", number_format="#,##0.00", border=tb, size=9)
+        # Columns reference ER Calculation sheet directly: D=Baseline, E=Project, H=Net ER
+        for col_vint, col_er in [(3, "D"), (4, "E"), (5, "H")]:
+            cv = ws_vint.cell(row=r, column=col_vint,
+                              value=f"='ER Calculation'!{col_er}{er_row}")
+            cv.number_format = "#,##0.00"
+            from openpyxl.styles import Alignment as _A2, Font as _F2
+            cv.alignment = _A2(horizontal="right", vertical="center")
+            cv.border = tb
+            cv.font = _F2(name="Calibri", size=9)
+            if bg:
+                from openpyxl.styles import PatternFill as _PF2
+                cv.fill = _PF2("solid", fgColor=bg.lstrip("#"))
         r += 1
 
     vint_data_end = r - 1
