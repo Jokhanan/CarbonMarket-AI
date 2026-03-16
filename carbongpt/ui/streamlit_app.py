@@ -1584,7 +1584,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-PAGES = ["Workspace", "Portfolio", "Admin"]
+PAGES = ["Workspace", "Portfolio", "Profiles", "Admin"]
 
 SVG_ICONS = {
     "projects": '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>',
@@ -9286,6 +9286,89 @@ def _render_proponent_card(project_id, intake, standard, prefix=""):
 SCALE_OPTIONS = ["", "Micro-scale", "Small-scale", "Large-scale"]
 ACTIVITY_TYPE_OPTIONS = ["", "Greenfield", "Switch from existing", "Capacity addition", "Energy efficiency", "Other"]
 
+_TPDDTEC_MICRO_SCALE_ER_THRESHOLD = 10_000  # tCO2e/yr
+
+
+def _suggest_project_scale(project_id, methodology_settings=None):
+    """
+    Auto-suggest project scale from:
+      1. Selected ER scenario results
+      2. Estimated ER from num_devices × typical emission reduction per device
+    Returns (suggested_scale, reason) or (None, None).
+    """
+    meth_s = methodology_settings or {}
+    methodology = (meth_s.get("calculation_method") or "").lower()
+    is_tpddtec_vm0050 = bool(meth_s.get("baseline_fuel") or meth_s.get("calculation_method"))
+
+    if not is_tpddtec_vm0050:
+        return None, None
+
+    try:
+        from carbongpt.core.er_simulator import get_selected_scenario
+        sel = get_selected_scenario(project_id)
+        if sel:
+            sc = sel.get("scenario", {})
+            summary = sc.get("results_summary") or {}
+            if isinstance(summary, str):
+                import json as _j
+                try:
+                    summary = _j.loads(summary)
+                except Exception:
+                    summary = {}
+            annual_er = summary.get("average_annual_er", 0) or 0
+            if annual_er > 0:
+                if annual_er <= _TPDDTEC_MICRO_SCALE_ER_THRESHOLD:
+                    return "Micro-scale", f"ER scenario average {annual_er:,.0f} tCO2e/yr ≤ 10,000 tCO2e/yr threshold"
+                else:
+                    return "Small-scale", f"ER scenario average {annual_er:,.0f} tCO2e/yr > 10,000 tCO2e/yr — Small-scale or Large-scale applies"
+    except Exception:
+        pass
+
+    try:
+        from carbongpt.core.parameter_engine import get_parameters_as_dict
+        params = get_parameters_as_dict(project_id) or {}
+        num_devices = None
+        bl_cons = None
+        pj_cons = None
+        for k, v in params.items():
+            val = v.get("value") if isinstance(v, dict) else None
+            if val is None:
+                continue
+            try:
+                val = float(val)
+            except (ValueError, TypeError):
+                continue
+            if k == "num_devices":
+                num_devices = val
+            elif k == "baseline_fuel_consumption":
+                bl_cons = val
+            elif k == "project_fuel_consumption":
+                pj_cons = val
+
+        if num_devices and bl_cons:
+            pj_val = pj_cons if pj_cons is not None else bl_cons * 0.5
+            fuel_saved = (bl_cons - pj_val) * num_devices
+            ncv_wood_tj_per_t = 0.0156
+            ef_co2 = 112.0
+            fnrb = 0.85
+            estimated_annual_er = fuel_saved * ncv_wood_tj_per_t * 1000 * (ef_co2 * fnrb + 9.46) / 1000
+            if estimated_annual_er > 0:
+                if estimated_annual_er <= _TPDDTEC_MICRO_SCALE_ER_THRESHOLD:
+                    return "Micro-scale", f"Estimated ER ~{estimated_annual_er:,.0f} tCO2e/yr ≤ 10,000 tCO2e/yr (from parameters)"
+                else:
+                    return "Small-scale", f"Estimated ER ~{estimated_annual_er:,.0f} tCO2e/yr > 10,000 tCO2e/yr (from parameters)"
+        elif num_devices:
+            typical_er_per_device = 0.8
+            estimated_annual_er = num_devices * typical_er_per_device
+            if estimated_annual_er <= _TPDDTEC_MICRO_SCALE_ER_THRESHOLD:
+                return "Micro-scale", f"Estimated ~{estimated_annual_er:,.0f} tCO2e/yr based on {int(num_devices):,} devices × typical 0.8 tCO2e/device/yr"
+            else:
+                return "Small-scale", f"Estimated ~{estimated_annual_er:,.0f} tCO2e/yr based on {int(num_devices):,} devices"
+    except Exception:
+        pass
+
+    return None, None
+
 
 def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None, methodology_settings=None):
     from carbongpt.core.methodology_rules import get_methodology_metadata, has_methodology_fuel_choices
@@ -9343,11 +9426,21 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                 available_scales = SCALE_OPTIONS
                 if meth_meta and meth_meta.get("scale_options"):
                     available_scales = [""] + meth_meta["scale_options"]
-                scale_idx = available_scales.index(_po_scale_raw) if _po_scale_raw in available_scales else 0
+                _suggested_scale, _suggest_reason = _suggest_project_scale(project_id, methodology_settings)
+                _scale_to_use = _po_scale_raw
+                if not _scale_to_use and _suggested_scale and _suggested_scale in available_scales:
+                    _scale_to_use = _suggested_scale
+                scale_idx = available_scales.index(_scale_to_use) if _scale_to_use in available_scales else 0
                 po_scale = st.selectbox("Project scale", available_scales,
                                          index=scale_idx,
                                          key=f"setup_po_scale_{project_id}",
                                          format_func=lambda x: x if x else "Select scale...")
+                if _suggested_scale and not _po_scale_raw:
+                    st.markdown(
+                        f'<span style="background:#fff3e0;color:#e65100;padding:1px 6px;border-radius:3px;font-size:0.78em;font-weight:bold;">AUTO-DETECTED</span> '
+                        f'<span style="font-size:0.78em;color:#777;">{_suggest_reason}</span>',
+                        unsafe_allow_html=True,
+                    )
                 _intel_source_label(intake, "project_overview", "scale")
         with pc3:
             _num_devices = po.get("num_devices")
@@ -9957,6 +10050,42 @@ _COOKSTOVE_CORE_SDGS = {"1", "3", "5", "7", "13"}
 _COOKSTOVE_WOOD_SDGS = {"1", "3", "5", "7", "13", "15"}
 
 
+def _sdg_load_er_data(project_id):
+    """Load the selected ER scenario summary for SDG auto-derivation. Returns dict or None."""
+    try:
+        from carbongpt.core.er_simulator import get_selected_scenario
+        sel = get_selected_scenario(project_id)
+        if not sel:
+            return None
+        sc = sel.get("scenario", {})
+        summary = sc.get("results_summary") or {}
+        if isinstance(summary, str):
+            import json as _j
+            try:
+                summary = _j.loads(summary)
+            except Exception:
+                return None
+        if summary.get("total_er") or summary.get("average_annual_er"):
+            return {
+                "total_er": summary.get("total_er", 0),
+                "average_annual_er": summary.get("average_annual_er", 0),
+                "crediting_years": sc.get("crediting_period_years") or 7,
+                "scenario_name": sc.get("name", "Selected scenario"),
+            }
+    except Exception:
+        pass
+    return None
+
+
+def _sdg_load_params(project_id):
+    """Load key project parameters for SDG derivation. Returns dict."""
+    try:
+        from carbongpt.core.parameter_engine import get_parameters_as_dict
+        return get_parameters_as_dict(project_id) or {}
+    except Exception:
+        return {}
+
+
 def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, methodology_hint=""):
     meth_s = methodology_settings or {}
     baseline_fuel = meth_s.get("baseline_fuel", "").lower()
@@ -9967,7 +10096,8 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
         or "mecd" in str(methodology_hint).lower()
         or "cookstove" in str(methodology_hint).lower()
     )
-    suggested_sdgs = _COOKSTOVE_WOOD_SDGS if (is_cookstove and baseline_fuel in ("wood", "charcoal", "biomass", "crop residues")) else (
+    is_biomass_baseline = baseline_fuel in ("wood", "charcoal", "biomass", "crop_residue", "dung", "crop residues")
+    suggested_sdgs = _COOKSTOVE_WOOD_SDGS if (is_cookstove and is_biomass_baseline) else (
         _COOKSTOVE_CORE_SDGS if is_cookstove else set()
     )
 
@@ -9977,8 +10107,41 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
         gn = str(s.get("goal_number", ""))
         existing_map[gn] = s
 
+    er_data = _sdg_load_er_data(project_id)
+    param_data = _sdg_load_params(project_id)
+
+    def _get_param_val(key, fallback=None):
+        entry = param_data.get(key)
+        if not entry:
+            return fallback
+        v = entry.get("value")
+        try:
+            return float(v) if v is not None else fallback
+        except (ValueError, TypeError):
+            return fallback
+
+    num_hh = _get_param_val("num_households")
+    bl_consumption = _get_param_val("baseline_fuel_consumption")
+    pj_consumption = _get_param_val("project_fuel_consumption")
+    num_devices = _get_param_val("num_devices")
+
+    fuel_saved_annual_tonnes = None
+    if bl_consumption is not None and pj_consumption is not None and num_devices is not None:
+        fuel_saved_annual_tonnes = (bl_consumption - pj_consumption) * num_devices
+    elif bl_consumption is not None and num_devices is not None:
+        fuel_saved_annual_tonnes = bl_consumption * num_devices * 0.5
+
     with st.container(border=True):
         st.markdown("#### SDGs & Co-benefits")
+
+        if er_data:
+            st.markdown(
+                f'<div style="background:#e8f5e9;border-left:3px solid #4caf50;padding:6px 10px;border-radius:4px;font-size:0.85em;">'
+                f'ER scenario available: <strong>{er_data["scenario_name"]}</strong> — '
+                f'{er_data["total_er"]:,.0f} tCO2e total, {er_data["average_annual_er"]:,.0f} tCO2e/yr average. '
+                f'SDG 13 values will be auto-suggested from this scenario.</div>',
+                unsafe_allow_html=True,
+            )
 
         if suggested_sdgs:
             _sugg_key = f"sdg_suggestion_applied_{project_id}"
@@ -10016,7 +10179,56 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
             existing_indicators = existing_entry.get("indicators", [])
             old_contrib = existing_entry.get("contribution_description", "")
 
+            auto_bl_val = ""
+            auto_pj_val = ""
+            auto_tier = _EVIDENCE_TIERS[1]
+            auto_note = ""
+            is_auto_derived = False
+
+            if goal_num == "13" and er_data:
+                existing_pj_val = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                existing_bl_val = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                if not existing_pj_val or existing_entry.get("_auto_derived"):
+                    auto_pj_val = f"{er_data['average_annual_er']:,.1f}"
+                    auto_bl_val = existing_bl_val or "0"
+                    auto_tier = _EVIDENCE_TIERS[2]
+                    auto_note = f"Auto-calculated from ER scenario ({er_data['scenario_name']}): {er_data['average_annual_er']:,.1f} tCO2e/yr average, {er_data['total_er']:,.1f} tCO2e total over crediting period."
+                    is_auto_derived = True
+
+            elif goal_num == "15" and is_biomass_baseline and fuel_saved_annual_tonnes is not None:
+                existing_pj_val = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                if not existing_pj_val or existing_entry.get("_auto_derived"):
+                    auto_pj_val = f"{fuel_saved_annual_tonnes:,.1f}"
+                    auto_bl_val = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                    auto_tier = _EVIDENCE_TIERS[2]
+                    auto_note = f"Auto-calculated: approx. {fuel_saved_annual_tonnes:,.1f} tonnes/yr {baseline_fuel} saved based on project parameters."
+                    is_auto_derived = True
+
+            elif goal_num == "1" and fuel_saved_annual_tonnes is not None:
+                existing_pj_val = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                fuel_price_usd_per_tonne = 150.0
+                if not existing_pj_val or existing_entry.get("_auto_derived"):
+                    num_hh_for_savings = num_hh or num_devices or 1
+                    savings_per_hh = (fuel_saved_annual_tonnes * fuel_price_usd_per_tonne) / num_hh_for_savings if num_hh_for_savings else None
+                    if savings_per_hh:
+                        auto_pj_val = f"{savings_per_hh:,.1f}"
+                        auto_bl_val = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                        auto_tier = _EVIDENCE_TIERS[2]
+                        auto_note = (
+                            f"Auto-estimated: ~{savings_per_hh:,.1f} USD/hh/yr savings "
+                            f"({fuel_saved_annual_tonnes:,.1f} t fuel saved × ${fuel_price_usd_per_tonne}/t ÷ {int(num_hh_for_savings)} households). "
+                            f"Override fuel price if known."
+                        )
+                        is_auto_derived = True
+
             with st.container(border=True):
+                if is_auto_derived:
+                    st.markdown(
+                        f'<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:3px;font-size:0.8em;font-weight:bold;">AUTO-DERIVED</span> '
+                        f'<span style="font-size:0.8em;color:#555;">{auto_note}</span>',
+                        unsafe_allow_html=True,
+                    )
+
                 indicator_options = _SDG_INDICATORS.get(goal_num, [])
                 indicator_options_with_other = indicator_options + ["Other (specify)"]
 
@@ -10052,22 +10264,28 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
 
                 val_c1, val_c2 = st.columns(2)
                 with val_c1:
+                    _existing_bl = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                    _default_bl = _existing_bl or auto_bl_val
                     baseline_val = st.text_input(
                         "Baseline value",
-                        value=existing_indicators[0].get("baseline_value", "") if existing_indicators else "",
+                        value=_default_bl,
                         key=f"setup_sdg_bl_{project_id}_{goal_num}",
                         placeholder="e.g. 245",
                     )
                 with val_c2:
+                    _existing_pj = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                    _default_pj = _existing_pj or auto_pj_val
+                    _pj_label = "Project / target value (auto-derived — override if needed)" if is_auto_derived and not _existing_pj else "Project / target value"
                     project_val = st.text_input(
-                        "Project / target value",
-                        value=existing_indicators[0].get("project_value", "") if existing_indicators else "",
+                        _pj_label,
+                        value=_default_pj,
                         key=f"setup_sdg_pv_{project_id}_{goal_num}",
                         placeholder="e.g. 35",
                     )
 
-                existing_tier = existing_indicators[0].get("evidence_tier", _EVIDENCE_TIERS[1]) if existing_indicators else _EVIDENCE_TIERS[1]
-                tier_idx = _EVIDENCE_TIERS.index(existing_tier) if existing_tier in _EVIDENCE_TIERS else 1
+                _existing_tier = existing_indicators[0].get("evidence_tier", "") if existing_indicators else ""
+                _default_tier = _existing_tier if _existing_tier in _EVIDENCE_TIERS else (auto_tier if is_auto_derived else _EVIDENCE_TIERS[1])
+                tier_idx = _EVIDENCE_TIERS.index(_default_tier) if _default_tier in _EVIDENCE_TIERS else 1
                 evidence_tier = st.selectbox(
                     "Evidence tier",
                     _EVIDENCE_TIERS,
@@ -10075,17 +10293,22 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
                     key=f"setup_sdg_tier_{project_id}_{goal_num}",
                 )
 
+                _default_meas = existing_indicators[0].get("measurement_approach", "") if existing_indicators else old_contrib
+                if not _default_meas and auto_note:
+                    _default_meas = auto_note
                 measurement = st.text_area(
                     "Measurement / monitoring approach",
-                    value=existing_indicators[0].get("measurement_approach", "") if existing_indicators else old_contrib,
+                    value=_default_meas,
                     key=f"setup_sdg_meas_{project_id}_{goal_num}",
                     placeholder="How will this indicator be measured and monitored?",
                     height=68,
                 )
 
+            _auto_flag = is_auto_derived and not (existing_indicators[0].get("project_value", "") if existing_indicators else "")
             sdg_list.append({
                 "goal_number": goal_num,
                 "contribution_description": measurement,
+                "_auto_derived": _auto_flag,
                 "indicators": [{
                     "indicator_name": ind_name,
                     "baseline_value": baseline_val,
@@ -10879,6 +11102,178 @@ def _render_chat_widget():
         st.rerun()
 
 
+_PROFILE_TYPE_LABELS = {
+    "technology": "Technology / Stove Model",
+    "developer": "Developer / Organisation",
+    "participant": "Participant Baseline",
+}
+
+_PROFILE_FIELDS = {
+    "technology": [
+        ("stove_model", "Stove model / product name", "text", "e.g. Envirofit G-3300"),
+        ("manufacturer", "Manufacturer", "text", "e.g. Envirofit International"),
+        ("baseline_fuel", "Baseline fuel", "select", ["wood", "charcoal", "kerosene", "LPG", "crop residues", "dung", "other"]),
+        ("project_fuel", "Project fuel", "select", ["wood (ICS)", "charcoal (ICS)", "LPG", "biogas", "electricity", "other"]),
+        ("thermal_efficiency_baseline", "Baseline thermal efficiency (%)", "number", "e.g. 15"),
+        ("thermal_efficiency_project", "Project thermal efficiency (%)", "number", "e.g. 35"),
+        ("sfc_project_kg_per_day", "Project SFC (kg/device/day from KPT)", "number", "e.g. 0.28"),
+        ("co_emission_factor", "CO emission factor (g/MJ)", "number", "e.g. 3.5"),
+        ("pm_emission_factor", "PM2.5 emission factor (mg/MJ)", "number", "e.g. 50"),
+        ("notes", "Notes", "textarea", ""),
+    ],
+    "developer": [
+        ("organisation_name", "Organisation name", "text", "e.g. Clean Energy Ltd"),
+        ("country", "Country of operation", "text", "e.g. Kenya"),
+        ("contact_name", "Contact person", "text", ""),
+        ("email", "Email", "text", ""),
+        ("address", "Mailing address", "textarea", ""),
+        ("website", "Website", "text", "https://"),
+        ("registration_number", "Company registration number", "text", ""),
+        ("registry_account", "Registry account ID", "text", "Gold Standard / Verra account"),
+    ],
+    "participant": [
+        ("household_size", "Average household size (persons)", "number", "e.g. 5"),
+        ("income_usd_per_day", "Average household income (USD/day)", "number", "e.g. 2.50"),
+        ("cooking_sessions_per_day", "Cooking sessions per day", "number", "e.g. 3"),
+        ("primary_fuel", "Primary cooking fuel", "select", ["wood", "charcoal", "kerosene", "LPG", "dung", "crop residues"]),
+        ("fuel_collection_method", "Fuel collection method", "select", ["collected (non-renewable)", "collected (renewable)", "purchased", "mixed"]),
+        ("monitoring_approach", "Monitoring approach", "textarea", "e.g. Annual KPT surveys"),
+    ],
+}
+
+
+def _render_profiles_page():
+    st.markdown("## Reusable Profiles")
+    st.caption(
+        "Save technology specs, developer details, and participant baselines as reusable profiles. "
+        "Apply them across projects to avoid re-entering data."
+    )
+
+    tab_tech, tab_dev, tab_part = st.tabs([
+        "Technology / Stove Models",
+        "Developer / Organisation",
+        "Participant Baselines",
+    ])
+
+    for tab, ptype in [(tab_tech, "technology"), (tab_dev, "developer"), (tab_part, "participant")]:
+        with tab:
+            _render_profile_tab(ptype)
+
+
+def _render_profile_tab(ptype):
+    from carbongpt.repository.profile_store import (
+        list_profiles, create_profile, update_profile, delete_profile
+    )
+
+    label = _PROFILE_TYPE_LABELS.get(ptype, ptype)
+    fields = _PROFILE_FIELDS.get(ptype, [])
+
+    profiles = list_profiles(profile_type=ptype)
+
+    _edit_key = f"profile_edit_id_{ptype}"
+    _new_key = f"profile_new_open_{ptype}"
+
+    if st.button(f"+ New {label}", key=f"profile_add_btn_{ptype}"):
+        st.session_state[_new_key] = True
+        st.session_state.pop(_edit_key, None)
+
+    if st.session_state.get(_new_key):
+        with st.form(key=f"profile_new_form_{ptype}"):
+            st.markdown(f"**New {label}**")
+            new_name = st.text_input("Profile name (short label)", key=f"prof_new_name_{ptype}")
+            new_desc = st.text_input("Short description (optional)", key=f"prof_new_desc_{ptype}")
+            new_data = {}
+            for fkey, flabel, ftype, fplaceholder in fields:
+                if ftype == "text":
+                    new_data[fkey] = st.text_input(flabel, key=f"prof_new_{ptype}_{fkey}", placeholder=str(fplaceholder))
+                elif ftype == "number":
+                    new_data[fkey] = st.text_input(flabel, key=f"prof_new_{ptype}_{fkey}", placeholder=str(fplaceholder))
+                elif ftype == "select":
+                    opts = [""] + (fplaceholder if isinstance(fplaceholder, list) else [fplaceholder])
+                    new_data[fkey] = st.selectbox(flabel, opts, key=f"prof_new_{ptype}_{fkey}")
+                elif ftype == "textarea":
+                    new_data[fkey] = st.text_area(flabel, key=f"prof_new_{ptype}_{fkey}", height=60)
+            col_s, col_c = st.columns(2)
+            submitted = col_s.form_submit_button("Save")
+            cancelled = col_c.form_submit_button("Cancel")
+        if submitted and new_name.strip():
+            result = create_profile(ptype, new_name.strip(), new_desc.strip(), new_data)
+            if result:
+                st.success(f"Profile '{new_name}' created.")
+                st.session_state.pop(_new_key, None)
+                st.rerun()
+            else:
+                st.error("Failed to create profile.")
+        elif submitted:
+            st.warning("Please enter a profile name.")
+        elif cancelled:
+            st.session_state.pop(_new_key, None)
+            st.rerun()
+
+    if not profiles:
+        st.info(f"No {label.lower()} profiles yet. Click the button above to create one.")
+        return
+
+    for prof in profiles:
+        pid = prof["id"]
+        pname = prof.get("name", "")
+        pdesc = prof.get("description", "")
+        pdata = prof.get("data") or {}
+
+        with st.container(border=True):
+            hcol, btn_col = st.columns([5, 1])
+            with hcol:
+                st.markdown(f"**{pname}**" + (f" — {pdesc}" if pdesc else ""))
+            with btn_col:
+                if st.button("Edit", key=f"prof_edit_btn_{ptype}_{pid}"):
+                    st.session_state[_edit_key] = pid
+                    st.session_state.pop(_new_key, None)
+
+            if st.session_state.get(_edit_key) == pid:
+                with st.form(key=f"profile_edit_form_{ptype}_{pid}"):
+                    edit_name = st.text_input("Profile name", value=pname, key=f"prof_ename_{ptype}_{pid}")
+                    edit_desc = st.text_input("Short description", value=pdesc, key=f"prof_edesc_{ptype}_{pid}")
+                    edit_data = {}
+                    for fkey, flabel, ftype, fplaceholder in fields:
+                        cur_val = str(pdata.get(fkey, "")) if pdata.get(fkey) is not None else ""
+                        if ftype == "text":
+                            edit_data[fkey] = st.text_input(flabel, value=cur_val, key=f"prof_ef_{ptype}_{pid}_{fkey}")
+                        elif ftype == "number":
+                            edit_data[fkey] = st.text_input(flabel, value=cur_val, key=f"prof_ef_{ptype}_{pid}_{fkey}")
+                        elif ftype == "select":
+                            opts = [""] + (fplaceholder if isinstance(fplaceholder, list) else [fplaceholder])
+                            sel_idx = opts.index(cur_val) if cur_val in opts else 0
+                            edit_data[fkey] = st.selectbox(flabel, opts, index=sel_idx, key=f"prof_ef_{ptype}_{pid}_{fkey}")
+                        elif ftype == "textarea":
+                            edit_data[fkey] = st.text_area(flabel, value=cur_val, key=f"prof_ef_{ptype}_{pid}_{fkey}", height=60)
+                    sc, dc, cc = st.columns(3)
+                    save_clicked = sc.form_submit_button("Save")
+                    delete_clicked = dc.form_submit_button("Delete", type="secondary")
+                    cancel_clicked = cc.form_submit_button("Cancel")
+                if save_clicked:
+                    update_profile(pid, edit_name.strip(), edit_desc.strip(), edit_data)
+                    st.success("Profile updated.")
+                    st.session_state.pop(_edit_key, None)
+                    st.rerun()
+                elif delete_clicked:
+                    delete_profile(pid)
+                    st.success(f"Profile '{pname}' deleted.")
+                    st.session_state.pop(_edit_key, None)
+                    st.rerun()
+                elif cancel_clicked:
+                    st.session_state.pop(_edit_key, None)
+                    st.rerun()
+            else:
+                if pdata:
+                    summary_items = []
+                    for fkey, flabel, _, _ in fields[:4]:
+                        v = pdata.get(fkey)
+                        if v:
+                            summary_items.append(f"{flabel}: **{v}**")
+                    if summary_items:
+                        st.caption(" | ".join(summary_items))
+
+
 if page == "Workspace":
     if "selected_project_id" not in st.session_state:
         st.session_state.selected_project_id = None
@@ -10889,6 +11284,8 @@ if page == "Workspace":
         _render_home()
 elif page == "Portfolio":
     render_portfolio_dashboard()
+elif page == "Profiles":
+    _render_profiles_page()
 elif page == "Admin":
     render_repository()
 

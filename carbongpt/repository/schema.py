@@ -910,6 +910,22 @@ CREATE TABLE IF NOT EXISTS methodology_version_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mvh_methodology ON methodology_version_history(methodology_code, registry);
+
+-- ============================================================
+-- Reusable profiles: technology, developer, participant
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id           SERIAL       PRIMARY KEY,
+    profile_type VARCHAR(30)  NOT NULL CHECK (profile_type IN ('technology', 'developer', 'participant')),
+    name         VARCHAR(200) NOT NULL,
+    description  TEXT,
+    data         JSONB        NOT NULL DEFAULT '{}',
+    created_at   TIMESTAMPTZ  DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_type ON user_profiles(profile_type);
 """
 
 

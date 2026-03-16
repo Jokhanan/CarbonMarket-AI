@@ -41,6 +41,7 @@ from carbongpt.tools.parse_docx import debug_sections
 from carbongpt.app.admin_routes import router as admin_router
 from carbongpt.app.project_routes import router as project_router
 from carbongpt.app.pack_routes import router as pack_router
+from carbongpt.app.profile_routes import router as profile_router
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ app.add_middleware(
 app.include_router(admin_router)
 app.include_router(project_router)
 app.include_router(pack_router)
+app.include_router(profile_router)
 
 
 @app.on_event("startup")

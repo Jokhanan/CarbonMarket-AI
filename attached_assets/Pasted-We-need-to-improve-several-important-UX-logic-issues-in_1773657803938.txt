@@ -1,0 +1,236 @@
+We need to improve several important UX + logic issues in the current CarbonGPT application.
+
+This is an implementation task, but it must be done carefully.
+
+IMPORTANT RULES
+
+1. Do not break the existing application
+2. Do not remove working functionality unless you replace it safely
+3. Audit the current code first before changing anything
+4. Keep all existing data and database rows intact
+5. Prefer additive / backward-compatible changes
+6. If one part is too risky, implement the safe subset and report what remains
+
+The goal is to make the application much clearer and more intelligent for real project developers.
+
+--------------------------------------------------
+PART 1 — PROJECT PARAMETERS CLEANUP
+--------------------------------------------------
+
+There is confusion and duplication in the parameter forms.
+
+Current issue examples:
+- "Project Fuel Consumption Rate" is entered in kg/device/day
+- "Project Annual Fuel Consumption" is entered in t/device/year
+These are the same underlying quantity expressed in different units.
+
+Similarly:
+- baseline fuel consumption is shown in kg/device/day
+- baseline annual fuel consumption is shown in t/device/year
+- the app appears to hardcode a household size of 5 in some calculations instead of using the selected household size field
+
+This is confusing and bad UX.
+
+Please audit the current parameter logic and implement the following:
+
+1. Define one canonical quantity for each concept.
+   Example:
+   - raw daily rate (kg/device/day)
+   - derived annual consumption (t/device/year)
+
+2. The user should NOT need to manually enter both when one can be derived safely.
+
+3. If the user enters kg/device/day, the annual value should be derived automatically.
+   If the user enters annual consumption, the daily value should be derived automatically.
+   Keep them synchronized.
+
+4. Remove hardcoded household size assumptions.
+   If annual household consumption depends on household size, use the actual selected household_size field, not a hardcoded 5.
+
+5. Reorganize the parameter form so that the drivers appear before the derived values.
+   Example:
+   - household size
+   - devices per household
+   - baseline/project fuel type
+   - daily consumption
+   - derived annual consumption
+
+6. Clearly label:
+   - user input fields
+   - auto-derived fields
+   - default values
+   - methodology-based values
+
+The objective is to reduce duplicate input and make the logic transparent.
+
+--------------------------------------------------
+PART 2 — SDG LOGIC CLEANUP
+--------------------------------------------------
+
+Current SDG handling is not well structured.
+
+Problems:
+- SDG 13 is being entered manually even though it should be derived from emission reductions
+- SDG 1 and SDG 15 can also be partly derived from other quantities
+- users are being asked too early for values they do not yet know
+
+Please redesign SDG handling safely.
+
+Implement the following logic:
+
+1. SDG 13 should be derived automatically from calculated emission reductions.
+   The user should not manually enter the emissions reduction again inside SDG.
+
+2. SDG 15 (for biomass/forest-related projects) should be derivable from biomass saved, where possible.
+
+3. SDG 1 (household savings) should be derivable where possible from:
+   - biomass/fuel saved
+   - fuel price
+   If fuel price is unknown, allow user override + source.
+
+4. Keep manual override capability for all SDG values, but clearly mark whether the value is:
+   - calculated
+   - defaulted
+   - user override
+
+5. Move SDG entry to a later logical stage if needed, after key calculations exist.
+
+6. Make it clear which SDGs are:
+   - automatically derivable
+   - partially derivable
+   - fully manual
+
+--------------------------------------------------
+PART 3 — PROJECT SCALE AUTO-DETECTION
+--------------------------------------------------
+
+Current project scale selection is too manual.
+
+Please audit the methodology logic and implement safer scale handling.
+
+Requirements:
+
+1. Determine where project scale can be auto-detected from:
+   - calculated ER
+   - methodology thresholds
+   - project type / fuel / technology
+   - user-entered quantities
+
+2. If scale can be inferred, auto-suggest it or auto-fill it.
+
+3. If scale is uncertain, show the detected suggestion and allow override.
+
+4. Do not require users to manually choose scale when the app can derive it logically.
+
+--------------------------------------------------
+PART 4 — ER SHEET EXPORT WITH FORMULAS
+--------------------------------------------------
+
+The ER Excel export currently writes fixed numbers into cells.
+
+This is not acceptable for auditability.
+
+The exported ER sheet must preserve formulas, not only final values.
+
+Requirements:
+
+1. Audit the current ER export pipeline.
+2. Replace hardcoded result-only cells with actual spreadsheet formulas wherever possible.
+3. The auditor should be able to click on a cell and see the formula behind the result.
+4. Maintain readability:
+   - clear input section
+   - calculation section
+   - results section
+5. Keep the exported workbook compatible with the current application flow.
+
+This is a critical requirement.
+
+--------------------------------------------------
+PART 5 — USER PROFILE / REUSABLE MASTER DATA
+--------------------------------------------------
+
+We need a reusable profile/master-data layer so users do not have to re-enter the same entities repeatedly.
+
+Examples:
+- technology profiles
+- project developers
+- project participants
+
+Use cases:
+- A user stores one stove model once
+- Then when creating a new project, they select it from saved technologies
+- The same for developers and participants
+
+Please design and implement a first version of this.
+
+Requirements:
+
+1. Add a lightweight user profile / reusable entities layer.
+
+At minimum support:
+- technologies
+- project developers
+- project participants
+
+2. Each saved technology profile may include fields such as:
+- technology name
+- model
+- manufacturer
+- efficiency
+- fuel type
+- description
+
+3. Each saved developer / participant profile may include:
+- organization name
+- contact details
+- address / country
+- description / role
+
+4. When creating a new project, users should be able to:
+- select an existing saved technology
+- select an existing saved developer
+- select an existing saved participant
+
+5. Selected profiles should pre-fill the project form automatically.
+
+6. Keep this first version simple and safe.
+   No need to redesign the whole account system.
+
+--------------------------------------------------
+PART 6 — IMPLEMENTATION APPROACH
+--------------------------------------------------
+
+Please proceed in this order:
+
+1. Audit the current code paths for:
+   - parameter logic
+   - SDG handling
+   - scale handling
+   - ER export
+   - project creation / profile storage
+
+2. Implement the safest improvements first:
+   - parameter synchronization
+   - removal of hardcoded household size usage
+   - SDG auto-derivation logic
+   - ER export formulas
+   - reusable profiles
+
+3. Keep the existing app working throughout.
+
+--------------------------------------------------
+PART 7 — FINAL REPORT
+--------------------------------------------------
+
+After implementation, provide a report including:
+
+1. files changed
+2. logic changes made
+3. what is now auto-derived vs user-entered
+4. how SDGs now work
+5. how scale detection now works
+6. how ER formulas are preserved in exports
+7. how reusable technology / developer / participant profiles work
+8. confirmation that the app still starts cleanly and existing functionality still works
+
+If any part is too risky to complete fully in one pass, implement the safe subset and clearly explain what remains.

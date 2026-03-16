@@ -766,13 +766,6 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         if cf and isinstance(cf, dict):
             value = cf.get("value")
             source_reference = cf.get("source", "CDM TOOL33 v3")
-    elif param_key == "baseline_fuel_consumption":
-        if is_charcoal:
-            value = 0.1 * 5.0
-            source_reference = "CDM TOOL33 v3 §5.4 default: 0.1 t charcoal/person/yr * 5 persons/hh"
-        else:
-            value = 0.4 * 5.0
-            source_reference = "CDM TOOL33 v3 §5.4 default: 0.4 t wood/person/yr * 5 persons/hh"
     elif param_key == "SFC_baseline":
         # Raw KPT measurement in kg/device/day — TPDDTEC v4.0 ICS 14 typical values
         if is_charcoal:

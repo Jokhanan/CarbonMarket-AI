@@ -460,6 +460,7 @@ def generate_exante_workbook(project, calc_result=None):
         _hc(ws_calc, r, ci, h, _EA_HEADER, size=9, border=tb, wrap=True)
     r += 1
 
+    from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Align
     year_data = calc_result.get("years", [])
     data_start = r
     for yd in year_data:
@@ -472,12 +473,22 @@ def generate_exante_workbook(project, calc_result=None):
             number_format="#,##0.00", border=tb, size=9)
         _dc(ws_calc, r, 5, yd.get("project_emissions"), bg=bg, halign="right",
             number_format="#,##0.00", border=tb, size=9)
-        _dc(ws_calc, r, 6, yd.get("gross_er"), bg=bg, halign="right",
-            number_format="#,##0.00", border=tb, size=9)
+        _gross_er_cell = ws_calc.cell(row=r, column=6, value=f"=D{r}-E{r}")
+        _gross_er_cell.number_format = "#,##0.00"
+        _gross_er_cell.alignment = _Align(horizontal="right", vertical="center")
+        if bg:
+            _gross_er_cell.fill = _Fill("solid", fgColor=bg.lstrip("#"))
+        _gross_er_cell.border = tb
+        _gross_er_cell.font = _Font(name="Calibri", size=9)
         _dc(ws_calc, r, 7, yd.get("leakage"), bg=bg, halign="right",
             number_format="#,##0.00", border=tb, size=9)
-        _dc(ws_calc, r, 8, yd.get("net_er"), bg=bg, halign="right",
-            number_format="#,##0.00", border=tb, size=9)
+        _net_er_cell = ws_calc.cell(row=r, column=8, value=f"=F{r}-G{r}")
+        _net_er_cell.number_format = "#,##0.00"
+        _net_er_cell.alignment = _Align(horizontal="right", vertical="center")
+        if bg:
+            _net_er_cell.fill = _Fill("solid", fgColor=bg.lstrip("#"))
+        _net_er_cell.border = tb
+        _net_er_cell.font = _Font(name="Calibri", size=9)
         r += 1
 
     data_end = r - 1
