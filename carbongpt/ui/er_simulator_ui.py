@@ -483,6 +483,10 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
             unsafe_allow_html=True,
         )
 
+    # ── SDG co-benefits section — always shown, ER summary passed when available
+    _er_summary_for_sdg = result.get("summary") if result else None
+    _render_sdg_cobenefit_section(project_id, project, _er_summary_for_sdg)
+
 
 def _render_deployment_charts(result):
     timeline = result.get("deployment_timeline", [])
@@ -678,6 +682,149 @@ def _render_er_results(result, project_name="Project"):
             f"Average Annual ER        = {summary['average_annual_er']:,.2f} tCO2e/yr",
             language=None,
         )
+
+def _render_sdg_cobenefit_section(project_id, project, er_summary=None):
+    """
+    Full SDG co-benefit section shown AFTER ER simulation results.
+    Applies to all standards and methodologies.
+    """
+    from carbongpt.repository.store import get_user_project, update_project as _update_proj
+
+    _SDG_GOALS = [
+        ("1", "No Poverty"), ("2", "Zero Hunger"), ("3", "Good Health and Well-being"),
+        ("4", "Quality Education"), ("5", "Gender Equality"), ("6", "Clean Water and Sanitation"),
+        ("7", "Affordable and Clean Energy"), ("8", "Decent Work and Economic Growth"),
+        ("9", "Industry, Innovation and Infrastructure"), ("10", "Reduced Inequalities"),
+        ("11", "Sustainable Cities and Communities"), ("12", "Responsible Consumption and Production"),
+        ("13", "Climate Action"), ("14", "Life Below Water"), ("15", "Life on Land"),
+        ("16", "Peace, Justice and Strong Institutions"), ("17", "Partnerships for the Goals"),
+    ]
+    _EVIDENCE_TIERS = ["Tier 1 — Monitored data", "Tier 2 — Calculated estimate", "Tier 3 — Conservative assumption"]
+
+    st.divider()
+    st.markdown("### Co-benefits & SDG Indicators")
+    st.caption(
+        "Select the Sustainable Development Goals this project contributes to and fill in "
+        "quantitative indicator values. SDG 13 climate values are auto-suggested from the "
+        "ER simulation above when available."
+    )
+
+    fresh_project = get_user_project(project_id) or project
+    existing_intake = fresh_project.get("project_intake") or {}
+    sdgs_data = existing_intake.get("sdgs", {})
+    existing_sdgs = sdgs_data.get("selected_sdgs", [])
+    existing_map = {str(s.get("goal_number", "")): s for s in existing_sdgs}
+
+    meth_settings = fresh_project.get("methodology_settings") or fresh_project.get("project_settings") or {}
+    baseline_fuel = meth_settings.get("baseline_fuel", "").lower()
+    is_cookstove = bool(meth_settings.get("calculation_method") or meth_settings.get("baseline_fuel"))
+    is_biomass = baseline_fuel in ("wood", "charcoal", "biomass", "crop_residue", "dung", "crop residues")
+    suggested = {"1", "3", "5", "7", "13", "15"} if (is_cookstove and is_biomass) else (
+        {"1", "3", "5", "7", "13"} if is_cookstove else set()
+    )
+
+    if suggested and not existing_map:
+        st.info(f"Common SDGs for cookstove projects: {', '.join(sorted(suggested, key=int))}. "
+                f"Select them below and fill in indicator values.")
+
+    sdg_list = []
+    for goal_num, goal_name in _SDG_GOALS:
+        existing_entry = existing_map.get(goal_num, {})
+        existing_indicators = existing_entry.get("indicators", [])
+        default_sel = bool(existing_entry) or (not existing_map and goal_num in suggested)
+
+        is_selected = st.checkbox(
+            f"SDG {goal_num} — {goal_name}",
+            value=default_sel,
+            key=f"er_sdg_sel_{project_id}_{goal_num}",
+        )
+        if not is_selected:
+            continue
+
+        with st.container(border=True):
+            old_ind = existing_indicators[0] if existing_indicators else {}
+            old_contrib = existing_entry.get("contribution_description", "")
+
+            contrib = st.text_area(
+                f"SDG {goal_num} — contribution description",
+                value=old_contrib or old_ind.get("measurement_approach", ""),
+                key=f"er_sdg_desc_{project_id}_{goal_num}",
+                placeholder="Describe how this project contributes to this goal.",
+                height=60,
+            )
+
+            c1, c2, c3 = st.columns(3)
+
+            auto_bl, auto_pj, auto_note = "", "", ""
+            if goal_num == "13" and er_summary:
+                auto_bl = "0"
+                auto_pj = f"{er_summary.get('average_annual_er', 0):,.1f}"
+                auto_note = f"Auto from ER simulation: {er_summary.get('average_annual_er', 0):,.1f} tCO2e/yr average annual reduction"
+            elif goal_num == "7" and er_summary:
+                params = get_parameters_as_dict(project_id) or {}
+                nd = params.get("num_devices", {})
+                nd_val = nd.get("value") if isinstance(nd, dict) else None
+                if nd_val:
+                    auto_pj = str(int(float(nd_val)))
+                    auto_note = f"Number of clean energy devices: {int(float(nd_val)):,}"
+
+            with c1:
+                ind_name = st.text_input(
+                    "Indicator name",
+                    value=old_ind.get("indicator_name", ""),
+                    key=f"er_sdg_ind_{project_id}_{goal_num}",
+                    placeholder="e.g., tCO2e reduced/yr",
+                )
+            with c2:
+                bl_default = old_ind.get("baseline_value", auto_bl)
+                bl_val = st.text_input(
+                    "Baseline value",
+                    value=bl_default,
+                    key=f"er_sdg_bl_{project_id}_{goal_num}",
+                    placeholder="e.g., 0",
+                )
+            with c3:
+                pj_default = old_ind.get("project_value", auto_pj)
+                pj_val = st.text_input(
+                    "Project value",
+                    value=pj_default,
+                    key=f"er_sdg_pj_{project_id}_{goal_num}",
+                    placeholder="e.g., 5,000",
+                )
+
+            existing_tier = old_ind.get("evidence_tier", _EVIDENCE_TIERS[1])
+            tier_idx = _EVIDENCE_TIERS.index(existing_tier) if existing_tier in _EVIDENCE_TIERS else 1
+            ev_tier = st.selectbox(
+                "Evidence tier",
+                _EVIDENCE_TIERS,
+                index=tier_idx,
+                key=f"er_sdg_ev_{project_id}_{goal_num}",
+            )
+
+            if auto_note:
+                st.caption(f"Auto-suggested: {auto_note}")
+
+        sdg_list.append({
+            "goal_number": goal_num,
+            "contribution_description": contrib,
+            "indicators": [{
+                "indicator_name": ind_name,
+                "baseline_value": bl_val,
+                "project_value": pj_val,
+                "evidence_tier": ev_tier,
+                "measurement_approach": contrib,
+            }],
+        })
+
+    if st.button("Save SDG Indicators", key=f"er_sdg_save_{project_id}", type="primary"):
+        updated_intake = dict(existing_intake)
+        updated_intake["sdgs"] = {"selected_sdgs": sdg_list}
+        try:
+            _update_proj(project_id, project_intake=updated_intake)
+            st.success(f"SDG indicators saved ({len(sdg_list)} goal(s) recorded).")
+            import time; time.sleep(0.4); st.rerun()
+        except Exception as e:
+            st.error(f"Save failed: {e}")
 
 
 def _render_saved_scenarios(project_id):

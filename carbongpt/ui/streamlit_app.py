@@ -10104,8 +10104,6 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
                                     placeholder="e.g., Rural households in Northern Region without clean cooking access")
         _intel_source_label(intake, "location", "target_population")
 
-    sdg_list = _render_sdg_selection_only(project_id, sdgs_data, methodology_settings=meth_settings)
-
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information the AI should use instead of generating.")
 
@@ -10178,7 +10176,7 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
             "calculation_approach": er.get("calculation_approach", ""),
             "er_summary": er.get("er_summary", ""),
         },
-        "sdgs": {"selected_sdgs": sdg_list},
+        "sdgs": intake.get("sdgs", {}),
         "stakeholders": {
             "consultation_summary": stk_consultation,
             "grievance_mechanism": stk.get("grievance_mechanism", ""),
@@ -10260,8 +10258,6 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
             er_total = st.text_input("Total estimated ERs (tCO2e)", value=er.get("total_er_estimate", ""),
                                       key=f"setup_poa_er_total_{project_id}")
 
-    sdg_list = _render_sdg_selection_only(project_id, sdgs_data)
-
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information.")
 
@@ -10298,7 +10294,7 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
         },
         "monitoring": {"monitoring_approach": mon.get("monitoring_approach", "")},
         "emission_reductions": {"annual_er_estimate": er_annual, "total_er_estimate": er_total},
-        "sdgs": {"selected_sdgs": sdg_list},
+        "sdgs": intake.get("sdgs", {}),
         "stakeholders": {"consultation_summary": stk_consultation, "grievance_mechanism": stk.get("grievance_mechanism", "")},
         "safeguards": {"environmental_safeguards": safeg.get("environmental_safeguards", ""), "social_safeguards": safeg.get("social_safeguards", "")},
     }
@@ -11120,7 +11116,12 @@ def _render_project_settings(project):
             pass
     cp_years = _cp_block.get("years") or project.get("crediting_period_years") or 7
 
-    existing_settings = project.get("project_settings") or {}
+    # Merge methodology_settings (wizard source of truth) with project_settings (Setup overrides).
+    # project_settings takes priority so manual Setup changes are preserved;
+    # methodology_settings fills in any keys not yet set in project_settings.
+    _meth_settings_base = project.get("methodology_settings") or {}
+    _proj_settings_override = project.get("project_settings") or {}
+    existing_settings = {**_meth_settings_base, **_proj_settings_override}
 
     meth_parsed = None
     methodology = new_methodology or project.get("methodology")
@@ -11223,29 +11224,6 @@ def _render_project_settings(project):
                 pass
 
             _mecd_basket_data = _basket_rows if abs(_basket_total - 100.0) < 0.5 else None
-
-    st.divider()
-
-    # ── Full SDG Indicators section (quantitative values — placed after methodology choices)
-    # Users first select SDGs in the intake section above; here they fill in indicator values
-    # after ER context is established.
-    _sdgs_current = intake_data.get("sdgs", {}) if isinstance(intake_data, dict) else {}
-    _sdg_has_selection = bool(_sdgs_current.get("selected_sdgs"))
-    if _sdg_has_selection:
-        with st.expander("SDG Indicator Values (post-methodology)", expanded=False):
-            st.caption(
-                "Now that methodology choices are defined, you can fill in quantitative "
-                "indicator values for your selected SDGs. These feed directly into the PDD document. "
-                "For GS-MECD projects, SDG 13 values are auto-derived from ER simulation results."
-            )
-            _sdg_full_list = _render_sdg_section(
-                project_id, _sdgs_current,
-                methodology_settings=project.get("methodology_settings") or {},
-            )
-            if _sdg_full_list:
-                intake_data["sdgs"] = {"selected_sdgs": _sdg_full_list}
-    elif new_methodology:
-        st.caption("SDG indicator values will be available here after selecting goals in the intake section above.")
 
     st.divider()
 
