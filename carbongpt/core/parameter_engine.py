@@ -575,7 +575,7 @@ def _get_tool33_intake_value(intake, param_key):
 
 def initialize_project_parameters(project_id):
     with get_cursor() as cur:
-        cur.execute("SELECT methodology, country, project_settings, project_intake FROM user_projects WHERE id = %s", (project_id,))
+        cur.execute("SELECT methodology, country, methodology_settings, project_settings, project_intake FROM user_projects WHERE id = %s", (project_id,))
         project = cur.fetchone()
         if not project:
             return {"error": "Project not found"}
@@ -584,12 +584,17 @@ def initialize_project_parameters(project_id):
         methodology = (project["methodology"] or "").upper().replace("GS-", "")
         methodology = _re.sub(r"[\s-]*V(?:ERSION\s*)?\d+(\.\d+)?$", "", methodology, flags=_re.IGNORECASE).strip()
         country = project.get("country", "")
-        settings = project.get("project_settings") or {}
+        # Merge methodology_settings (wizard) + project_settings (Setup overrides).
+        # project_settings takes priority; methodology_settings fills any gaps.
+        _meth_settings = project.get("methodology_settings") or {}
+        _proj_settings = project.get("project_settings") or {}
+        settings = {**_meth_settings, **_proj_settings}
         intake = project.get("project_intake") or {}
 
         raw_baseline_fuel = settings.get("baseline_fuel") or intake.get("baseline_fuel", "wood")
         baseline_fuel = normalize_fuel_type(raw_baseline_fuel)
         raw_project_fuel = settings.get("project_fuel") or intake.get("project_fuel", "")
+        # Only fall back to "same fuel as baseline" when no project fuel is anywhere specified.
         if not raw_project_fuel and methodology in ("VM0050", "TPDDTEC"):
             raw_project_fuel = raw_baseline_fuel
         project_fuel = normalize_fuel_type(raw_project_fuel) if raw_project_fuel else ""
@@ -826,7 +831,7 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
     elif param_key == "project_fuel_consumption":
         value = None
         source_type = "default"
-        source_reference = "Must be determined from project stove testing (KPT / WBT)"
+        source_reference = "Auto-derived from SFC_project (kg/device/day × 365 / 1000). Enter SFC_project to compute."
     elif param_key == "usage_rate":
         value = 0.90
         source_type = "default"
@@ -862,9 +867,31 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
         source_type = "default"
         source_reference = "Common assumption (SSA average)"
     elif param_key == "SFC_project":
-        value = None
-        source_type = "default"
-        source_reference = "Must be determined from project stove testing (Kitchen Performance Test or Water Boiling Test)"
+        # Ex-ante indicative default based on project fuel type.
+        # These represent typical improved-stove KPT results for SSA;
+        # the user MUST replace with their own field measurement before issuance.
+        _pj_fuel = normalize_fuel_type(project_fuel) if project_fuel else ""
+        if _pj_fuel == "charcoal":
+            value = 0.38
+            source_reference = (
+                "Ex-ante estimate: ~0.38 kg charcoal/device/day (TPDDTEC ICS-14 typical improved "
+                "charcoal stove, SSA). Replace with your KPT field measurement before issuance."
+            )
+        elif _pj_fuel == "wood":
+            value = 0.87
+            source_reference = (
+                "Ex-ante estimate: ~0.87 kg wood/device/day (typical improved wood stove, SSA). "
+                "Replace with your KPT field measurement before issuance."
+            )
+        elif _pj_fuel == "lpg":
+            value = 0.20
+            source_reference = (
+                "Ex-ante estimate: ~0.20 kg LPG/device/day (typical LPG stove, SSA). "
+                "Replace with your WBT field measurement before issuance."
+            )
+        else:
+            value = None
+            source_reference = "Must be determined from project stove testing (Kitchen Performance Test or Water Boiling Test)"
     elif param_key == "baseline_fuel":
         value = baseline_fuel or "wood"
         source_type = "default"

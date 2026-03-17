@@ -82,6 +82,26 @@ def _should_show_param(param_key, baseline_fuel, project_fuel, method_id=None):
     return True
 
 
+def _auto_refresh_null_defaults(project_id, all_params):
+    """
+    Re-run initialize_project_parameters if any key parameter has value=None
+    and source_type='default'.  This is a one-time migration that fires when
+    the engine defaults have been improved since the project was last initialized.
+    Confirmed / measured / user_override values are always preserved by initialize.
+    """
+    SENTINEL_PARAMS = {"SFC_project", "SFC_baseline"}
+    needs_refresh = any(
+        p["param_key"] in SENTINEL_PARAMS
+        and p.get("value") is None
+        and p.get("source_type") == "default"
+        for p in all_params
+    )
+    if not needs_refresh:
+        return False
+    result = initialize_project_parameters(project_id)
+    return "error" not in result
+
+
 def render_parameter_dashboard(project):
     project_id = project["id"]
     _param_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>'
@@ -171,6 +191,15 @@ def render_parameter_dashboard(project):
 
     all_params = get_project_parameters(project_id)
     baseline_fuel, project_fuel, method_id, meth_settings = _get_project_method_settings(project_id, all_params)
+
+    # One-time auto-refresh: if key params (SFC_project etc.) have null defaults from
+    # an old engine, re-initialize to pick up improved ex-ante defaults.
+    _refresh_key = f"params_refreshed_{project_id}"
+    if _refresh_key not in st.session_state:
+        st.session_state[_refresh_key] = True
+        if _auto_refresh_null_defaults(project_id, all_params):
+            all_params = get_project_parameters(project_id)
+            baseline_fuel, project_fuel, method_id, meth_settings = _get_project_method_settings(project_id, all_params)
 
     if method_id:
         try:
