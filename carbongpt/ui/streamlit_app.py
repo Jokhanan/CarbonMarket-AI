@@ -6807,9 +6807,9 @@ def _render_project_workspace(project_id):
 
     # ── Stage-aware quick actions ─────────────────────────────────────────
     stage_actions = _get_stage_quick_actions(derived_stage, nba_from_brain)
-    qa_col1, qa_col2, qa_col3, qa_divider, qa_col4 = st.columns([1, 1, 1, 0.05, 1])
-    qa_cols = [qa_col1, qa_col2, qa_col3]
-    for col_i, (col, (btn_label, key_sfx, tab_idx)) in enumerate(zip(qa_cols, stage_actions[:3])):
+    qa_col1, qa_col2, qa_divider, qa_col4 = st.columns([1, 1, 0.05, 1])
+    qa_cols = [qa_col1, qa_col2]
+    for col_i, (col, (btn_label, key_sfx, tab_idx)) in enumerate(zip(qa_cols, stage_actions[:2])):
         with col:
             if tab_idx == -1:
                 if st.button(btn_label, key=f"qa_{key_sfx}_{project_id}", use_container_width=True):
