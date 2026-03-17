@@ -10799,26 +10799,36 @@ def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, method
                         placeholder="e.g. Reduction in PM2.5 exposure (μg/m³)",
                     )
 
-                val_c1, val_c2 = st.columns(2)
-                with val_c1:
-                    _existing_bl = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
-                    _default_bl = _existing_bl or auto_bl_val
-                    baseline_val = st.text_input(
-                        "Baseline value",
-                        value=_default_bl,
-                        key=f"setup_sdg_bl_{project_id}_{goal_num}",
-                        placeholder="e.g. 245",
+                _hide_sdg13_quant = (goal_num == "13" and not er_data)
+                if _hide_sdg13_quant:
+                    st.caption(
+                        "Quantitative indicator values for SDG 13 will be auto-derived "
+                        "once you run an ER simulation (ER Simulator tab). "
+                        "You can still select the SDG and describe your monitoring approach below."
                     )
-                with val_c2:
-                    _existing_pj = existing_indicators[0].get("project_value", "") if existing_indicators else ""
-                    _default_pj = _existing_pj or auto_pj_val
-                    _pj_label = "Project / target value (auto-derived — override if needed)" if is_auto_derived and not _existing_pj else "Project / target value"
-                    project_val = st.text_input(
-                        _pj_label,
-                        value=_default_pj,
-                        key=f"setup_sdg_pv_{project_id}_{goal_num}",
-                        placeholder="e.g. 35",
-                    )
+                    baseline_val = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                    project_val = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                else:
+                    val_c1, val_c2 = st.columns(2)
+                    with val_c1:
+                        _existing_bl = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+                        _default_bl = _existing_bl or auto_bl_val
+                        baseline_val = st.text_input(
+                            "Baseline value",
+                            value=_default_bl,
+                            key=f"setup_sdg_bl_{project_id}_{goal_num}",
+                            placeholder="e.g. 245",
+                        )
+                    with val_c2:
+                        _existing_pj = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+                        _default_pj = _existing_pj or auto_pj_val
+                        _pj_label = "Project / target value (auto-derived — override if needed)" if is_auto_derived and not _existing_pj else "Project / target value"
+                        project_val = st.text_input(
+                            _pj_label,
+                            value=_default_pj,
+                            key=f"setup_sdg_pv_{project_id}_{goal_num}",
+                            placeholder="e.g. 35",
+                        )
 
                 _existing_tier = existing_indicators[0].get("evidence_tier", "") if existing_indicators else ""
                 _default_tier = _existing_tier if _existing_tier in _EVIDENCE_TIERS else (auto_tier if is_auto_derived else _EVIDENCE_TIERS[1])

@@ -1,0 +1,205 @@
+We need a strict methodology-by-methodology coherence repair pass.
+
+This is not a broad product audit.
+This is not a generic UX pass.
+This is not a partial cleanup.
+
+This is a full consistency correction pass focused on making the project setup + methodology flow coherent and safe.
+
+IMPORTANT:
+Do not make general improvements first.
+Do not jump to unrelated architecture work.
+Do not optimize around summaries.
+First fix the methodology flow and parameter logic so the app becomes trustworthy.
+
+==================================================
+CORE PROBLEM
+==================================================
+
+The application is still inconsistent and currently unsafe in several places.
+
+Examples visible in the UI:
+
+1. Baseline fuel / project fuel is being asked in more than one place, and not always consistently.
+   Example: one place shows baseline=wood, project=charcoal, and another place later still shows baseline/project fuel again with different values.
+
+2. SDGs are still being asked too early in the flow.
+   This is wrong.
+   Some SDGs (especially SDG 13, and partly SDG 1 / SDG 15) depend on later calculations and should be derived after results exist, not asked upfront in setup.
+
+3. Project specific fuel consumption (kg/device/day) and project annual fuel consumption (t/device/year) are still both shown as independent inputs.
+   This is duplicate input for the same concept and should be synchronized or reduced to one canonical driver + one derived display.
+
+4. Baseline annual fuel consumption is still mixing incompatible default logics:
+   - 0.4 t/person/year × household size
+   - 0.5 t/device/year
+   These belong to different methodological assumptions and must not be mixed carelessly.
+
+5. Crediting period is still not placed logically in the setup flow.
+
+The app must become methodology-consistent, dependency-aware, and non-duplicative.
+
+==================================================
+TASK
+==================================================
+
+You must now do a strict repair pass methodology by methodology, especially for the cookstove pathways already implemented.
+
+Focus on:
+- TPDDTEC Method 1
+- TPDDTEC Method 2
+- TPDDTEC Method 3
+- VM0050
+- GS-MECD if active
+
+For each pathway, verify the full flow from:
+Setup → Methodology choice → Parameters → ER logic → SDG logic
+
+==================================================
+PART 1 — SINGLE SOURCE OF TRUTH PER CONCEPT
+==================================================
+
+Audit and repair the system so each concept has one clear canonical source of truth.
+
+Examples:
+- baseline fuel type
+- project fuel type
+- baseline fuel consumption
+- project fuel consumption
+- annual consumption
+- household size
+- crediting period
+- SDG values
+
+For each concept:
+1. identify where it is currently defined
+2. identify duplicates
+3. identify contradictions
+4. choose one canonical source
+5. make downstream fields read-only / derived where appropriate
+
+The same concept must not be independently editable in multiple places unless absolutely necessary.
+
+==================================================
+PART 2 — FLOW ORDER / DEPENDENCY REPAIR
+==================================================
+
+Reorganize the logic so fields are asked only when they are actually knowable.
+
+Examples:
+- SDGs must not be asked before calculations if they depend on calculations
+- derived values must not be requested as primary inputs
+- methodology-dependent defaults must only appear after methodology/pathway is known
+- crediting period should be placed logically in the project setup flow
+
+Implement a clean dependency order.
+
+==================================================
+PART 3 — METHODOLOGY CHOICE VS PARAMETERS
+==================================================
+
+The app must not ask for baseline/project fuel in Setup and then ask again later in Parameters in a contradictory or duplicate way.
+
+Repair this.
+
+For each methodology/pathway:
+- determine which fuel fields belong in setup
+- determine which fields belong in parameters
+- determine which parameter fields should be read-only reflections of setup choices
+- determine which ones should never be shown again later
+
+The user must not feel they are filling the same thing twice.
+
+==================================================
+PART 4 — FUEL CONSUMPTION LOGIC
+==================================================
+
+Repair the consumption input logic.
+
+We need a clean distinction between:
+- raw measured daily consumption (kg/device/day)
+- annual consumption (t/device/year)
+- methodology default annual assumptions where applicable
+
+Rules:
+1. If raw daily KPT is entered, annual consumption is derived automatically.
+2. If annual consumption is the canonical methodology quantity, the daily display should be derived or shown only as reference.
+3. The user should not be forced to enter both.
+4. Method-specific defaults must not be mixed:
+   - 0.4 t/person/year × household size
+   - 0.5 t/device/year
+   - TPDDTEC typical KPT default ~1.37 kg/device/day
+These must be clearly tied to their methodological context and never blended silently.
+
+Explain exactly which default applies under which method/pathway.
+
+==================================================
+PART 5 — SDG REPAIR
+==================================================
+
+Repair the SDG flow completely.
+
+Requirements:
+- move SDGs to the correct stage if needed
+- SDG 13 should come from ER results
+- SDG 15 should come from biomass saved where applicable
+- SDG 1 should come from household savings where derivable
+- manual override is allowed, but derived values should be the default where possible
+- the user must clearly see what is:
+  - derived
+  - defaulted
+  - manually entered
+
+Do not leave SDG requests in the setup flow if they depend on later calculations.
+
+==================================================
+PART 6 — METHODOLOGY-BY-METHODOLOGY QA TABLE
+==================================================
+
+Before implementing, build an internal QA matrix for each supported cookstove pathway.
+
+For each pathway, check:
+- which fields belong in setup
+- which fields belong in parameters
+- which are derived
+- which are defaults
+- which are hidden
+- which are editable
+- what equations / defaults apply
+- what should happen in ER simulation
+- what should happen in SDG derivation
+
+Use this QA matrix to drive the implementation.
+
+==================================================
+PART 7 — IMPLEMENTATION
+==================================================
+
+After the QA review, implement the fixes safely.
+
+Requirements:
+- no contradictory duplicate fields
+- no silent methodology mixing
+- no asking the user for values that should be derived later
+- no asking the same concept twice
+- clearer stage order
+- preserve app stability
+
+==================================================
+PART 8 — FINAL REPORT
+==================================================
+
+At the end, provide a strict report including:
+
+1. all duplicated concepts found
+2. all contradictory fields found
+3. what was changed in setup
+4. what was changed in parameters
+5. what was moved later in the flow
+6. how each methodology/pathway now behaves
+7. which defaults now apply under which method
+8. confirmation that the app starts cleanly
+9. list of any remaining known inconsistencies
+
+This pass must prioritize correctness and coherence over adding features.
+The goal is to make the methodology flow trustworthy.

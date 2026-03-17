@@ -13,7 +13,15 @@ from carbongpt.core.parameter_engine import (
 )
 from carbongpt.core.evidence_engine import get_evidence_links, get_evidence_counts_by_param
 
-DERIVED_PARAMS = {"num_beneficiaries", "num_households", "bl_consumption_wood_equiv"}
+DERIVED_PARAMS = {
+    "num_beneficiaries",
+    "num_households",
+    "bl_consumption_wood_equiv",
+    # When SFC is set (Method 1 KPT), these are derived (read-only) from SFC × 365 / 1000.
+    # When no SFC (user enters directly), source_type stays 'default' → normal editable row.
+    "baseline_fuel_consumption",
+    "project_fuel_consumption",
+}
 
 CHARCOAL_ONLY_PARAMS = {"CF"}
 
@@ -291,12 +299,19 @@ def _render_derived_parameter(project_id, param, evidence_by_param):
         unit = param.get("unit", "")
         if current_val:
             try:
-                display_val = f"{float(current_val):,.0f}"
+                display_val = f"{float(current_val):,.4f}"
             except (ValueError, TypeError):
                 display_val = str(current_val)
             st.markdown(f"**{display_val}** {unit}")
+            if param_key in ("baseline_fuel_consumption", "project_fuel_consumption"):
+                sfc_key = "SFC_baseline" if "baseline" in param_key else "SFC_project"
+                st.caption(f"Auto-derived from {sfc_key} (kg/device/day × 365 / 1000). Override to use a direct field measurement.")
         else:
-            st.caption("Not yet computed (set primary inputs first)")
+            if param_key in ("baseline_fuel_consumption", "project_fuel_consumption"):
+                sfc_key = "SFC_baseline" if "baseline" in param_key else "SFC_project"
+                st.caption(f"Will be auto-derived from {sfc_key} once set. Override below to enter a direct field measurement.")
+            else:
+                st.caption("Not yet computed (set primary inputs first)")
 
     with col3:
         override_key = f"override_derived_{param_key}_{project_id}"
@@ -364,18 +379,11 @@ def _render_parameter_row(project_id, param, evidence_by_param):
         current_val = param["value"] if param["value"] is not None else ""
         unit = param.get("unit", "")
 
-        if param_key == "baseline_fuel":
-            fuel_options = FUEL_CANONICAL_OPTIONS
-            current_fuel = str(current_val) if current_val else "wood"
-            fuel_idx = fuel_options.index(current_fuel) if current_fuel in fuel_options else 0
-            new_val = st.selectbox(
-                f"Fuel Type",
-                fuel_options,
-                index=fuel_idx,
-                key=f"param_val_{param_key}_{param['id']}",
-                label_visibility="collapsed",
-                format_func=get_fuel_display_label,
-            )
+        if param_key in ("baseline_fuel", "project_fuel"):
+            display_fuel = get_fuel_display_label(str(current_val)) if current_val else "wood"
+            st.markdown(f"**{display_fuel}**", help="Set in Methodology Choices in the Setup tab")
+            st.caption("Read-only — change fuel type in Setup tab (Methodology Choices)")
+            new_val = current_val
         else:
             new_val = st.text_input(
                 f"Value ({unit})",

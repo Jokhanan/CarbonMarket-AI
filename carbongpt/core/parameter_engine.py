@@ -775,17 +775,54 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
             value = 1.37
             source_reference = "TPDDTEC typical KPT default: ~1.37 kg wood/device/day (≈0.5 t/device/yr)"
     elif param_key == "baseline_fuel_consumption":
-        # Canonical calculation quantity in t/device/year
-        # Default derived from CDM TOOL33 v3 §5.4 per-capita defaults × household_size
+        # Canonical calculation quantity in t/device/year.
+        # Source hierarchy (highest to lowest priority):
+        #   1. SFC_baseline (if already resolved in param_values) — converted from kg/device/day
+        #   2. Method 2 locked default: TPDDTEC v4.0 §4.2.2 → 0.5 t/capita/yr × hh_size
+        #   3. CDM TOOL33 v3 §5.4 general default × hh_size (Methods 1, 3, VM0050)
         _hh_entry = param_values.get("household_size")
         _hh_val = (_hh_entry.get("value") if isinstance(_hh_entry, dict) else _hh_entry) if _hh_entry else None
         hh_sz = float(_hh_val) if (_hh_val and float(_hh_val) > 0) else 5.0
-        if is_charcoal:
-            value = round(0.1 * hh_sz, 4)
-            source_reference = f"CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr × {hh_sz} persons/hh = {0.1 * hh_sz:.4f} t/device/yr"
-        else:
-            value = round(0.4 * hh_sz, 4)
-            source_reference = f"CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh = {0.4 * hh_sz:.4f} t/device/yr"
+
+        _calc_method = settings.get("calculation_method", "") if settings else ""
+        _is_method2 = (_calc_method == "method_2")
+
+        _sfc_entry = param_values.get("SFC_baseline")
+        _sfc_val = (_sfc_entry.get("value") if isinstance(_sfc_entry, dict) else _sfc_entry) if _sfc_entry else None
+        if _sfc_val is not None:
+            try:
+                _sfc_float = float(_sfc_val)
+                if _sfc_float > 0:
+                    value = round(_sfc_float * 365.0 / 1000.0, 4)
+                    source_reference = (
+                        f"Derived from SFC_baseline ({_sfc_float} kg/device/day × 365 days ÷ 1000 "
+                        f"= {value} t/device/yr)"
+                    )
+                    source_type = "calculated"
+            except (ValueError, TypeError):
+                pass
+
+        if value is None:
+            if _is_method2:
+                value = round(0.5 * hh_sz, 4)
+                source_reference = (
+                    f"TPDDTEC Method 2 locked: 0.5 t/capita/yr × {hh_sz:.1f} persons/hh "
+                    f"= {0.5 * hh_sz:.4f} t/device/yr (read-only — switch to Method 1 to use measured field data)"
+                )
+                source_type = "default"
+            elif is_charcoal:
+                value = round(0.1 * hh_sz, 4)
+                source_reference = f"CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr × {hh_sz} persons/hh = {0.1 * hh_sz:.4f} t/device/yr"
+            elif methodology and "VM0050" in str(methodology).upper():
+                value = round(0.4 * hh_sz, 4)
+                source_reference = (
+                    f"VM0050 §9.2 / CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh "
+                    f"= {0.4 * hh_sz:.4f} t/device/yr. "
+                    f"Note: VM0050 uses 0.4 t/person/yr (CDM TOOL33), distinct from TPDDTEC Method 2 which mandates 0.5 t/person/yr."
+                )
+            else:
+                value = round(0.4 * hh_sz, 4)
+                source_reference = f"CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh = {0.4 * hh_sz:.4f} t/device/yr"
     elif param_key == "project_fuel_consumption":
         value = None
         source_type = "default"
@@ -891,6 +928,33 @@ def _compute_derived_params(resolved_values, resolved_meta):
                 "estimated",
             )
 
+    # R5b: SFC_baseline (kg/device/day, raw KPT) → baseline_fuel_consumption (t/device/yr)
+    # Fires ONLY when baseline_fuel_consumption is not already user-confirmed/measured.
+    sfc_b = _safe_float(resolved_values.get("SFC_baseline"))
+    if sfc_b and sfc_b > 0:
+        _, _, bl_cons_status = resolved_meta.get("baseline_fuel_consumption", ("default", None, "default"))
+        if bl_cons_status not in ("confirmed", "measured", "user_override"):
+            derived_bl_cons = round(sfc_b * 365.0 / 1000.0, 4)
+            resolved_values["baseline_fuel_consumption"] = derived_bl_cons
+            resolved_meta["baseline_fuel_consumption"] = (
+                "calculated",
+                f"Derived from SFC_baseline ({sfc_b} kg/device/day × 365 ÷ 1000 = {derived_bl_cons} t/device/yr)",
+                "estimated",
+            )
+
+    # R5c: SFC_project (kg/device/day) → project_fuel_consumption (t/device/yr)
+    sfc_p = _safe_float(resolved_values.get("SFC_project"))
+    if sfc_p and sfc_p > 0:
+        _, _, pj_cons_status = resolved_meta.get("project_fuel_consumption", ("default", None, "default"))
+        if pj_cons_status not in ("confirmed", "measured", "user_override"):
+            derived_pj_cons = round(sfc_p * 365.0 / 1000.0, 4)
+            resolved_values["project_fuel_consumption"] = derived_pj_cons
+            resolved_meta["project_fuel_consumption"] = (
+                "calculated",
+                f"Derived from SFC_project ({sfc_p} kg/device/day × 365 ÷ 1000 = {derived_pj_cons} t/device/yr)",
+                "estimated",
+            )
+
     # R6: P_b (t/capita/yr, MECD) → baseline_fuel_consumption (t/device/yr, TPDDTEC/VM0050)
     # This bridge is ONLY for cross-methodology display and canonical quantity consistency.
     # MECD's own calculator continues to read P_b directly from params.
@@ -959,9 +1023,12 @@ def _recompute_derived_after_update(cur, project_id, keys_to_recompute):
     devices_per_hh = _sf(vals.get("devices_per_household")) or 1.0
     household_size = _sf(vals.get("household_size")) or 5.0
 
+    sfc_b_val = _sf(vals.get("SFC_baseline"))
+    sfc_p_val = _sf(vals.get("SFC_project"))
+
     for key in keys_to_recompute:
         existing = next((r for r in all_rows if r["param_key"] == key), None)
-        if existing and existing["source_type"] == "user_override":
+        if existing and existing["source_type"] in ("user_override", "measured", "confirmed"):
             continue
 
         computed = None
@@ -976,6 +1043,12 @@ def _recompute_derived_after_update(cur, project_id, keys_to_recompute):
             if hh is not None:
                 computed = hh * household_size
                 ref = f"Derived: {int(hh)} households x {household_size:.0f} persons/hh = {int(computed)}"
+        elif key == "baseline_fuel_consumption" and sfc_b_val and sfc_b_val > 0:
+            computed = round(sfc_b_val * 365.0 / 1000.0, 4)
+            ref = f"Derived from SFC_baseline ({sfc_b_val} kg/device/day × 365 ÷ 1000 = {computed} t/device/yr)"
+        elif key == "project_fuel_consumption" and sfc_p_val and sfc_p_val > 0:
+            computed = round(sfc_p_val * 365.0 / 1000.0, 4)
+            ref = f"Derived from SFC_project ({sfc_p_val} kg/device/day × 365 ÷ 1000 = {computed} t/device/yr)"
 
         if computed is not None:
             cur.execute("""
@@ -983,7 +1056,7 @@ def _recompute_derived_after_update(cur, project_id, keys_to_recompute):
                 SET value = %s, source_type = 'calculated', source_reference = %s,
                     param_status = 'estimated', updated_at = NOW()
                 WHERE project_id = %s AND param_key = %s AND applicable_year IS NULL
-                  AND source_type != 'user_override'
+                  AND source_type NOT IN ('user_override', 'measured', 'confirmed')
             """, (str(computed), ref, project_id, key))
             vals[key] = str(computed)
 
@@ -1033,6 +1106,9 @@ def update_parameter(project_id, param_key, value, source_type=None, source_refe
             "devices_per_household": ["num_households", "num_beneficiaries"],
             "household_size": ["num_beneficiaries"],
             "num_households": ["num_beneficiaries"],
+            # SFC (kg/device/day) → annual fuel consumption (t/device/yr)
+            "SFC_baseline": ["baseline_fuel_consumption"],
+            "SFC_project": ["project_fuel_consumption"],
         }
         if param_key in derivation_triggers:
             _recompute_derived_after_update(cur, project_id, derivation_triggers[param_key])
