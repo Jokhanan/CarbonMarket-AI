@@ -9614,6 +9614,50 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
     selected_baseline = existing_settings.get("baseline_fuel", "")
     selected_project = existing_settings.get("project_fuel", "")
 
+    def _fuzzy_option_index(val, options):
+        """Return the index of the best matching option for a canonical or display value."""
+        if not val or not options:
+            return 0
+        if val in options:
+            return options.index(val)
+        val_lower = val.lower().strip()
+        for i, opt in enumerate(options):
+            opt_lower = opt.lower().strip()
+            if opt_lower == val_lower:
+                return i
+            # "wood" → "Wood (firewood)"  |  "Wood (firewood)" → "wood"
+            if opt_lower.startswith(val_lower) or val_lower.startswith(opt_lower.split("(")[0].strip()):
+                return i
+            # "charcoal" → "Charcoal"
+            if val_lower in opt_lower or opt_lower in val_lower:
+                return i
+        return 0
+
+    # ── Pre-seed session state from DB values to prevent stale defaults.
+    # Only seeds if the key is missing OR if the widget currently shows the
+    # first-option default while the DB has a more specific value.
+    _seeded_key = f"meth_choices_seeded_{project_id}"
+    if context_dims and (
+        _seeded_key not in st.session_state
+        or st.session_state.get(_seeded_key) != id(existing_settings)
+    ):
+        st.session_state[_seeded_key] = id(existing_settings)
+        for _dim in context_dims:
+            _dk = _dim.get("dimension_key", "")
+            _opts = _dim.get("options", [])
+            if not _dk or not _opts or _dk in ("method_selection",):
+                continue
+            _saved_val = existing_settings.get(_dk, "")
+            if not _saved_val:
+                continue
+            _best_idx = _fuzzy_option_index(_saved_val, _opts)
+            _ss_widget_key = f"meth_dim_{project_id}_{_dk}"
+            # Override session state if it holds a default (index 0) value
+            # but DB has a specifically saved non-default value.
+            _current_ss = st.session_state.get(_ss_widget_key)
+            if _current_ss is None or (_current_ss == _opts[0] and _best_idx != 0):
+                st.session_state[_ss_widget_key] = _opts[_best_idx]
+
     if context_dims:
         with st.container(border=True):
             st.markdown("#### Methodology Choices")
@@ -9631,23 +9675,20 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                     continue
 
                 if dim_key == "scale_classification":
-                    intake_scale = st.session_state.get(f"setup_po_scale_{project_id}", "") or intake.get("project_overview", {}).get("scale", "")
-                    if intake_scale:
-                        scale_lower = intake_scale.lower()
-                        matched = None
-                        for opt in options:
-                            if opt.lower() == scale_lower or scale_lower in opt.lower() or opt.lower() in scale_lower:
-                                matched = opt
-                                break
-                        if matched:
-                            new_settings[dim_key] = matched
-                            auto_derived_dims.add(dim_key)
-                            continue
+                    # Scale may come from existing_settings (wizard or prior save)
+                    scale_val = existing_settings.get("scale_classification", "")
+                    if not scale_val:
+                        # Fallback to intake field
+                        scale_val = intake.get("project_overview", {}).get("scale", "")
+                    if scale_val:
+                        scale_idx = _fuzzy_option_index(scale_val, options)
+                        matched = options[scale_idx]
+                        new_settings[dim_key] = matched
+                        auto_derived_dims.add(dim_key)
+                        continue
 
                 current_val = existing_settings.get(dim_key, "")
-                idx = 0
-                if current_val in options:
-                    idx = options.index(current_val)
+                idx = _fuzzy_option_index(current_val, options)
                 selected = st.selectbox(
                     dim.get("label", dim_key),
                     options,
