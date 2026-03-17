@@ -8448,6 +8448,143 @@ def _render_intelligence_review(project_id):
                         time.sleep(0.5)
                         st.rerun()
 
+    _render_save_to_profile_panel(project_id, suggestions)
+
+
+def _render_save_to_profile_panel(project_id, suggestions):
+    """
+    After intelligence extraction, offer to save developer and technology
+    data into reusable profiles so future projects can load them.
+    """
+    from carbongpt.repository.profile_store import create_profile, list_profiles
+
+    # ── collect best value per field key for proponent and technology
+    extracted = {}
+    for cat_group in suggestions:
+        cat = cat_group.get("category", "")
+        if cat not in ("proponent", "technology"):
+            continue
+        extracted[cat] = {}
+        for field in cat_group.get("fields", []):
+            values = field.get("values", [])
+            if values:
+                extracted[cat][field["field_key"]] = values[0].get("value", "")
+
+    if not extracted:
+        return
+
+    st.markdown("---")
+    with st.expander("Save extracted data to reusable profiles", expanded=False):
+        st.caption(
+            "Save detected developer or technology data as a profile. "
+            "You can then load it instantly when creating future projects."
+        )
+
+        # ── Developer / Proponent profile
+        if "proponent" in extracted:
+            pdata = extracted["proponent"]
+            existing_devs = {p["name"]: p for p in list_profiles("developer")}
+            st.markdown("**Developer / Organisation profile**")
+            dev_name_default = pdata.get("organization_name", "")
+            pc1, pc2 = st.columns([3, 1])
+            with pc1:
+                dev_profile_name = st.text_input(
+                    "Profile name",
+                    value=dev_name_default,
+                    key=f"save_dev_name_{project_id}",
+                    placeholder="Short label e.g. CleanCook Ltd.",
+                )
+            with pc2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Save developer profile", key=f"save_dev_btn_{project_id}", type="primary"):
+                    if dev_profile_name.strip():
+                        dev_data = {
+                            "organisation_name": pdata.get("organization_name", ""),
+                            "country": pdata.get("country", ""),
+                            "contact_name": pdata.get("contact_person", ""),
+                            "email": pdata.get("email", ""),
+                            "address": pdata.get("address", ""),
+                            "website": pdata.get("website", ""),
+                            "registration_number": pdata.get("registration_number", ""),
+                            "registry_account": pdata.get("registry_account", ""),
+                        }
+                        name = dev_profile_name.strip()
+                        if name in existing_devs:
+                            from carbongpt.repository.profile_store import update_profile
+                            update_profile(existing_devs[name]["id"], name, "", dev_data)
+                            st.success(f"Profile '{name}' updated.")
+                        else:
+                            create_profile("developer", name, "", dev_data)
+                            st.success(f"Developer profile '{name}' saved.")
+                        time.sleep(0.4)
+                        st.rerun()
+                    else:
+                        st.warning("Enter a profile name first.")
+
+            with st.container(border=True):
+                st.caption("Detected fields:")
+                col_a, col_b = st.columns(2)
+                for i, (k, v) in enumerate(pdata.items()):
+                    if v:
+                        (col_a if i % 2 == 0 else col_b).markdown(
+                            f"<span style='color:#6b7280;font-size:0.8rem;'>{k.replace('_',' ').title()}:</span> "
+                            f"<span style='font-size:0.85rem;'>{v}</span>",
+                            unsafe_allow_html=True,
+                        )
+
+        # ── Technology profile
+        if "technology" in extracted:
+            tdata = extracted["technology"]
+            st.markdown("**Technology / Stove model profile**")
+            existing_techs = {p["name"]: p for p in list_profiles("technology")}
+            tech_name_default = tdata.get("stove_model", tdata.get("technology_name", ""))
+            tc1, tc2 = st.columns([3, 1])
+            with tc1:
+                tech_profile_name = st.text_input(
+                    "Profile name",
+                    value=tech_name_default,
+                    key=f"save_tech_name_{project_id}",
+                    placeholder="Short label e.g. Envirofit G-3300",
+                )
+            with tc2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Save technology profile", key=f"save_tech_btn_{project_id}", type="primary"):
+                    if tech_profile_name.strip():
+                        tech_data = {
+                            "stove_model": tdata.get("stove_model", tdata.get("technology_name", "")),
+                            "manufacturer": tdata.get("manufacturer", ""),
+                            "baseline_fuel": tdata.get("baseline_fuel", ""),
+                            "project_fuel": tdata.get("project_fuel", ""),
+                            "thermal_efficiency_baseline": tdata.get("baseline_efficiency", ""),
+                            "thermal_efficiency_project": tdata.get("project_efficiency", ""),
+                            "sfc_project_kg_per_day": tdata.get("sfc_project", ""),
+                            "co_emission_factor": tdata.get("co_emission_factor", ""),
+                            "pm_emission_factor": tdata.get("pm_emission_factor", ""),
+                        }
+                        name = tech_profile_name.strip()
+                        if name in existing_techs:
+                            from carbongpt.repository.profile_store import update_profile
+                            update_profile(existing_techs[name]["id"], name, "", tech_data)
+                            st.success(f"Profile '{name}' updated.")
+                        else:
+                            create_profile("technology", name, "", tech_data)
+                            st.success(f"Technology profile '{name}' saved.")
+                        time.sleep(0.4)
+                        st.rerun()
+                    else:
+                        st.warning("Enter a profile name first.")
+
+            with st.container(border=True):
+                st.caption("Detected fields:")
+                col_a, col_b = st.columns(2)
+                for i, (k, v) in enumerate(tdata.items()):
+                    if v:
+                        (col_a if i % 2 == 0 else col_b).markdown(
+                            f"<span style='color:#6b7280;font-size:0.8rem;'>{k.replace('_',' ').title()}:</span> "
+                            f"<span style='font-size:0.85rem;'>{v}</span>",
+                            unsafe_allow_html=True,
+                        )
+
 
 def _render_document_card(project_id, doc):
     doc_type_label = PROJECT_DOC_TYPES.get(doc["doc_type"], doc["doc_type"])
@@ -9814,8 +9951,37 @@ def _render_intake_by_type(project_id, project_type, intake, standard="GoldStand
 
 
 def _render_proponent_card(project_id, intake, standard, prefix=""):
+    from carbongpt.repository.profile_store import list_profiles
+
     prop = intake.get("proponent", {})
     sfx = f"_{prefix}" if prefix else ""
+
+    # ── Profile loader: inject selected profile into session state before widgets render
+    dev_profiles = list_profiles("developer")
+    if dev_profiles:
+        _load_key = f"load_dev_profile_{project_id}{sfx}"
+        profile_options = ["— load from saved profile —"] + [p["name"] for p in dev_profiles]
+        selected_profile_name = st.selectbox(
+            "Load from saved profile",
+            profile_options,
+            index=0,
+            key=_load_key,
+            help="Pre-fill the fields below from a saved developer profile.",
+        )
+        if selected_profile_name != profile_options[0]:
+            chosen = next((p for p in dev_profiles if p["name"] == selected_profile_name), None)
+            if chosen:
+                d = chosen.get("data") or {}
+                _field_map = {
+                    f"setup_prop_org{sfx}_{project_id}": d.get("organisation_name", ""),
+                    f"setup_prop_email{sfx}_{project_id}": d.get("email", ""),
+                    f"setup_prop_contact{sfx}_{project_id}": d.get("contact_name", ""),
+                    f"setup_prop_phone{sfx}_{project_id}": d.get("phone", ""),
+                    f"setup_prop_address{sfx}_{project_id}": d.get("address", ""),
+                }
+                for sk, sv in _field_map.items():
+                    if sv:
+                        st.session_state[sk] = sv
 
     with st.container(border=True):
         std_label = "Project Developer" if standard == "GoldStandard" else "Project Proponent"

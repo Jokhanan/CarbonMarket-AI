@@ -173,6 +173,54 @@ def render_parameter_dashboard(project):
                 st.success(msg)
                 st.rerun()
 
+    # ── Technology profile loader
+    try:
+        from carbongpt.repository.profile_store import list_profiles
+        tech_profiles = list_profiles("technology")
+        if tech_profiles:
+            _tech_load_key = f"load_tech_profile_{project_id}"
+            tech_opts = ["— load from technology profile —"] + [p["name"] for p in tech_profiles]
+            sel_tech = st.selectbox(
+                "Import from technology profile",
+                tech_opts,
+                index=0,
+                key=_tech_load_key,
+                help="Pre-fill SFC, efficiency and emission factor parameters from a saved stove profile.",
+            )
+            if sel_tech != tech_opts[0]:
+                chosen_tech = next((p for p in tech_profiles if p["name"] == sel_tech), None)
+                if chosen_tech:
+                    td = chosen_tech.get("data") or {}
+                    _TECH_PARAM_MAP = {
+                        "SFC_project": "sfc_project_kg_per_day",
+                        "baseline_efficiency": "thermal_efficiency_baseline",
+                        "project_efficiency": "thermal_efficiency_project",
+                        "EF_CO2_baseline": "co_emission_factor",
+                    }
+                    imported = []
+                    for param_key, profile_field in _TECH_PARAM_MAP.items():
+                        raw_val = td.get(profile_field)
+                        if raw_val:
+                            try:
+                                fval = float(str(raw_val).strip())
+                                # Convert percentage to fraction for efficiency fields
+                                if "efficiency" in profile_field and fval > 1:
+                                    fval = round(fval / 100, 4)
+                                update_parameter(
+                                    project_id, param_key,
+                                    value=str(fval),
+                                    source_type="user_override",
+                                    source_reference=f"Loaded from technology profile: {sel_tech}",
+                                )
+                                imported.append(param_key)
+                            except (ValueError, TypeError):
+                                pass
+                    if imported:
+                        st.success(f"Loaded {len(imported)} parameter(s) from '{sel_tech}'.")
+                        import time; time.sleep(0.4); st.rerun()
+    except Exception:
+        pass
+
     st.markdown("---")
 
     categories = ["baseline", "project", "emission_factor", "fuel_property", "activity_data", "monitoring", "leakage", "calculated", "financial", "other"]
