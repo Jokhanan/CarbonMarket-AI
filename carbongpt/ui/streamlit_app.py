@@ -9757,9 +9757,9 @@ def _intel_source_label(intake, category, field_key):
         )
 
 
-def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard", methodology=None, methodology_settings=None):
+def _render_intake_by_type(project_id, project_type, intake, standard="GoldStandard", methodology=None, methodology_settings=None, project=None):
     if project_type in ("standalone_pdd", ""):
-        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings, project=project)
     elif project_type == "poa_programme":
         return _render_intake_poa(project_id, intake, standard)
     elif project_type == "vpa_component":
@@ -9769,7 +9769,7 @@ def _render_intake_by_type(project_id, project_type, intake, standard="GoldStand
     elif project_type == "valver_report":
         return _render_intake_valver(project_id, intake, standard)
     else:
-        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings)
+        return _render_intake_pdd(project_id, intake, standard, methodology=methodology, methodology_settings=methodology_settings, project=project)
 
 
 def _render_proponent_card(project_id, intake, standard, prefix=""):
@@ -9907,8 +9907,9 @@ def _suggest_project_scale(project_id, methodology_settings=None):
     return None, None
 
 
-def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None, methodology_settings=None):
-    from carbongpt.core.methodology_rules import get_methodology_metadata, has_methodology_fuel_choices
+def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=None, methodology_settings=None, project=None):
+    from carbongpt.core.methodology_rules import get_methodology_metadata, has_methodology_fuel_choices, get_crediting_period_default
+    from datetime import date as _cp_date
 
     po = intake.get("project_overview", {})
     tech = intake.get("technology", {})
@@ -9921,6 +9922,7 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
     safeg = intake.get("safeguards", {})
     prior = intake.get("prior_consideration", {})
     legal = intake.get("legal_compliance", {})
+    _proj = project or {}
 
     meth_settings = methodology_settings or {}
     meth_meta = get_methodology_metadata(methodology)
@@ -9942,55 +9944,102 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
         if derived_parts:
             st.caption("Derived from methodology: " + " | ".join(derived_parts))
 
+    # ── Project scale resolution (canonical: Methodology Choices, derived after ER if available)
+    _meth_scale = meth_settings.get("scale_classification", "")
+    _po_scale_raw = po.get("scale", "")
+    _suggested_scale, _suggest_reason = _suggest_project_scale(project_id, methodology_settings)
+    po_scale = _meth_scale or _suggested_scale or _po_scale_raw or ""
+
+    # ── Crediting period defaults from DB record
+    _cp_start_raw = _proj.get("crediting_period_start")
+    _cp_start_val = None
+    if _cp_start_raw:
+        try:
+            _cp_start_val = _cp_date.fromisoformat(str(_cp_start_raw)[:10])
+        except Exception:
+            pass
+    _cp_years_saved = _proj.get("crediting_period_years")
+    _cp_years_default = _cp_years_saved if _cp_years_saved else get_crediting_period_default(standard)
+
     with st.container(border=True):
-        st.markdown("#### Project Facts")
-        st.caption("Only provide facts unique to your project. The AI will draft everything else from your methodology and uploaded documents.")
-        pc1, pc2, pc3 = st.columns(3)
-        with pc1:
-            po_start_date = st.text_input("Project start date", value=po.get("start_date", ""),
-                                           key=f"setup_po_start_{project_id}",
-                                           placeholder="YYYY-MM-DD")
+        st.markdown("#### Project Facts & Key Dates")
+        st.caption("Core facts about your project. Scale is auto-determined from methodology choices and ER results below.")
+
+        # ── Row 1: Project start date + Crediting period start
+        pd1, pd2 = st.columns(2)
+        with pd1:
+            po_start_date = st.text_input(
+                "Project start date",
+                value=po.get("start_date", ""),
+                key=f"setup_po_start_{project_id}",
+                placeholder="YYYY-MM-DD",
+                help="Date the project activity physically began (e.g., first stove distributed)",
+            )
             _intel_source_label(intake, "project_overview", "start_date")
-        with pc2:
-            _meth_scale = (methodology_settings or {}).get("scale_classification", "")
-            _po_scale_raw = po.get("scale", "")
-            _effective_scale = _meth_scale or _po_scale_raw
-            if _meth_scale:
-                st.markdown(f"**Project scale:** {_meth_scale}")
-                st.caption("Read-only — change in Methodology Choices below.")
-                po_scale = _meth_scale
+        with pd2:
+            cp_start = st.date_input(
+                "Crediting period start",
+                value=_cp_start_val,
+                key=f"setup_cp_start_{project_id}",
+                help="Start of the formal crediting period under the chosen standard",
+            )
+
+        # ── Row 2: Crediting duration + Scale (read-only)
+        pd3, pd4 = st.columns(2)
+        with pd3:
+            cp_years = st.number_input(
+                "Crediting period (years)",
+                min_value=1, max_value=30,
+                value=_cp_years_default,
+                step=1,
+                key=f"setup_cp_years_{project_id}",
+            )
+            if cp_start:
+                try:
+                    _cp_end = _cp_date(cp_start.year + cp_years, cp_start.month, cp_start.day)
+                    st.caption(f"End: {_cp_end.isoformat()} — {cp_years} yr — vintages {cp_start.year}–{_cp_end.year - 1}")
+                except Exception:
+                    pass
+        with pd4:
+            if po_scale:
+                _scale_badge = (
+                    f'<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:3px;'
+                    f'font-size:0.85em;font-weight:bold;">{po_scale}</span>'
+                )
+                st.markdown(f"**Project scale:** {_scale_badge}", unsafe_allow_html=True)
+                if _meth_scale:
+                    st.caption("Set in Methodology Choices.")
+                elif _suggested_scale:
+                    st.caption(f"Auto-detected: {_suggest_reason}")
+                else:
+                    st.caption("Will be determined in Methodology Choices below.")
             else:
-                available_scales = SCALE_OPTIONS
-                if meth_meta and meth_meta.get("scale_options"):
-                    available_scales = [""] + meth_meta["scale_options"]
-                _suggested_scale, _suggest_reason = _suggest_project_scale(project_id, methodology_settings)
-                _scale_to_use = _po_scale_raw
-                if not _scale_to_use and _suggested_scale and _suggested_scale in available_scales:
-                    _scale_to_use = _suggested_scale
-                scale_idx = available_scales.index(_scale_to_use) if _scale_to_use in available_scales else 0
-                po_scale = st.selectbox("Project scale", available_scales,
-                                         index=scale_idx,
-                                         key=f"setup_po_scale_{project_id}",
-                                         format_func=lambda x: x if x else "Select scale...")
-                if _suggested_scale and not _po_scale_raw:
-                    st.markdown(
-                        f'<span style="background:#fff3e0;color:#e65100;padding:1px 6px;border-radius:3px;font-size:0.78em;font-weight:bold;">AUTO-DETECTED</span> '
-                        f'<span style="font-size:0.78em;color:#777;">{_suggest_reason}</span>',
-                        unsafe_allow_html=True,
-                    )
-                _intel_source_label(intake, "project_overview", "scale")
-        with pc3:
-            _num_devices = po.get("num_devices")
-            _num_units_legacy = po.get("num_units", "")
-            if _num_devices is not None:
-                st.markdown(f"**Devices deployed:** {int(_num_devices):,}")
-                st.caption("Read-only — change in the Parameters tab.")
-                po_num_units = str(int(_num_devices))
-            else:
-                po_num_units = st.text_input("Number of units", value=_num_units_legacy,
-                                              key=f"setup_po_num_units_{project_id}",
-                                              placeholder="e.g., 50,000 stoves")
-                _intel_source_label(intake, "project_overview", "num_units")
+                st.caption("Project scale will be determined automatically from Methodology Choices below.")
+                st.caption("Typical thresholds: Micro ≤ 10,000 tCO2e/yr | Small ≤ 60,000 | Large > 60,000")
+
+        # ── Devices / units — read-only from Parameters tab
+        _num_devices_str = ""
+        try:
+            from carbongpt.core.parameter_engine import get_parameters_as_dict as _gpd
+            _pdict = _gpd(project_id) or {}
+            _nd_entry = _pdict.get("num_devices", {})
+            _nd_val = _nd_entry.get("value") if isinstance(_nd_entry, dict) else None
+            if _nd_val:
+                _num_devices_str = str(int(float(_nd_val)))
+        except Exception:
+            pass
+        if not _num_devices_str:
+            _num_devices_str = str(po.get("num_devices") or po.get("num_units", ""))
+        if _num_devices_str:
+            st.markdown(
+                f'<span style="font-size:0.88em;">Devices / units: <strong>{_num_devices_str}</strong> '
+                f'<span style="color:#888;">(set in Parameters tab)</span></span>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Device count: set in Parameters tab (num_devices parameter).")
+
+    po_num_units = _num_devices_str or po.get("num_units", "")
 
     po_activity_type = meth_meta["activity_type"] if meth_meta and meth_meta.get("activity_type") else po.get("activity_type", "")
     po_sector = meth_meta["sectoral_scope"] if meth_meta and meth_meta.get("sectoral_scope") else po.get("sectoral_scope", "")
@@ -10048,17 +10097,14 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
         _intel_source_label(intake, "technology", "distribution_method")
 
     with st.container(border=True):
-        st.markdown("#### Location & Beneficiaries")
-        st.caption("Region, coordinates, and country are set in the location section above.")
-        loc_target = st.text_input("Target population", value=loc.get("target_population", ""),
+        st.markdown("#### Target Population")
+        st.caption("Country, region, and map boundary are set in the Location section at the top of Setup.")
+        loc_target = st.text_input("Target population description", value=loc.get("target_population", ""),
                                     key=f"setup_loc_target_{project_id}",
-                                    placeholder="e.g., Rural households in Northern Region")
-        st.caption("AI document context only — used to describe the project beneficiary population.")
+                                    placeholder="e.g., Rural households in Northern Region without clean cooking access")
         _intel_source_label(intake, "location", "target_population")
-        loc_regions = loc.get("regions", "")
-        loc_coords = loc.get("coordinates", "")
 
-    sdg_list = _render_sdg_section(project_id, sdgs_data, methodology_settings=meth_settings)
+    sdg_list = _render_sdg_selection_only(project_id, sdgs_data, methodology_settings=meth_settings)
 
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information the AI should use instead of generating.")
@@ -10110,8 +10156,11 @@ def _render_intake_pdd(project_id, intake, standard="GoldStandard", methodology=
             "distribution_method": tech_distribution,
         },
         "location": {
-            "regions": loc_regions, "coordinates": loc_coords,
             "target_population": loc_target,
+        },
+        "_crediting": {
+            "start": cp_start.isoformat() if cp_start else None,
+            "years": cp_years,
         },
         "baseline_additionality": {
             "baseline_scenario": ba_baseline, "additionality_justification": ba_additionality,
@@ -10211,8 +10260,7 @@ def _render_intake_poa(project_id, intake, standard="GoldStandard"):
             er_total = st.text_input("Total estimated ERs (tCO2e)", value=er.get("total_er_estimate", ""),
                                       key=f"setup_poa_er_total_{project_id}")
 
-    _poa_meth = intake.get("programme", {}).get("methodology", "")
-    sdg_list = _render_sdg_section(project_id, sdgs_data, methodology_hint=_poa_meth)
+    sdg_list = _render_sdg_selection_only(project_id, sdgs_data)
 
     with st.expander("Additional details (optional)", expanded=False):
         st.caption("The AI will draft these sections automatically. Only fill in if you have specific information.")
@@ -10623,6 +10671,103 @@ def _sdg_load_params(project_id):
         return {}
 
 
+def _render_sdg_selection_only(project_id, sdgs_data, methodology_settings=None):
+    """
+    Lightweight SDG picker for the Setup tab.
+    Shows only: which SDGs this project targets + monitoring approach per SDG.
+    Quantitative indicator values (baseline/project values) are deferred to
+    after ER simulation — shown in the full _render_sdg_section call via the
+    ER Simulator tab.
+    """
+    meth_s = methodology_settings or {}
+    baseline_fuel = meth_s.get("baseline_fuel", "").lower()
+    is_cookstove = bool(
+        meth_s.get("calculation_method")
+        or meth_s.get("baseline_fuel")
+    )
+    is_biomass_baseline = baseline_fuel in ("wood", "charcoal", "biomass", "crop_residue", "dung", "crop residues")
+    suggested_sdgs = _COOKSTOVE_WOOD_SDGS if (is_cookstove and is_biomass_baseline) else (
+        _COOKSTOVE_CORE_SDGS if is_cookstove else set()
+    )
+
+    existing_sdgs = sdgs_data.get("selected_sdgs", [])
+    existing_map = {}
+    for s in existing_sdgs:
+        gn = str(s.get("goal_number", ""))
+        existing_map[gn] = s
+
+    with st.container(border=True):
+        st.markdown("#### SDGs & Co-benefits")
+        st.caption(
+            "Select which Sustainable Development Goals this project contributes to. "
+            "Quantitative indicator values (tCO2e, households, etc.) will be auto-derived "
+            "in the ER Simulator tab once you have run an emission reduction scenario."
+        )
+
+        if suggested_sdgs:
+            _sugg_key = f"sdg_suggestion_applied_{project_id}"
+            if not existing_map and _sugg_key not in st.session_state:
+                st.info(
+                    f"Cookstove projects typically report SDGs "
+                    f"{', '.join(sorted(suggested_sdgs, key=int))}. Click to pre-select."
+                )
+                if st.button("Pre-select suggested SDGs", key=f"sdg_apply_sugg_setup_{project_id}"):
+                    st.session_state[_sugg_key] = True
+                    st.rerun()
+
+        sdg_list = []
+        for goal_num, goal_name in _SDG_GOALS:
+            default_selected = (
+                goal_num in existing_map
+                or (not existing_map and goal_num in suggested_sdgs
+                    and f"sdg_suggestion_applied_{project_id}" in st.session_state)
+            )
+            is_selected = st.checkbox(
+                f"SDG {goal_num} — {goal_name}",
+                value=default_selected,
+                key=f"setup_sdg_sel_{project_id}_{goal_num}",
+            )
+            if not is_selected:
+                continue
+
+            existing_entry = existing_map.get(goal_num, {})
+            existing_indicators = existing_entry.get("indicators", [])
+            old_contrib = existing_entry.get("contribution_description", "")
+            old_meas = existing_indicators[0].get("measurement_approach", "") if existing_indicators else ""
+            default_desc = old_contrib or old_meas
+
+            with st.container(border=True):
+                meas = st.text_area(
+                    f"SDG {goal_num} — contribution & monitoring approach",
+                    value=default_desc,
+                    key=f"setup_sdg_desc_{project_id}_{goal_num}",
+                    placeholder=(
+                        "Briefly describe how this project contributes to this goal "
+                        "and how it will be monitored. Quantitative values are set after ER simulation."
+                    ),
+                    height=60,
+                )
+
+            ind_name = existing_indicators[0].get("indicator_name", "") if existing_indicators else ""
+            bl_val = existing_indicators[0].get("baseline_value", "") if existing_indicators else ""
+            pj_val = existing_indicators[0].get("project_value", "") if existing_indicators else ""
+            ev_tier = existing_indicators[0].get("evidence_tier", "") if existing_indicators else ""
+
+            sdg_list.append({
+                "goal_number": goal_num,
+                "contribution_description": meas,
+                "indicators": [{
+                    "indicator_name": ind_name,
+                    "baseline_value": bl_val,
+                    "project_value": pj_val,
+                    "evidence_tier": ev_tier,
+                    "measurement_approach": meas,
+                }],
+            })
+
+    return sdg_list
+
+
 def _render_sdg_section(project_id, sdgs_data, methodology_settings=None, methodology_hint=""):
     meth_s = methodology_settings or {}
     baseline_fuel = meth_s.get("baseline_fuel", "").lower()
@@ -10955,43 +11100,25 @@ def _render_project_settings(project):
                                    if project.get("status") in STATUS_LABELS else 0,
                                    key=f"setup_status_{project_id}")
 
-    intake_data = _render_intake_by_type(project_id, project_type, intake, standard=new_standard, methodology=new_methodology, methodology_settings=project.get("methodology_settings") or {})
+    intake_data = _render_intake_by_type(
+        project_id, project_type, intake,
+        standard=new_standard, methodology=new_methodology,
+        methodology_settings=project.get("methodology_settings") or {},
+        project=project,
+    )
 
-    st.divider()
-    st.subheader("Crediting Period")
-
+    # ── Crediting period is now rendered inside _render_intake_pdd (Project Facts & Key Dates).
+    # ── Read the values back from intake_data for the save path.
     from datetime import date as _date
-    from carbongpt.core.methodology_rules import get_crediting_period_default
-
-    cp_start_raw = project.get("crediting_period_start")
-    cp_start_val = None
-    if cp_start_raw:
+    _cp_block = intake_data.get("_crediting", {}) if isinstance(intake_data, dict) else {}
+    _cp_start_str = _cp_block.get("start")
+    cp_start = None
+    if _cp_start_str:
         try:
-            if isinstance(cp_start_raw, str):
-                cp_start_val = _date.fromisoformat(cp_start_raw[:10])
-            else:
-                cp_start_val = cp_start_raw
+            cp_start = _date.fromisoformat(_cp_start_str)
         except Exception:
             pass
-    cp_start = st.date_input(
-        "Crediting period start date",
-        value=cp_start_val,
-        key=f"setup_cp_start_{project_id}",
-    )
-    saved_cp_years = project.get("crediting_period_years")
-    cp_default = saved_cp_years if saved_cp_years else get_crediting_period_default(new_standard)
-    cp_years = st.number_input(
-        "Crediting period (years)",
-        min_value=1, max_value=30,
-        value=cp_default,
-        key=f"setup_cp_years_{project_id}",
-    )
-    if cp_start:
-        cp_end = _date(cp_start.year + cp_years, cp_start.month, cp_start.day) if cp_start else None
-        if cp_end:
-            st.caption(f"Crediting period: {cp_start.isoformat()} to {cp_end.isoformat()} ({cp_years} years)")
-            vintages = [str(cp_start.year + i) for i in range(cp_years)]
-            st.caption(f"Vintages: {', '.join(vintages)}")
+    cp_years = _cp_block.get("years") or project.get("crediting_period_years") or 7
 
     existing_settings = project.get("project_settings") or {}
 
@@ -11099,6 +11226,29 @@ def _render_project_settings(project):
 
     st.divider()
 
+    # ── Full SDG Indicators section (quantitative values — placed after methodology choices)
+    # Users first select SDGs in the intake section above; here they fill in indicator values
+    # after ER context is established.
+    _sdgs_current = intake_data.get("sdgs", {}) if isinstance(intake_data, dict) else {}
+    _sdg_has_selection = bool(_sdgs_current.get("selected_sdgs"))
+    if _sdg_has_selection:
+        with st.expander("SDG Indicator Values (post-methodology)", expanded=False):
+            st.caption(
+                "Now that methodology choices are defined, you can fill in quantitative "
+                "indicator values for your selected SDGs. These feed directly into the PDD document. "
+                "For GS-MECD projects, SDG 13 values are auto-derived from ER simulation results."
+            )
+            _sdg_full_list = _render_sdg_section(
+                project_id, _sdgs_current,
+                methodology_settings=project.get("methodology_settings") or {},
+            )
+            if _sdg_full_list:
+                intake_data["sdgs"] = {"selected_sdgs": _sdg_full_list}
+    elif new_methodology:
+        st.caption("SDG indicator values will be available here after selecting goals in the intake section above.")
+
+    st.divider()
+
     if st.button("Save All Changes", key=f"save_setup_{project_id}", type="primary"):
         methodology_changed = new_methodology != project.get("methodology")
         if methodology_changed:
@@ -11136,6 +11286,9 @@ def _render_project_settings(project):
 
         if _mecd_basket_data is not None:
             intake_data["baseline_fuels"] = _mecd_basket_data
+
+        # Strip the internal _crediting transport key before persisting intake JSON.
+        intake_data.pop("_crediting", None)
 
         update_payload = {
             "name": new_name,

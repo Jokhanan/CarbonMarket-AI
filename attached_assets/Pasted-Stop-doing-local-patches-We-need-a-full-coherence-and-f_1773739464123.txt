@@ -1,0 +1,209 @@
+Stop doing local patches.
+
+We need a full coherence and flow refactor of the application.
+
+This is now a structural repair task, not a feature task.
+
+The current problem is not one isolated bug. The problem is that the application still feels like multiple partially-connected systems asking for overlapping information at different stages.
+
+Examples of still-broken behavior:
+- map boundary behavior regressed from polygon/boundary back to single point
+- distribution location is asked, then location/region/coordinates are asked again later
+- baseline fuel / project fuel are still effectively duplicated across setup / methodology / parameters
+- SDGs are still placed too early in the flow
+- crediting period is placed in the wrong part of setup
+- project scale is asked before downstream calculations are finalized
+- some defaults are still mixed or presented in confusing ways
+- the Project Brain was added, but it has not solved the underlying workflow incoherence
+- there may now be duplicated logic / duplicated code paths creating contradictory UI behavior
+
+We are losing time and credits by patching symptoms.
+Now we need a strict product-flow repair.
+
+==================================================
+MISSION
+==================================================
+
+You must act as:
+- senior carbon project developer
+- senior product architect
+- senior full-stack refactoring engineer
+- senior workflow designer
+
+Your job is to think like a real carbon project developer using this system from beginning to end, then repair the flow so it becomes coherent, non-duplicative, and trustworthy.
+
+Do NOT begin with coding.
+First do a structural diagnosis of the full flow.
+
+==================================================
+PART 1 — FULL FLOW INVENTORY
+==================================================
+
+Audit the entire project flow screen by screen and code path by code path.
+
+Map the real user flow from:
+- create project
+- setup
+- documents
+- parameters
+- ER simulation
+- SDG
+- writing
+- review
+- audit
+- export
+
+For each step, identify:
+1. what information is asked
+2. what should be asked there
+3. what is duplicated from earlier steps
+4. what should be derived later instead of asked now
+5. what should be read-only because it already came from an earlier canonical source
+6. where the same concept is represented by multiple disconnected UI/code paths
+
+Build a complete flow inventory before changing anything.
+
+==================================================
+PART 2 — SINGLE SOURCE OF TRUTH AUDIT
+==================================================
+
+For each core concept, identify the canonical source of truth and all duplicate paths.
+
+Core concepts include at minimum:
+- project location
+- country
+- region / coordinates / distribution area
+- baseline fuel
+- project fuel
+- project developer
+- technology / stove model
+- project start date
+- crediting period
+- methodology choice / method_id
+- project scale
+- baseline/project fuel consumption
+- SDG quantitative indicators
+
+For each concept:
+- identify all current locations where it is set or re-asked
+- identify contradictions
+- choose one canonical source
+- identify where downstream screens must become read-only reflections instead of editable duplicates
+
+==================================================
+PART 3 — CORRECT TARGET FLOW
+==================================================
+
+Design the correct project flow for this app.
+
+The flow should be simple and logical for a real developer.
+
+A likely target structure is something like:
+1. Core project setup
+2. Supporting documents
+3. Methodology/parameter determination
+4. ER simulation
+5. SDG derivation
+6. Drafting / review / audit / export
+
+But do not assume blindly — validate this against the codebase and product logic.
+
+For the final proposed flow, explicitly state:
+- what belongs in Setup
+- what belongs in Documents
+- what belongs in Parameters
+- what belongs after ER simulation
+- what belongs in Writing/Audit
+- what should disappear entirely because it is duplicate
+
+==================================================
+PART 4 — SPECIFIC REPAIRS REQUIRED
+==================================================
+
+You must specifically audit and repair these areas:
+
+A. MAP / LOCATION
+- restore boundary/polygon behavior if it regressed
+- ensure location is not asked redundantly in multiple places
+- if the project area is already selected earlier, downstream location fields must reflect that instead of asking again unless additional detail is actually required
+
+B. SDG FLOW
+- move SDG quantitative logic to after ER simulation if that is the correct dependency order
+- do not ask for values that depend on downstream calculations
+- make derived SDGs appear only when the upstream calculations exist
+
+C. CREDITING PERIOD / DATES
+- place project start date and crediting period in a logically consistent area
+- do not separate tightly related temporal fields into arbitrary parts of the flow
+
+D. METHODOLOGY CHOICES / FUELS
+- remove repeated requests for baseline/project fuel where the same choice has already been made
+- ensure methodology choice and fuel logic are linked coherently
+
+E. PARAMETERS
+- ensure parameter screens do not re-ask setup concepts
+- ensure derived values are not asked as independent inputs
+- ensure defaults are methodology-consistent and not mixed
+
+==================================================
+PART 5 — DUPLICATED CODE PATH AUDIT
+==================================================
+
+Audit the codebase for duplicated or conflicting logic paths related to:
+- setup values
+- methodology values
+- parameter initialization
+- location handling
+- SDG placement
+- scale determination
+- map rendering
+- derived parameter logic
+
+Identify where there are:
+- duplicate render paths
+- duplicate sources of truth
+- stale old code still active
+- inconsistent logic between setup and parameters
+- inconsistent logic between displayed UI and saved DB state
+
+Then remove or unify the conflicting paths safely.
+
+==================================================
+PART 6 — IMPLEMENTATION STRATEGY
+==================================================
+
+After the diagnosis, implement the refactor carefully.
+
+Rules:
+- prioritize correctness and coherence over adding features
+- remove duplication
+- unify code paths
+- preserve stability
+- do not layer new logic on top of contradictory old logic
+- if needed, replace old paths instead of patching them again
+
+The goal is to make the flow feel like one system, not many stitched-together screens.
+
+==================================================
+PART 7 — REQUIRED FINAL OUTPUT
+==================================================
+
+At the end, provide:
+
+1. Full diagnosis of the incoherent flow
+2. List of duplicated concepts found
+3. List of duplicated/conflicting code paths found
+4. Final target flow you implemented
+5. What changed in setup
+6. What changed in documents
+7. What changed in parameters
+8. What moved after ER simulation
+9. What was made read-only
+10. What duplicate screens/fields were removed or unified
+11. What was fixed in map/location handling
+12. Confirmation that the app starts cleanly
+
+This is the priority now.
+Do not add new product domains.
+Do not move to later roadmap phases.
+Repair the coherence of the product flow first.
