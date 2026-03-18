@@ -4786,8 +4786,12 @@ def _render_project_card(proj, indent=False, child_count=0):
 
 
 def _render_import_document_wizard(existing_projects, step_key):
-    st.markdown("**Import: Upload an existing document**")
-    st.caption("Upload a PDD, PoA-DD, Monitoring Report, or similar carbon project document. The system will extract the key project details and pre-fill the wizard for you.")
+    st.markdown("**Import a project from an existing document**")
+    st.caption(
+        "Upload a PDD, PoA-DD, Monitoring Report, or similar document that already exists "
+        "(e.g., from Gold Standard or Verra registry). The AI will extract project name, country, "
+        "methodology, monitoring period, and other key details to create a new project pre-filled with this information."
+    )
 
     import_key = "import_extracted"
     uploaded = st.file_uploader(
@@ -4909,22 +4913,33 @@ def _render_new_project_wizard(existing_projects):
             p1, p2, p3 = st.columns(3)
             with p1:
                 with st.container(border=True):
-                    st.markdown("**Start a new project**")
-                    st.caption("Register a Standalone project or Programme of Activities from scratch.")
-                    if st.button("New project", key="path_new_proj", use_container_width=True, type="primary"):
+                    st.markdown("**Draft a new project**")
+                    st.caption(
+                        "You have no document yet. Start here to draft a PDD or PoA-DD from scratch. "
+                        "The wizard walks you through methodology, parameters, and ER estimation."
+                    )
+                    if st.button("Start drafting", key="path_new_proj", use_container_width=True, type="primary"):
                         st.session_state["wizard_path"] = "new"
                         st.rerun()
             with p2:
                 with st.container(border=True):
-                    st.markdown("**Add to existing project**")
-                    st.caption("Add a Monitoring Report, VPA-DD, or Validation Report to a project you already have.")
-                    if st.button("Add to existing", key="path_add_existing", use_container_width=True):
+                    st.markdown("**Add a document to an existing project**")
+                    st.caption(
+                        "Your PDD is already in CarbonGPT and you want to add a Monitoring Report, "
+                        "Validation Report, or VPA-DD. Optionally upload a previous version — "
+                        "the AI will extract baseline data to pre-fill the new document."
+                    )
+                    if st.button("Add document", key="path_add_existing", use_container_width=True):
                         st.session_state["wizard_path"] = "add_existing"
                         st.rerun()
             with p3:
                 with st.container(border=True):
-                    st.markdown("**Import existing document**")
-                    st.caption("Upload a PDD, Monitoring Report, or PoA-DD — the system extracts the project details for you.")
+                    st.markdown("**Import a project from an existing document**")
+                    st.caption(
+                        "You have a PDD, MR, or PoA-DD already published (e.g., on Gold Standard or Verra). "
+                        "Upload it and the AI creates a new project pre-filled with the extracted details. "
+                        "Use this to bring an existing project into CarbonGPT."
+                    )
                     if st.button("Import document", key="path_import_doc", use_container_width=True):
                         st.session_state["wizard_path"] = "import"
                         st.rerun()
@@ -4956,7 +4971,7 @@ def _render_new_project_wizard(existing_projects):
                 st.rerun()
 
         elif wizard_path == "add_existing":
-            st.markdown("**Step 1: Add to existing project**")
+            st.markdown("**Step 1: Add a document to an existing project**")
             parents = [p for p in existing_projects if p.get("project_type") in ("standalone_pdd", "poa_programme", "vpa_component")]
             if not parents:
                 st.warning("No existing projects found. Create a project first.")
@@ -4969,7 +4984,7 @@ def _render_new_project_wizard(existing_projects):
                     for p in parents
                 }
                 chosen_parent_id = st.selectbox(
-                    "Select the parent project",
+                    "Select the project",
                     list(parent_opts.keys()),
                     format_func=lambda x: parent_opts.get(x, str(x)),
                     key="wizard_add_parent_pick",
@@ -4995,10 +5010,67 @@ def _render_new_project_wizard(existing_projects):
                 chosen_child_type = child_type_keys[child_type_labels.index(chosen_child_label)]
                 st.caption(avail_child_types[chosen_child_type]["description"])
 
+                # ── Optional: upload a previous version for AI extraction
+                st.markdown("---")
+                st.markdown("**Upload a previous version for AI extraction (optional)**")
+                st.caption(
+                    "If you have a previous Monitoring Report, Validation Report, or similar document, "
+                    "upload it here. The AI will extract baseline data (monitoring period, emission reductions, "
+                    "device usage rates, etc.) to pre-fill the new document wizard."
+                )
+                _add_existing_extract_key = "add_existing_extracted"
+                uploaded_prev = st.file_uploader(
+                    "Previous document (PDF or DOCX)",
+                    type=["pdf", "docx"],
+                    key="add_existing_file_upload",
+                )
+                if uploaded_prev is not None and _add_existing_extract_key not in st.session_state:
+                    with st.spinner("Extracting data from previous document..."):
+                        try:
+                            import requests as _req
+                            resp = _req.post(
+                                f"{API_BASE}/projects/import-document",
+                                files={"file": (uploaded_prev.name, uploaded_prev.getvalue(), uploaded_prev.type)},
+                                timeout=60,
+                            )
+                            if resp.status_code == 200:
+                                _exdata = resp.json().get("extracted", {})
+                                st.session_state[_add_existing_extract_key] = _exdata
+                                st.session_state["add_existing_text_len"] = resp.json().get("text_length", 0)
+                            else:
+                                st.error("Could not parse the document. You can continue without extraction.")
+                        except Exception as _e:
+                            st.error(f"Extraction failed: {_e}")
+
+                _prev_extracted = st.session_state.get(_add_existing_extract_key)
+                if _prev_extracted:
+                    _chars = st.session_state.get("add_existing_text_len", 0)
+                    st.success(f"Document parsed ({_chars:,} characters). The extracted data will pre-fill the wizard.")
+                    with st.expander("Preview extracted fields", expanded=False):
+                        _preview_cols = st.columns(2)
+                        _fields_to_show = [
+                            ("project_name", "Project name"), ("methodology", "Methodology"),
+                            ("monitoring_period_start", "Monitoring start"), ("monitoring_period_end", "Monitoring end"),
+                            ("country", "Country"), ("description", "Description"),
+                        ]
+                        for i, (fk, fl) in enumerate(_fields_to_show):
+                            _val = _prev_extracted.get(fk)
+                            if _val:
+                                _preview_cols[i % 2].markdown(
+                                    f"<span style='color:#6b7280;font-size:0.8rem;'>{fl}:</span> "
+                                    f"<span style='font-size:0.85rem;'>{_val}</span>",
+                                    unsafe_allow_html=True,
+                                )
+                    if st.button("Clear extracted data", key="clear_add_existing_extract"):
+                        st.session_state.pop(_add_existing_extract_key, None)
+                        st.rerun()
+
+                st.markdown("---")
                 c_back, c_next = st.columns([1, 3])
                 with c_back:
                     if st.button("Back", key="path_back_existing"):
                         st.session_state.pop("wizard_path", None)
+                        st.session_state.pop(_add_existing_extract_key, None)
                         st.rerun()
                 with c_next:
                     if st.button("Continue", key="path_continue_existing", type="primary"):
@@ -5007,6 +5079,17 @@ def _render_new_project_wizard(existing_projects):
                         if chosen_parent:
                             st.session_state["wizard_standard_saved"] = chosen_parent.get("standard", "GoldStandard")
                             st.session_state["wizard_country_saved"] = chosen_parent.get("country", "")
+                        # If we have extracted data, seed the Step 2 fields from it
+                        if _prev_extracted:
+                            if _prev_extracted.get("methodology"):
+                                st.session_state["wizard_methodology_step2"] = _prev_extracted["methodology"]
+                            if _prev_extracted.get("monitoring_period_start"):
+                                st.session_state["wizard_mon_start_saved"] = _prev_extracted["monitoring_period_start"]
+                            if _prev_extracted.get("monitoring_period_end"):
+                                st.session_state["wizard_mon_end_saved"] = _prev_extracted["monitoring_period_end"]
+                            if _prev_extracted.get("description"):
+                                st.session_state["wizard_desc_saved"] = _prev_extracted["description"]
+                            st.session_state.pop(_add_existing_extract_key, None)
                         st.session_state[step_key] = 2
                         st.rerun()
 
