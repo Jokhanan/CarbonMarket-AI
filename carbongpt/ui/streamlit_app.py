@@ -5390,15 +5390,43 @@ def _render_new_project_wizard(existing_projects):
         if _compat_activity == "Cookstoves / Thermal energy":
             bl_fuel_choice = bl_fuel_top if (bl_fuel_top in TPDDTEC_BASELINE_FUEL_OPTIONS) else "wood"
             pj_fuel_choice = pj_fuel_top if (pj_fuel_top in TPDDTEC_PROJECT_FUEL_OPTIONS) else "wood"
+
+            # ── Number of devices asked FIRST so scale can be derived from it
             st.markdown("---")
-            st.markdown("**Scale**")
-            scale_labels = [f"{s} ({TPDDTEC_SCALE_DESCRIPTIONS[s]})" for s in TPDDTEC_SCALE_OPTIONS]
-            scale_choice_label = st.radio(
-                "Expected scale of the project",
-                scale_labels,
-                key="wizard_scale_label",
+            wizard_num_devices = st.number_input(
+                "Number of cookstoves / devices to be deployed",
+                min_value=0, max_value=10_000_000,
+                value=int(st.session_state.get("wizard_num_devices", 0)),
+                step=1,
+                key="wizard_num_devices",
+                help="Used to automatically determine project scale. You can refine this later in the Parameters tab.",
             )
-            scale_choice = TPDDTEC_SCALE_OPTIONS[scale_labels.index(scale_choice_label)]
+
+            # ── Auto-derive scale from num_devices (typical 0.8 tCO2e/device/yr for cookstoves)
+            _MICRO_THRESHOLD = 10_000   # tCO2e/yr
+            _TYPICAL_ER_PER_DEVICE = 0.8
+            if wizard_num_devices > 0:
+                _est_annual_er = wizard_num_devices * _TYPICAL_ER_PER_DEVICE
+                if _est_annual_er <= _MICRO_THRESHOLD:
+                    scale_choice = "Micro-scale"
+                    _scale_reason = (
+                        f"Estimated ~{_est_annual_er:,.0f} tCO2e/yr "
+                        f"({wizard_num_devices:,} devices × 0.8 tCO2e/device/yr) — within the 10,000 tCO2e/yr threshold"
+                    )
+                else:
+                    scale_choice = "Small-scale"
+                    _scale_reason = (
+                        f"Estimated ~{_est_annual_er:,.0f} tCO2e/yr "
+                        f"({wizard_num_devices:,} devices × 0.8 tCO2e/device/yr) — above the 10,000 tCO2e/yr threshold"
+                    )
+                st.caption(f"Scale auto-detected: **{scale_choice}** — {_scale_reason}. "
+                           f"This will be confirmed after your first ER simulation.")
+            else:
+                scale_choice = "Micro-scale"
+                st.caption(
+                    "Scale: **Micro-scale** (default — enter number of devices above to auto-detect). "
+                    "Confirmed automatically after your first ER simulation."
+                )
 
             meth_info = derive_methodology_from_fuels(saved_standard, bl_fuel_choice, pj_fuel_choice)
             method_result = derive_tpddtec_method(bl_fuel_choice, pj_fuel_choice, scale_choice, "measured")
@@ -5453,18 +5481,9 @@ def _render_new_project_wizard(existing_projects):
                         bl_label = TPDDTEC_FUEL_DISPLAY.get(bl_fuel_choice, bl_fuel_choice)
                         pj_label = TPDDTEC_FUEL_DISPLAY.get(pj_fuel_choice, pj_fuel_choice)
                         st.markdown(f"Fuel: **{bl_label} → {pj_label}**")
-                        st.markdown(f"Scale: **{scale_choice}**")
+                        st.markdown(f"Scale: **{scale_choice}** (auto-derived)")
                         leakage_label = "5% standard deduction" if leakage_option == "option_1" else "Project-specific"
                         st.caption(f"Leakage: {leakage_label}")
-
-            wizard_num_devices = st.number_input(
-                "Number of cookstoves / devices to be deployed",
-                min_value=0, max_value=10_000_000,
-                value=int(st.session_state.get("wizard_num_devices", 0)),
-                step=1,
-                key="wizard_num_devices",
-                help="Structured activity data — used by the calculation engine. Enter 0 to set later in the Parameters tab.",
-            )
 
             bk1, cr2 = st.columns([1, 3])
             with bk1:
@@ -9900,11 +9919,27 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                     if not scale_val:
                         # Fallback to intake field
                         scale_val = intake.get("project_overview", {}).get("scale", "")
+                    if not scale_val:
+                        # Auto-suggest from ER or num_devices instead of asking user
+                        _sugg_scale, _sugg_reason = _suggest_project_scale(project_id, existing_settings)
+                        if _sugg_scale:
+                            scale_val = _sugg_scale
+                    if not scale_val:
+                        # Last resort: default to Micro-scale for new projects
+                        scale_val = "Micro-scale"
                     if scale_val:
                         scale_idx = _fuzzy_option_index(scale_val, options)
                         matched = options[scale_idx]
                         new_settings[dim_key] = matched
                         auto_derived_dims.add(dim_key)
+                        _sugg_reason_local = locals().get("_sugg_reason")
+                        if _sugg_reason_local:
+                            st.caption(f"Scale: **{matched}** — {_sugg_reason_local}. Confirmed automatically after ER simulation.")
+                        else:
+                            st.caption(
+                                f"Scale: **{matched}** — set at project creation. "
+                                "Recalculated automatically after your first ER simulation."
+                            )
                         continue
 
                 current_val = existing_settings.get(dim_key, "")
