@@ -9913,15 +9913,24 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                         new_settings[dim_key] = matched
                         auto_derived_dims.add(dim_key)
                         _sugg_reason_local = locals().get("_sugg_reason")
+                        _scale_source = existing_settings.get("scale_classification_source", "")
                         if _sugg_reason_local:
                             st.caption(
                                 f"Scale: **{matched}** — derived from ER simulation results "
                                 f"({_sugg_reason_local})."
                             )
+                        elif _scale_source == "er_simulation":
+                            st.caption(
+                                f"Scale: **{matched}** — confirmed from ER simulation results "
+                                f"(≤ 10,000 tCO2e/yr → Micro-scale; ≤ 60 GWh/yr → Small-scale; > 60 GWh/yr → Large-scale). "
+                                "Updated automatically each time you save or select a scenario."
+                            )
                         else:
                             st.caption(
-                                f"Scale: **{matched}** — default until your first ER simulation, "
-                                "which will confirm or update this automatically."
+                                f"Scale: **{matched}** — provisional default. "
+                                "Confirmed automatically after your first ER simulation "
+                                "(thresholds: ≤ 10,000 tCO2e/yr → Micro-scale; ≤ 60 GWh/yr energy saved → Small-scale; "
+                                "> 60 GWh/yr → Large-scale per CDM AMS-II.G)."
                             )
                         continue
 

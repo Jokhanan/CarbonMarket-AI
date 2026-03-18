@@ -222,6 +222,9 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     total_be = 0.0
     total_pe = 0.0
     total_le = 0.0
+    # Energy saved accumulator for AMS-II.G Large-scale threshold (60 GWh/yr)
+    # ec_b / ec_p are in TJ/device/yr; 1 TJ = 1/3.6 GWh → divide by 3.6 to get GWh
+    total_energy_saved_tj = 0.0
 
     for y in range(crediting_years):
         year_num = y + 1
@@ -235,11 +238,14 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         gross_er = be_y - pe_y
         le_y = gross_er * leakage_pct if leakage_pct > 0 else 0.0
         er_y = gross_er - le_y
+        # Energy saved this year (TJ) = (baseline EC - project EC) per device × active devices
+        energy_saved_tj_y = (ec_b - ec_p) * active_devices
 
         total_er += er_y
         total_be += be_y
         total_pe += pe_y
         total_le += le_y
+        total_energy_saved_tj += energy_saved_tj_y
 
         years.append({
             "year_number": year_num,
@@ -263,6 +269,9 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "net_er_formula": f"{gross_er:.2f} - {le_y:.2f}",
         })
 
+    # Average annual energy saved in GWh/yr (AMS-II.G scale threshold: 60 GWh/yr)
+    avg_energy_saved_gwh_yr = round((total_energy_saved_tj / crediting_years) / 3.6, 2)
+
     return {
         "calculation_steps": calculation_steps,
         "years": years,
@@ -272,6 +281,7 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             "total_project": round(total_pe, 2),
             "total_leakage": round(total_le, 2),
             "average_annual_er": round(total_er / crediting_years, 2),
+            "energy_saved_gwh_yr": avg_energy_saved_gwh_yr,
             "crediting_years": crediting_years,
             "methodology": methodology,
         },
@@ -481,6 +491,7 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
     total_pe = 0.0
     total_le = 0.0
     cumulative_er = 0.0
+    total_energy_saved_tj = 0.0   # for AMS-II.G Large-scale threshold (60 GWh/yr)
     deployment_timeline = []
 
     for y in range(crediting_years):
@@ -550,6 +561,8 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         total_pe += pe_y
         total_le += le_y
         cumulative_er += er_y
+        # Energy saved this year (TJ) = (ec_b - ec_p) per device × effectively_used device-years
+        total_energy_saved_tj += (ec_b - ec_p) * effectively_used
 
         cumulative_deployed = sum(c["count"] for c in cohorts if c["month"] < year_end_month)
 
@@ -651,6 +664,7 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
             "total_project": round(total_pe, 2),
             "total_leakage": round(total_le, 2),
             "average_annual_er": round(total_er / crediting_years, 2) if crediting_years > 0 else 0,
+            "energy_saved_gwh_yr": round((total_energy_saved_tj / crediting_years) / 3.6, 2) if crediting_years > 0 else 0,
             "crediting_years": crediting_years,
             "methodology": methodology,
             "deployment_mode": deployment_mode,
@@ -986,25 +1000,39 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
 
 VALID_SCENARIO_PURPOSES = ("exploratory", "comparison", "shortlisted", "selected_for_drafting", "archived")
 
-_MICRO_SCALE_THRESHOLD_TCO2_YR = 10_000  # tCO2e/yr — TPDDTEC v4.0 applicability threshold
+_MICRO_SCALE_THRESHOLD_TCO2_YR = 10_000  # tCO2e/yr — GoldStandard micro-scale threshold
+_LARGE_SCALE_THRESHOLD_GWH_YR  = 60.0   # GWh/yr   — CDM AMS-II.G Large-scale threshold
 
 
 def _auto_update_scale_from_er(project_id, summary):
     """
     After a scenario is saved or selected, derive scale_classification from
-    average_annual_er and persist it to methodology_settings.
+    ER results and persist it to methodology_settings.
 
-    Rules (TPDDTEC / VM0050 cookstoves):
-        ≤ 10,000 tCO2e/yr  → Micro-scale
-        >  10,000 tCO2e/yr → Small-scale
-        (Large-scale threshold of >60 GWh/yr is effectively unreachable for cookstoves)
+    Two-step classification per TPDDTEC v4.0 / CDM AMS-II.G:
+        Step 1 — tCO2e/yr threshold (GoldStandard micro-scale):
+            ≤ 10,000 tCO2e/yr  → Micro-scale
+
+        Step 2 — GWh/yr threshold (CDM AMS-II.G Section 1 small-scale boundary):
+            > 10,000 tCO2e/yr AND ≤ 60 GWh/yr energy saved  → Small-scale
+            > 60 GWh/yr energy saved                          → Large-scale
+
+    Note: energy_saved_gwh_yr is available in the summary only for TPDDTEC/VM0050
+    cookstove simulations. If absent, the function only applies the tCO2e threshold.
     """
     try:
         annual_er = float(summary.get("average_annual_er") or 0)
         if annual_er <= 0:
             return  # No reliable ER yet — leave scale unset
 
-        new_scale = "Micro-scale" if annual_er <= _MICRO_SCALE_THRESHOLD_TCO2_YR else "Small-scale"
+        if annual_er <= _MICRO_SCALE_THRESHOLD_TCO2_YR:
+            new_scale = "Micro-scale"
+        else:
+            energy_gwh = float(summary.get("energy_saved_gwh_yr") or 0)
+            if energy_gwh > _LARGE_SCALE_THRESHOLD_GWH_YR:
+                new_scale = "Large-scale"
+            else:
+                new_scale = "Small-scale"
 
         with get_cursor() as cur:
             cur.execute(
@@ -1018,13 +1046,15 @@ def _auto_update_scale_from_er(project_id, summary):
             if meth_settings.get("scale_classification") == new_scale:
                 return  # Already correct — skip update
             meth_settings["scale_classification"] = new_scale
+            meth_settings["scale_classification_source"] = "er_simulation"
 
         from carbongpt.repository.store import update_user_project
         update_user_project(project_id, methodology_settings=meth_settings)
+        energy_gwh = float(summary.get("energy_saved_gwh_yr") or 0)
         logging.info(
             "scale_classification auto-updated to %s for project %s "
-            "(avg annual ER: %.0f tCO2e/yr)",
-            new_scale, project_id, annual_er,
+            "(avg annual ER: %.0f tCO2e/yr, energy saved: %.1f GWh/yr)",
+            new_scale, project_id, annual_er, energy_gwh,
         )
     except Exception:
         logging.exception("_auto_update_scale_from_er failed for project %s", project_id)
