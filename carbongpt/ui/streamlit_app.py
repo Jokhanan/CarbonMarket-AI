@@ -5391,7 +5391,7 @@ def _render_new_project_wizard(existing_projects):
             bl_fuel_choice = bl_fuel_top if (bl_fuel_top in TPDDTEC_BASELINE_FUEL_OPTIONS) else "wood"
             pj_fuel_choice = pj_fuel_top if (pj_fuel_top in TPDDTEC_PROJECT_FUEL_OPTIONS) else "wood"
 
-            # ── Number of devices asked FIRST so scale can be derived from it
+            # ── Number of devices
             st.markdown("---")
             wizard_num_devices = st.number_input(
                 "Number of cookstoves / devices to be deployed",
@@ -5399,34 +5399,14 @@ def _render_new_project_wizard(existing_projects):
                 value=int(st.session_state.get("wizard_num_devices", 0)),
                 step=1,
                 key="wizard_num_devices",
-                help="Used to automatically determine project scale. You can refine this later in the Parameters tab.",
+                help="You can refine this later in the Parameters tab.",
             )
 
-            # ── Auto-derive scale from num_devices (typical 0.8 tCO2e/device/yr for cookstoves)
-            _MICRO_THRESHOLD = 10_000   # tCO2e/yr
-            _TYPICAL_ER_PER_DEVICE = 0.8
-            if wizard_num_devices > 0:
-                _est_annual_er = wizard_num_devices * _TYPICAL_ER_PER_DEVICE
-                if _est_annual_er <= _MICRO_THRESHOLD:
-                    scale_choice = "Micro-scale"
-                    _scale_reason = (
-                        f"Estimated ~{_est_annual_er:,.0f} tCO2e/yr "
-                        f"({wizard_num_devices:,} devices × 0.8 tCO2e/device/yr) — within the 10,000 tCO2e/yr threshold"
-                    )
-                else:
-                    scale_choice = "Small-scale"
-                    _scale_reason = (
-                        f"Estimated ~{_est_annual_er:,.0f} tCO2e/yr "
-                        f"({wizard_num_devices:,} devices × 0.8 tCO2e/device/yr) — above the 10,000 tCO2e/yr threshold"
-                    )
-                st.caption(f"Scale auto-detected: **{scale_choice}** — {_scale_reason}. "
-                           f"This will be confirmed after your first ER simulation.")
-            else:
-                scale_choice = "Micro-scale"
-                st.caption(
-                    "Scale: **Micro-scale** (default — enter number of devices above to auto-detect). "
-                    "Confirmed automatically after your first ER simulation."
-                )
+            # ── Scale: silent default — confirmed after first ER simulation
+            # For TPDDTEC, only Large-scale (>60 GWh/yr) changes method availability.
+            # That threshold is unreachable for cookstove projects, so Micro-scale is
+            # always the correct starting point. Scale is locked-in after first ER run.
+            scale_choice = "Micro-scale"
 
             meth_info = derive_methodology_from_fuels(saved_standard, bl_fuel_choice, pj_fuel_choice)
             method_result = derive_tpddtec_method(bl_fuel_choice, pj_fuel_choice, scale_choice, "measured")
@@ -5481,7 +5461,7 @@ def _render_new_project_wizard(existing_projects):
                         bl_label = TPDDTEC_FUEL_DISPLAY.get(bl_fuel_choice, bl_fuel_choice)
                         pj_label = TPDDTEC_FUEL_DISPLAY.get(pj_fuel_choice, pj_fuel_choice)
                         st.markdown(f"Fuel: **{bl_label} → {pj_label}**")
-                        st.markdown(f"Scale: **{scale_choice}** (auto-derived)")
+                        st.caption("Scale: confirmed automatically after first ER simulation.")
                         leakage_label = "5% standard deduction" if leakage_option == "option_1" else "Project-specific"
                         st.caption(f"Leakage: {leakage_label}")
 
@@ -5502,7 +5482,7 @@ def _render_new_project_wizard(existing_projects):
                     meth_settings = {
                         "baseline_fuel": bl_fuel_choice,
                         "project_fuel": pj_fuel_choice,
-                        "scale_classification": scale_choice,
+                        # scale_classification intentionally omitted — derived after first ER simulation
                         "baseline_approach": baseline_approach,
                         "leakage_option": leakage_option,
                         "method_selection": method_result["method_label"],
@@ -9934,11 +9914,14 @@ def _render_methodology_layer(project_id, meth_parsed, existing_settings, intake
                         auto_derived_dims.add(dim_key)
                         _sugg_reason_local = locals().get("_sugg_reason")
                         if _sugg_reason_local:
-                            st.caption(f"Scale: **{matched}** — {_sugg_reason_local}. Confirmed automatically after ER simulation.")
+                            st.caption(
+                                f"Scale: **{matched}** — derived from ER simulation results "
+                                f"({_sugg_reason_local})."
+                            )
                         else:
                             st.caption(
-                                f"Scale: **{matched}** — set at project creation. "
-                                "Recalculated automatically after your first ER simulation."
+                                f"Scale: **{matched}** — default until your first ER simulation, "
+                                "which will confirm or update this automatically."
                             )
                         continue
 

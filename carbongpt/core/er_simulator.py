@@ -986,6 +986,49 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
 
 VALID_SCENARIO_PURPOSES = ("exploratory", "comparison", "shortlisted", "selected_for_drafting", "archived")
 
+_MICRO_SCALE_THRESHOLD_TCO2_YR = 10_000  # tCO2e/yr — TPDDTEC v4.0 applicability threshold
+
+
+def _auto_update_scale_from_er(project_id, summary):
+    """
+    After a scenario is saved or selected, derive scale_classification from
+    average_annual_er and persist it to methodology_settings.
+
+    Rules (TPDDTEC / VM0050 cookstoves):
+        ≤ 10,000 tCO2e/yr  → Micro-scale
+        >  10,000 tCO2e/yr → Small-scale
+        (Large-scale threshold of >60 GWh/yr is effectively unreachable for cookstoves)
+    """
+    try:
+        annual_er = float(summary.get("average_annual_er") or 0)
+        if annual_er <= 0:
+            return  # No reliable ER yet — leave scale unset
+
+        new_scale = "Micro-scale" if annual_er <= _MICRO_SCALE_THRESHOLD_TCO2_YR else "Small-scale"
+
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT methodology_settings FROM user_projects WHERE id = %s",
+                (project_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+            meth_settings = dict(row["methodology_settings"] or {})
+            if meth_settings.get("scale_classification") == new_scale:
+                return  # Already correct — skip update
+            meth_settings["scale_classification"] = new_scale
+
+        from carbongpt.repository.store import update_user_project
+        update_user_project(project_id, methodology_settings=meth_settings)
+        logging.info(
+            "scale_classification auto-updated to %s for project %s "
+            "(avg annual ER: %.0f tCO2e/yr)",
+            new_scale, project_id, annual_er,
+        )
+    except Exception:
+        logging.exception("_auto_update_scale_from_er failed for project %s", project_id)
+
 
 def save_scenario(project_id, name, description="", parameter_overrides=None,
                   carbon_price=None, price_escalation=0, developer_share=100,
@@ -1054,6 +1097,10 @@ def save_scenario(project_id, name, description="", parameter_overrides=None,
 
     result["scenario_id"] = scenario_id
     result["scenario_purpose"] = scenario_purpose
+
+    # ── Auto-update scale_classification from ER results
+    _auto_update_scale_from_er(project_id, result.get("summary", {}))
+
     return result
 
 
@@ -1094,8 +1141,9 @@ def delete_scenario(scenario_id):
 
 def select_scenario_for_drafting(project_id, scenario_id):
     with get_cursor() as cur:
-        cur.execute("SELECT id FROM er_scenarios WHERE id = %s AND project_id = %s", (scenario_id, project_id))
-        if not cur.fetchone():
+        cur.execute("SELECT id, results_summary FROM er_scenarios WHERE id = %s AND project_id = %s", (scenario_id, project_id))
+        scenario_row = cur.fetchone()
+        if not scenario_row:
             return {"error": f"Scenario {scenario_id} not found for project {project_id}"}
 
         cur.execute("""
@@ -1116,7 +1164,16 @@ def select_scenario_for_drafting(project_id, scenario_id):
             UPDATE user_projects SET selected_scenario_id = %s WHERE id = %s
         """, (scenario_id, project_id))
 
-        return {"selected_scenario_id": updated["id"], "selected_scenario_name": updated["name"]}
+    # Auto-update scale from the selected scenario's ER results
+    try:
+        raw_summary = scenario_row.get("results_summary") or {}
+        if isinstance(raw_summary, str):
+            raw_summary = json.loads(raw_summary)
+        _auto_update_scale_from_er(project_id, raw_summary)
+    except Exception:
+        pass
+
+    return {"selected_scenario_id": updated["id"], "selected_scenario_name": updated["name"]}
 
 
 def deselect_scenario(project_id):
