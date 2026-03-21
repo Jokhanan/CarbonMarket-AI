@@ -84,11 +84,15 @@ def _should_show_param(param_key, baseline_fuel, project_fuel, method_id=None):
 
 def _auto_refresh_null_defaults(project_id, all_params):
     """
-    Re-run initialize_project_parameters if any key parameter has value=None
-    and source_type='default'.  This is a one-time migration that fires when
-    the engine defaults have been improved since the project was last initialized.
+    One-time per-session check that fires when key parameters still have null
+    values — either because the engine defaults improved since initialization, or
+    because the intake key-name mismatch (num_devices vs num_units) prevented the
+    wizard-entered device count from seeding the parameter on project creation.
+
     Confirmed / measured / user_override values are always preserved by initialize.
     """
+    from carbongpt.repository.store import get_user_project
+
     SENTINEL_PARAMS = {"SFC_project", "SFC_baseline"}
     needs_refresh = any(
         p["param_key"] in SENTINEL_PARAMS
@@ -96,6 +100,18 @@ def _auto_refresh_null_defaults(project_id, all_params):
         and p.get("source_type") == "default"
         for p in all_params
     )
+
+    # Also trigger if num_devices is missing but the project intake already has it
+    # (happens on projects created before the num_devices/num_units key fix).
+    if not needs_refresh:
+        nd_param = next((p for p in all_params if p["param_key"] == "num_devices"), None)
+        if nd_param and nd_param.get("value") is None and nd_param.get("source_type") == "default":
+            project = get_user_project(project_id)
+            if project:
+                po = (project.get("project_intake") or {}).get("project_overview") or {}
+                if po.get("num_devices") or po.get("num_units"):
+                    needs_refresh = True
+
     if not needs_refresh:
         return False
     result = initialize_project_parameters(project_id)

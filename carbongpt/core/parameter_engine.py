@@ -619,7 +619,9 @@ def initialize_project_parameters(project_id):
 
         intake_num_units = None
         po = intake.get("project_overview") or {}
-        raw_units = po.get("num_units")
+        # Wizard stores the device count as "num_devices"; legacy/import paths use "num_units".
+        # Accept both keys, preferring "num_devices" (the canonical wizard key).
+        raw_units = po.get("num_devices") or po.get("num_units")
         if raw_units:
             try:
                 intake_num_units = float(str(raw_units).replace(",", "").strip())
@@ -780,14 +782,20 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
             value = 1.37
             source_reference = "TPDDTEC typical KPT default: ~1.37 kg wood/device/day (≈0.5 t/device/yr)"
     elif param_key == "baseline_fuel_consumption":
-        # Canonical calculation quantity in t/device/year.
+        # Canonical quantity stored and used in the ER formula: t/device/yr.
+        # Conversion from per-capita reference values (from TPDDTEC §4.2.2 or CDM TOOL33 §5.4):
+        #   BCb (t/device/yr) = P_b (t/capita/yr) × household_size (persons/hh) ÷ devices_per_hh
         # Source hierarchy (highest to lowest priority):
-        #   1. SFC_baseline (if already resolved in param_values) — converted from kg/device/day
-        #   2. Method 2 locked default: TPDDTEC v4.0 §4.2.2 → 0.5 t/capita/yr × hh_size
-        #   3. CDM TOOL33 v3 §5.4 general default × hh_size (Methods 1, 3, VM0050)
+        #   1. SFC_baseline (field KPT measurement, kg/device/day) → SFC × 365 ÷ 1000 t/device/yr
+        #   2. Method 2 locked default: TPDDTEC §4.2.2 → 0.5 t/capita/yr (per-capita ref)
+        #   3. CDM TOOL33 v3 §5.4 general default: 0.4 t/capita/yr (VM0050, Methods 1/3, ACM0002)
         _hh_entry = param_values.get("household_size")
         _hh_val = (_hh_entry.get("value") if isinstance(_hh_entry, dict) else _hh_entry) if _hh_entry else None
         hh_sz = float(_hh_val) if (_hh_val and float(_hh_val) > 0) else 5.0
+
+        _dph_entry = param_values.get("devices_per_household")
+        _dph_val = (_dph_entry.get("value") if isinstance(_dph_entry, dict) else _dph_entry) if _dph_entry else None
+        dph = float(_dph_val) if (_dph_val and float(_dph_val) > 0) else 1.0
 
         _calc_method = settings.get("calculation_method", "") if settings else ""
         _is_method2 = (_calc_method == "method_2")
@@ -800,8 +808,8 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
                 if _sfc_float > 0:
                     value = round(_sfc_float * 365.0 / 1000.0, 4)
                     source_reference = (
-                        f"Derived from SFC_baseline ({_sfc_float} kg/device/day × 365 days ÷ 1000 "
-                        f"= {value} t/device/yr)"
+                        f"Field KPT measurement: SFC_baseline {_sfc_float} kg/device/day "
+                        f"× 365 days ÷ 1000 = {value} t/device/yr"
                     )
                     source_type = "calculated"
             except (ValueError, TypeError):
@@ -809,25 +817,40 @@ def _resolve_parameter_value(param_key, methodology, param_values, country, base
 
         if value is None:
             if _is_method2:
-                value = round(0.5 * hh_sz, 4)
+                # TPDDTEC Method 2: P_b = 0.5 t/capita/yr (methodology constant, not field-measured)
+                # → converted to per-device: × household_size ÷ devices_per_household
+                _p_b = 0.5  # t/capita/yr — TPDDTEC §4.2.2 fixed value
+                value = round(_p_b * hh_sz / dph, 4)
                 source_reference = (
-                    f"TPDDTEC Method 2 locked: 0.5 t/capita/yr × {hh_sz:.1f} persons/hh "
-                    f"= {0.5 * hh_sz:.4f} t/device/yr (read-only — switch to Method 1 to use measured field data)"
+                    f"TPDDTEC §4.2.2 Method 2 locked per-capita reference: "
+                    f"P_b = {_p_b} t/capita/yr × {hh_sz:.0f} persons/hh ÷ {dph:.0f} device/hh "
+                    f"= {value} t/device/yr (read-only; the 0.5 is per-capita, not per-device — "
+                    f"switch to Method 1 to replace with KPT field measurement)"
                 )
                 source_type = "default"
             elif is_charcoal:
-                value = round(0.1 * hh_sz, 4)
-                source_reference = f"CDM TOOL33 v3 §5.4 default: 0.1 t/person/yr × {hh_sz} persons/hh = {0.1 * hh_sz:.4f} t/device/yr"
-            elif methodology and "VM0050" in str(methodology).upper():
-                value = round(0.4 * hh_sz, 4)
+                _p_b = 0.1  # t/capita/yr — CDM TOOL33 v3 §5.4 charcoal
+                value = round(_p_b * hh_sz / dph, 4)
                 source_reference = (
-                    f"VM0050 §9.2 / CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh "
-                    f"= {0.4 * hh_sz:.4f} t/device/yr. "
-                    f"Note: VM0050 uses 0.4 t/person/yr (CDM TOOL33), distinct from TPDDTEC Method 2 which mandates 0.5 t/person/yr."
+                    f"CDM TOOL33 v3 §5.4 charcoal default: P_b = {_p_b} t/capita/yr "
+                    f"× {hh_sz:.0f} persons/hh ÷ {dph:.0f} device/hh = {value} t/device/yr"
+                )
+            elif methodology and "VM0050" in str(methodology).upper():
+                _p_b = 0.4  # t/capita/yr — VM0050/CDM TOOL33
+                value = round(_p_b * hh_sz / dph, 4)
+                source_reference = (
+                    f"VM0050 §9.2 / CDM TOOL33 v3 §5.4: P_b = {_p_b} t/capita/yr "
+                    f"× {hh_sz:.0f} persons/hh ÷ {dph:.0f} device/hh = {value} t/device/yr. "
+                    f"(0.4 t/capita/yr is the per-capita reference, distinct from the TPDDTEC Method 2 "
+                    f"fixed value of 0.5 t/capita/yr)"
                 )
             else:
-                value = round(0.4 * hh_sz, 4)
-                source_reference = f"CDM TOOL33 v3 §5.4 default: 0.4 t/person/yr × {hh_sz} persons/hh = {0.4 * hh_sz:.4f} t/device/yr"
+                _p_b = 0.4  # t/capita/yr — CDM TOOL33 v3 §5.4 general
+                value = round(_p_b * hh_sz / dph, 4)
+                source_reference = (
+                    f"CDM TOOL33 v3 §5.4: P_b = {_p_b} t/capita/yr "
+                    f"× {hh_sz:.0f} persons/hh ÷ {dph:.0f} device/hh = {value} t/device/yr"
+                )
     elif param_key == "project_fuel_consumption":
         value = None
         source_type = "default"
