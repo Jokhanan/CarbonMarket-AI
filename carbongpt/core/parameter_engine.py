@@ -1060,13 +1060,26 @@ def _recompute_derived_after_update(cur, project_id, keys_to_recompute):
 
         computed = None
         ref = None
-        if key == "num_households" and num_devices is not None:
-            computed = num_devices / devices_per_hh
-            ref = f"Derived: {int(num_devices)} devices / {devices_per_hh:.0f} per household = {int(computed)}"
+        if key == "num_households":
+            # Forward direction: num_devices → num_households (preferred)
+            if num_devices is not None:
+                computed = num_devices / devices_per_hh
+                ref = f"Derived: {int(num_devices)} devices / {devices_per_hh:.0f} per household = {int(computed)}"
+            # (no reverse here — num_devices derived from num_households is handled by key == "num_devices" below)
+        elif key == "num_devices":
+            # Reverse direction: num_households → num_devices (only when num_devices is not set)
+            hh_direct = _sf(vals.get("num_households"))
+            if num_devices is None and hh_direct is not None:
+                computed = hh_direct * devices_per_hh
+                ref = f"Derived: {int(hh_direct)} households × {devices_per_hh:.0f} per household = {int(computed)}"
         elif key == "num_beneficiaries":
+            # Use num_households from DB (possibly just computed above and written to vals)
             hh = _sf(vals.get("num_households"))
-            if "num_households" in keys_to_recompute and num_devices is not None:
+            if hh is None and "num_households" in keys_to_recompute and num_devices is not None:
                 hh = num_devices / devices_per_hh
+            if hh is None:
+                # Fall back to reverse path: if num_devices was just derived from num_households
+                hh = _sf(vals.get("num_households"))
             if hh is not None:
                 computed = hh * household_size
                 ref = f"Derived: {int(hh)} households x {household_size:.0f} persons/hh = {int(computed)}"
@@ -1129,10 +1142,12 @@ def update_parameter(project_id, param_key, value, source_type=None, source_refe
                 """, (updated["id"],))
 
         derivation_triggers = {
+            # Forward: num_devices set → derive num_households and num_beneficiaries
             "num_devices": ["num_households", "num_beneficiaries"],
             "devices_per_household": ["num_households", "num_beneficiaries"],
             "household_size": ["num_beneficiaries"],
-            "num_households": ["num_beneficiaries"],
+            # num_households set directly → back-derive num_devices (if missing) then num_beneficiaries
+            "num_households": ["num_devices", "num_beneficiaries"],
             # SFC (kg/device/day) → annual fuel consumption (t/device/yr)
             "SFC_baseline": ["baseline_fuel_consumption"],
             "SFC_project": ["project_fuel_consumption"],

@@ -307,7 +307,15 @@ def render_parameter_dashboard(project):
                     globally_rendered.add(key)
                     continue
 
-                is_derived = key in DERIVED_PARAMS and p.get("source_type") == "calculated"
+                # num_households is normally derived from num_devices; but when num_devices
+                # is not yet set the user should be able to enter it directly (reverse derivation
+                # will then compute num_devices from it automatically on Save).
+                if key == "num_households" and p.get("source_type") == "calculated":
+                    _nd_param = next((q for q in all_params if q["param_key"] == "num_devices"), None)
+                    _nd_missing = (not _nd_param) or (_nd_param.get("value") is None)
+                    is_derived = not _nd_missing  # editable when num_devices is missing
+                else:
+                    is_derived = key in DERIVED_PARAMS and p.get("source_type") == "calculated"
 
                 base_key = key.replace("_baseline", "").replace("_project", "")
                 pair = pair_map.get(base_key, {})
@@ -387,6 +395,16 @@ def _render_derived_parameter(project_id, param, evidence_by_param):
             if param_key in ("baseline_fuel_consumption", "project_fuel_consumption"):
                 sfc_key = "SFC_baseline" if "baseline" in param_key else "SFC_project"
                 st.caption(f"Will be auto-derived from {sfc_key} once set. Override below to enter a direct field measurement.")
+            elif param_key == "num_beneficiaries":
+                st.caption(
+                    "Not yet computed — set **Number of devices deployed** or **Number of households served** "
+                    "first; beneficiaries will be derived automatically (households x household size)."
+                )
+            elif param_key == "num_households":
+                st.caption(
+                    "Not yet computed — set **Number of devices deployed** and this will be derived "
+                    "automatically (devices / devices per household)."
+                )
             else:
                 st.caption("Not yet computed (set primary inputs first)")
 
@@ -443,7 +461,16 @@ def _render_parameter_row(project_id, param, evidence_by_param):
         )
         source_label = param.get("source_type", "default")
         source_ref = param.get("source_reference", "")
-        st.caption(f"Status: {p_status} | Source: {source_label} | {source_ref}")
+        # num_households shown as editable because num_devices is not yet set
+        if param_key == "num_households" and source_label == "calculated":
+            st.caption(
+                "Enter number of households directly — "
+                "Number of devices deployed will be computed automatically on save "
+                "(= households x devices per household). "
+                "Alternatively, enter **Number of devices deployed** below and this will be derived from it."
+            )
+        else:
+            st.caption(f"Status: {p_status} | Source: {source_label} | {source_ref}")
         if param_key == "fNRB":
             st.caption(f"ℹ️  {FNRB_GUIDANCE}")
         # Show extraction hint from PARAMETER_DEFINITIONS if available
@@ -473,6 +500,10 @@ def _render_parameter_row(project_id, param, evidence_by_param):
     with col3:
         source_options = ["default", "measured", "calculated", "user_override", "national_inventory", "ipcc", "methodology", "document_extracted"]
         current_source = param.get("source_type", "default")
+        # num_households shown as editable (num_devices missing): pre-select "user_override" so
+        # that saving protects the user's direct entry from being overwritten by forward derivation.
+        if param_key == "num_households" and current_source == "calculated":
+            current_source = "user_override"
         source_idx = source_options.index(current_source) if current_source in source_options else 0
         new_source = st.selectbox(
             "Source",
