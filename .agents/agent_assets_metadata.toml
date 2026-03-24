@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "x1nXMNJlAbTMPHI_0OSY7"
+uri = "file://.local/ux_audit_report.md"
+type = "text"
+title = "CarbonGPT Customer Journey Audit — All Methodologies"
