@@ -122,6 +122,61 @@ st.markdown("""
         color: #475569 !important;
     }
 
+    /* ── Workspace tab navigation — style horizontal radio as browser-style tab bar ── */
+    /* Anchor div injected just before the radio lets us use :has() to scope the rule */
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] > div,
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] > div {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0 !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 0.5rem !important;
+        background: transparent !important;
+    }
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] label,
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] label {
+        color: #64748b !important;
+        font-size: 0.82rem !important;
+        font-weight: 500 !important;
+        padding: 0.42rem 0.85rem !important;
+        border-radius: 6px 6px 0 0 !important;
+        border: 1px solid transparent !important;
+        border-bottom: none !important;
+        margin-bottom: -2px !important;
+        background: transparent !important;
+        transition: background 100ms, color 100ms !important;
+        white-space: nowrap !important;
+        cursor: pointer !important;
+    }
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] label:hover,
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] label:hover {
+        color: #0f172a !important;
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] label:has(input:checked),
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] label:has(input:checked),
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] label[data-checked="true"],
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] label[data-checked="true"] {
+        color: #0d9488 !important;
+        font-weight: 600 !important;
+        background: white !important;
+        border-color: #e2e8f0 !important;
+        border-bottom-color: white !important;
+    }
+    /* Hide the radio circle dot */
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] input[type="radio"],
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] input[type="radio"] {
+        display: none !important;
+    }
+    /* Hide the outer radio label (we show our own tab text) */
+    .stElementContainer:has(> .ws-tab-nav-anchor) + .stElementContainer div[data-testid="stRadio"] > label,
+    .element-container:has(> .ws-tab-nav-anchor) + .element-container div[data-testid="stRadio"] > label {
+        display: none !important;
+    }
+    .ws-tab-nav-anchor { display: none !important; }
+
     /* ── Sidebar Brand ── */
     .brand-header {
         padding: 0.4rem 0 1.4rem 0;
@@ -5215,6 +5270,8 @@ def _render_new_project_wizard(existing_projects):
                 if st.button("Continue", key="wizard_to_step3", type="primary"):
                     if not new_name:
                         st.warning("Please enter a project name.")
+                    elif not new_country:
+                        st.warning("Please select a country — it is required for fNRB defaults and AI features.")
                     else:
                         st.session_state["wizard_name_saved"] = new_name
                         st.session_state["wizard_standard_saved"] = new_standard
@@ -5391,17 +5448,6 @@ def _render_new_project_wizard(existing_projects):
             bl_fuel_choice = bl_fuel_top if (bl_fuel_top in TPDDTEC_BASELINE_FUEL_OPTIONS) else "wood"
             pj_fuel_choice = pj_fuel_top if (pj_fuel_top in TPDDTEC_PROJECT_FUEL_OPTIONS) else "wood"
 
-            # ── Number of devices
-            st.markdown("---")
-            wizard_num_devices = st.number_input(
-                "Number of cookstoves / devices to be deployed",
-                min_value=0, max_value=10_000_000,
-                value=int(st.session_state.get("wizard_num_devices", 0)),
-                step=1,
-                key="wizard_num_devices",
-                help="You can refine this later in the Parameters tab.",
-            )
-
             # ── Scale: silent default — confirmed after first ER simulation
             # For TPDDTEC, only Large-scale (>60 GWh/yr) changes method availability.
             # That threshold is unreachable for cookstove projects, so Micro-scale is
@@ -5490,7 +5536,6 @@ def _render_new_project_wizard(existing_projects):
                     }
 
                     saved_loc = st.session_state.get("wizard_loc_saved") or {}
-                    _wiz_devices = int(st.session_state.get("wizard_num_devices", 0)) or None
                     payload = {
                         "name": saved_name,
                         "standard": saved_standard,
@@ -5506,7 +5551,6 @@ def _render_new_project_wizard(existing_projects):
                         "latitude": saved_loc.get("latitude"),
                         "longitude": saved_loc.get("longitude"),
                         "boundary_geojson": saved_loc.get("boundary_geojson"),
-                        "project_intake": {"project_overview": {"num_devices": _wiz_devices}} if _wiz_devices else None,
                     }
                     mon_start = st.session_state.get("wizard_mon_start_saved")
                     mon_end = st.session_state.get("wizard_mon_end_saved")
@@ -5696,6 +5740,13 @@ def _render_new_project_wizard(existing_projects):
                             f"Project created — VM0050 v1.0 "
                             f"({vm_method['baseline_eq']} / {vm_method['project_eq']})!"
                         )
+                        # Pre-initialize parameters so fNRB is resolved from country now,
+                        # rather than waiting for the user to click "Initialize" in Parameters tab.
+                        new_vm_id = result["id"]
+                        try:
+                            _fetch(f"/projects/{new_vm_id}/parameters/initialize", method="POST")
+                        except Exception:
+                            pass
                         st.session_state["show_new_project"] = False
                         st.session_state.pop(step_key, None)
                         for k in ["wizard_name_saved", "wizard_standard_saved", "wizard_country_saved",
@@ -5703,7 +5754,7 @@ def _render_new_project_wizard(existing_projects):
                                   "wizard_mon_start_saved", "wizard_mon_end_saved"]:
                             st.session_state.pop(k, None)
                         time.sleep(0.5)
-                        st.session_state.selected_project_id = result["id"]
+                        st.session_state.selected_project_id = new_vm_id
                         st.rerun()
 
         elif _compat_activity == "Metered & Measured cooking device (MECD)":
@@ -5746,185 +5797,26 @@ def _render_new_project_wizard(existing_projects):
                 format_func=lambda x: MECD_REGION_DISPLAY.get(x, x),
             )
 
-            st.markdown("---")
-            st.markdown("**Baseline fuel mix**")
-            st.caption("Add all fuels currently used by target households. Shares must sum to 100%.")
-
-            n_fuels = st.selectbox(
-                "Number of baseline fuel types",
-                [1, 2, 3, 4],
-                key="mecd_n_fuels",
-            )
-
-            baseline_fuels_data = []
-            has_woody_baseline = False
-            total_share = 0.0
-
-            for i in range(n_fuels):
-                st.markdown(f"**Baseline fuel {i + 1}**")
-                rc1, rc2, rc3 = st.columns([2, 1, 1])
-                with rc1:
-                    fk = st.selectbox(
-                        "Fuel type",
-                        MECD_BASELINE_FUEL_OPTIONS,
-                        key=f"mecd_bl_fk_{i}",
-                        format_func=lambda x: MECD_BASELINE_FUEL_DISPLAY.get(x, x),
-                    )
-                lib_row = MECD_BASELINE_FUEL_LIBRARY.get(fk, MECD_BASELINE_FUEL_LIBRARY["wood_three_stone"])
-                with rc2:
-                    default_share = round(100.0 / n_fuels, 1)
-                    share_pct = st.number_input(
-                        "Share (%)",
-                        min_value=0.1,
-                        max_value=100.0,
-                        value=default_share,
-                        step=0.1,
-                        key=f"mecd_bl_share_{i}",
-                    )
-                with rc3:
-                    eta_default = lib_row["eta_b_default"] or 0.20
-                    eta_b = st.number_input(
-                        "Efficiency (0-1)",
-                        min_value=0.01,
-                        max_value=1.0,
-                        value=float(eta_default),
-                        step=0.01,
-                        key=f"mecd_bl_eta_{i}",
-                    )
-
-                fnrb_val = 0.0
-                if lib_row["uses_fnrb"]:
-                    has_woody_baseline = True
-                    fnrb_val = st.slider(
-                        f"fNRB – fraction non-renewable biomass (fuel {i + 1})",
-                        min_value=0.0,
-                        max_value=1.0,
-                        value=0.50,
-                        step=0.01,
-                        key=f"mecd_bl_fnrb_{i}",
-                    )
-
-                total_share += share_pct
-                baseline_fuels_data.append({
-                    "fuel_key": fk,
-                    "share_pct": share_pct,
-                    "eta_b": eta_b,
-                    "fnrb": fnrb_val,
-                })
-
-            if abs(total_share - 100.0) > 0.5:
-                st.warning(f"Baseline fuel shares sum to {total_share:.1f}% — must equal 100%.")
-            else:
-                st.success(f"Baseline shares: {total_share:.1f}% — OK")
-
-            if has_woody_baseline:
-                st.markdown("---")
-                st.markdown("**fNRB approach (MECD 13)**")
-                st.caption(
-                    "fNRB enters the baseline emission factor. "
-                    "Choose whether to fix it ex-ante for the full crediting period or update it biennially."
-                )
-                fnrb_approach_choice = st.radio(
-                    "fNRB determination method",
-                    [
-                        "Fixed ex-ante for the full crediting period",
-                        "Updated biennially at each monitoring and verification",
-                    ],
-                    key="mecd_fnrb_approach",
-                )
-                fnrb_approach = "fixed" if "Fixed" in fnrb_approach_choice else "biennial"
-            else:
-                fnrb_approach = "not_applicable"
-
             is_electric = fuel_type == "electric"
+            baseline_fuels_data = []
+            fnrb_approach = "fixed"
             n_persons = None
             eta_p = None
+            eg_mwh = None
+            ef_el = None
+            tdl = None
+            p_kg = None
+            ncv_p = None
+            ef_p = None
+            sc_b_mj = None
+            sc_p_mj = None
+            total_share = 100.0
 
-            if is_electric:
-                eg_mwh = None
-                ef_el = None
-                tdl = None
-                p_kg = None
-                ncv_p = None
-                ef_p = None
-                st.info(
-                    "Electric project device: EG (MWh/device/yr), EF_el, T&D losses, and n_persons "
-                    "are measurement inputs — enter them in the Parameters tab after project creation."
-                )
-            else:
-                st.markdown("---")
-                st.markdown("**Project fuel parameters**")
-                st.caption(
-                    "Enter default values for the project fuel. "
-                    "These can be refined in the Parameters tab after project creation."
-                )
-                fp1, fp2, fp3 = st.columns(3)
-                with fp1:
-                    p_kg = st.number_input(
-                        "Annual fuel per device (kg/yr) — MECD 14",
-                        min_value=0.1,
-                        value=120.0,
-                        step=1.0,
-                        key="mecd_p_kg_annual",
-                    )
-                with fp2:
-                    ncv_p = st.number_input(
-                        "Project fuel NCV (TJ/tonne)",
-                        min_value=0.001,
-                        value=0.04713,
-                        step=0.0001,
-                        format="%.5f",
-                        key="mecd_ncv_p",
-                    )
-                with fp3:
-                    ef_p = st.number_input(
-                        "Project fuel emission factor (tCO2e/TJ)",
-                        min_value=0.0,
-                        value=63.1,
-                        step=0.1,
-                        key="mecd_ef_p",
-                    )
-                eg_mwh = None
-                ef_el = None
-                tdl = None
-
-            if mecd_case == "2":
-                st.markdown("---")
-                st.markdown("**Case 2: Specific energy consumption parameters (MECD 7 / 8)**")
-                st.caption(
-                    "SC_b and SC_p in MJ/person/event. The ratio SC_b/SC_p is dimensionless — "
-                    "it acts as an energy equivalence factor in Eq. 4. "
-                    "Always store both in the same unit."
-                )
-                dominant_fk = max(baseline_fuels_data, key=lambda f: f["share_pct"])["fuel_key"] if baseline_fuels_data else "charcoal"
-                dominant_family = MECD_BASELINE_FUEL_LIBRARY.get(dominant_fk, {}).get("fuel_family", "charcoal")
-                sc_b_raw = MECD_SC_DEFAULTS.get(region, {}).get(dominant_family)
-                sc_b_default = float(sc_b_raw) if sc_b_raw is not None else 3.92
-                sc_p_default = float(MECD_SC_P_EPC_DEFAULTS.get(region, 0.258))
-                sc_col1, sc_col2 = st.columns(2)
-                with sc_col1:
-                    sc_b_mj = st.number_input(
-                        "SC_b – baseline specific consumption (MJ/person/event)",
-                        min_value=0.01,
-                        value=sc_b_default,
-                        step=0.01,
-                        format="%.4f",
-                        key="mecd_sc_b",
-                    )
-                with sc_col2:
-                    sc_p_mj = st.number_input(
-                        "SC_p – project device specific consumption (MJ/person/event)",
-                        min_value=0.001,
-                        value=sc_p_default,
-                        step=0.001,
-                        format="%.4f",
-                        key="mecd_sc_p",
-                    )
-                if sc_p_mj > 0:
-                    st.caption(f"SC_b/SC_p ratio: {sc_b_mj / sc_p_mj:.4f}")
-            else:
-                sc_b_mj = None
-                sc_p_mj = None
+            st.info(
+                "You will define the **baseline fuel mix** (fuel types, shares, efficiencies, fNRB) "
+                "in the **Setup tab** immediately after project creation. "
+                "That section is highlighted automatically when you arrive."
+            )
 
             st.markdown("---")
             st.markdown("**Leakage**")
@@ -5941,17 +5833,6 @@ def _render_new_project_wizard(existing_projects):
 
             st.markdown("---")
 
-            shares_ok = abs(total_share - 100.0) <= 0.5
-            ef_preview = None
-            ef_label_preview = ""
-            if shares_ok and baseline_fuels_data:
-                try:
-                    bf = compute_mecd_baseline_ef(mecd_case, baseline_fuels_data)
-                    ef_preview = bf["ef_b"]
-                    ef_label_preview = bf["label"]
-                except Exception:
-                    ef_preview = None
-
             with st.container(border=True):
                 st.markdown("**Project configuration summary**")
                 s1, s2, s3 = st.columns(3)
@@ -5963,12 +5844,10 @@ def _render_new_project_wizard(existing_projects):
                     er_disp = "Efficiency improvement only" if er_mode == "efficiency_only" else "Fuel-switch + efficiency ER"
                     st.caption(f"Case {mecd_case} | {fuel_type.upper()} | {er_disp}")
                 with s3:
-                    if ef_preview is not None:
-                        st.markdown(f"{ef_label_preview} (ex-ante): **{ef_preview:.2f} tCO2e/TJ**")
-                    else:
-                        st.caption("Baseline EF: fix fuel shares to preview.")
+                    st.markdown(f"Region: **{MECD_REGION_DISPLAY.get(region, region)}**")
                     leakage_disp = "5% standard deduction" if leakage_option == "option_1" else "Project-specific (RECH §3.11)"
                     st.caption(f"Leakage: {leakage_disp}")
+            st.caption("Next step: define the baseline fuel basket in Setup tab.")
 
             bk1_m, cr2_m = st.columns([1, 3])
             with bk1_m:
@@ -5976,12 +5855,7 @@ def _render_new_project_wizard(existing_projects):
                     st.session_state[step_key] = 2
                     st.rerun()
             with cr2_m:
-                if st.button(
-                    "Create Project",
-                    key="mecd_wizard_create",
-                    type="primary",
-                    disabled=not shares_ok,
-                ):
+                if st.button("Create Project", key="mecd_wizard_create", type="primary"):
                     final_country = saved_country
                     if saved_parent:
                         parent_proj = next((p for p in existing_projects if p["id"] == saved_parent), None)
@@ -5994,27 +5868,12 @@ def _render_new_project_wizard(existing_projects):
                         "device_type": device_key,
                         "device_label": MECD_DEVICE_DISPLAY.get(device_key, device_key),
                         "er_eligibility": er_mode,
-                        "baseline_fuels": baseline_fuels_data,
+                        "baseline_fuels": [],
                         "region": region,
                         "fnrb_approach": fnrb_approach,
                         "leakage_option": leakage_option,
-                        "n_persons": n_persons,
+                        "n_persons": None,
                     }
-                    if mecd_case == "1" and eta_p is not None:
-                        meth_settings["eta_p"] = eta_p
-                    if is_electric:
-                        meth_settings["eg_p_mwh_annual"] = eg_mwh
-                        meth_settings["ef_el"] = ef_el
-                        meth_settings["tdl"] = tdl
-                    else:
-                        meth_settings["p_p_kg_annual"] = p_kg
-                        meth_settings["ncv_p"] = ncv_p
-                        meth_settings["ef_p"] = ef_p
-                    if mecd_case == "2":
-                        meth_settings["sc_b_mj"] = sc_b_mj
-                        meth_settings["sc_p_mj"] = sc_p_mj
-                    if ef_preview is not None:
-                        meth_settings["baseline_ef_exante"] = round(ef_preview, 4)
 
                     saved_loc = st.session_state.get("wizard_loc_saved") or {}
                     payload = {
@@ -6050,7 +5909,9 @@ def _render_new_project_wizard(existing_projects):
                                   "wizard_mon_start_saved", "wizard_mon_end_saved"]:
                             st.session_state.pop(k, None)
                         time.sleep(0.5)
-                        st.session_state.selected_project_id = result["id"]
+                        new_proj_id = result["id"]
+                        st.session_state.selected_project_id = new_proj_id
+                        st.session_state[f"setup_highlight_fuel_basket_{new_proj_id}"] = True
                         st.rerun()
 
         else:
@@ -6866,6 +6727,27 @@ def _render_project_workspace(project_id):
         unsafe_allow_html=True,
     )
 
+    # ── LPG sunset persistent alert (VM0050 §4 cond. 11c) ────────────────
+    _meth_s = project.get("methodology_settings") or {}
+    if (
+        project.get("methodology") == "VM0050"
+        and _meth_s.get("project_device") == "lpg"
+    ):
+        _lpg_end = project.get("monitoring_period_end") or _meth_s.get("crediting_period_end")
+        _lpg_warn = True
+        if _lpg_end:
+            try:
+                _lpg_yr = int(str(_lpg_end)[:4])
+                _lpg_warn = _lpg_yr > 2045
+            except (ValueError, TypeError):
+                _lpg_warn = True
+        if _lpg_warn:
+            st.warning(
+                "LPG sunset clause (VM0050 §4 cond. 11c): credits cannot be issued for monitoring "
+                "periods ending after 31 December 2045. Ensure your crediting period ends on or "
+                "before that date — otherwise LPG projects are ineligible for issuance."
+            )
+
     # ── Evaluate brain once and cache ────────────────────────────────────
     brain_cache_key = f"brain_state_{project_id}"
     try:
@@ -7072,6 +6954,7 @@ def _render_project_workspace(project_id):
     if radio_key not in st.session_state:
         st.session_state[radio_key] = tab_labels[0]
 
+    st.markdown('<div class="ws-tab-nav-anchor"></div>', unsafe_allow_html=True)
     selected_label = st.radio(
         "Navigate to section",
         tab_labels,
@@ -11341,6 +11224,67 @@ def _render_project_settings(project):
     </span>
     """, unsafe_allow_html=True)
     st.caption("Fill in the details below. This data will be used by the AI when drafting and reviewing your documents.")
+
+    # ── Methodology Summary Card ─────────────────────────────────────────────
+    try:
+        from carbongpt.core.methodology_rules import (  # noqa: F401
+            MECD_REGION_DISPLAY as _MECD_REGION_DISPLAY,
+            VM0050_FNRB_DISPLAY as _VM0050_FNRB_DISPLAY,
+        )
+    except Exception:
+        _MECD_REGION_DISPLAY = {}
+        _VM0050_FNRB_DISPLAY = {}
+    _ms = project.get("methodology_settings") or {}
+    _meth_code = project.get("methodology") or ""
+    if _meth_code:
+        _summary_parts = []
+        if _ms.get("calculation_method") or _ms.get("method_selection"):
+            _calc = _ms.get("method_selection") or _ms.get("calculation_method", "")
+            _summary_parts.append(("Calculation", _calc))
+        if _ms.get("baseline_eq"):
+            _summary_parts.append(("Baseline eq.", _ms["baseline_eq"]))
+        if _ms.get("project_eq"):
+            _summary_parts.append(("Project eq.", _ms["project_eq"]))
+        if _ms.get("fnrb_source"):
+            _fnrb_disp = _VM0050_FNRB_DISPLAY.get(_ms["fnrb_source"], _ms["fnrb_source"])
+            _summary_parts.append(("fNRB", _fnrb_disp[:45]))
+        if _ms.get("fnrb_approach"):
+            _fnrb_a = "Fixed ex-ante" if _ms["fnrb_approach"] == "fixed" else ("Biennial" if _ms["fnrb_approach"] == "biennial" else _ms["fnrb_approach"])
+            _summary_parts.append(("fNRB approach", _fnrb_a))
+        if _ms.get("leakage_option") or _ms.get("leakage_discount"):
+            _lk = _ms.get("leakage_option", "")
+            _lk_disp = "5% standard deduction" if "option_1" in _lk else ("Project-specific" if "option_2" in _lk else ("Standard 0.95 factor" if "standard_0.95" in _lk else _lk))
+            _summary_parts.append(("Leakage", _lk_disp))
+        if _ms.get("scale_classification"):
+            _summary_parts.append(("Scale", _ms["scale_classification"]))
+        if _ms.get("mecd_case"):
+            _summary_parts.append(("MECD Case", f"Case {_ms['mecd_case']}"))
+        if _ms.get("region") and _meth_code == "GS-MECD":
+            _summary_parts.append(("Region", _MECD_REGION_DISPLAY.get(_ms["region"], _ms["region"])))
+        if _ms.get("project_device") or _ms.get("device_label"):
+            _dev = _ms.get("device_label") or _ms.get("project_device", "")
+            _summary_parts.append(("Project device", _dev))
+        if _ms.get("baseline_fuel"):
+            _summary_parts.append(("Baseline fuel", _ms["baseline_fuel"].replace("_", " ").title()))
+
+        if _summary_parts:
+            with st.container(border=True):
+                st.caption(f"Methodology configuration — **{_meth_code}**")
+                _sm_cols = st.columns(min(len(_summary_parts), 3))
+                for _si, (_sk, _sv) in enumerate(_summary_parts):
+                    with _sm_cols[_si % len(_sm_cols)]:
+                        st.markdown(f"**{_sk}:** {_sv}")
+
+    # ── MECD: fuel basket highlight after project creation ───────────────────
+    _highlight_fuel = st.session_state.pop(f"setup_highlight_fuel_basket_{project_id}", False)
+    if _highlight_fuel or (
+        _meth_code == "GS-MECD" and not (_ms.get("baseline_fuels") or [])
+    ):
+        st.info(
+            "**Next step: define the baseline fuel basket.** "
+            "Scroll down to the Methodology Choices section and add at least one baseline fuel "
+            "type, share, efficiency, and fNRB value — the ER Simulator needs this to calculate emission reductions."
+        )
 
     with st.container(border=True):
         st.markdown("#### About Your Project")
