@@ -12,6 +12,7 @@ The raw `carbon_projects.country` column is never modified.
 
 import difflib
 import logging
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -306,26 +307,50 @@ for raw, iso in RAW_TO_ISO.items():
     _ALL_KNOWN_NAMES[raw] = iso
 
 
+# Known non-country strings that appear legitimately in project data.
+# Returned silently as None without a warning or difflib lookup.
+_KNOWN_NON_COUNTRIES: frozenset[str] = frozenset({
+    "international",
+    "global",
+    "worldwide",
+    "multiple countries",
+    "various",
+    "n/a",
+    "na",
+    "unknown",
+    "tbd",
+    "other",
+    "",
+})
+
+
+@lru_cache(maxsize=512)
 def resolve_country_iso(raw_name: str) -> str | None:
     """
     Resolve a raw country name string to an ISO alpha-3 code.
 
+    Cached with lru_cache so repeated calls for the same name are O(1).
+
     Order:
-      1. Exact dict match (case-insensitive)
-      2. Canonical-name match
+      1. Known non-country strings → return None silently (no warning, no difflib)
+      2. Exact dict match (case-insensitive)
       3. difflib fuzzy match (threshold ≥ 0.82)
-      4. None — logs a WARNING
+      4. None — logs a WARNING (only once per unique name due to cache)
     """
     if not raw_name:
         return None
 
     normalized = raw_name.strip().lower()
 
-    # 1. Exact match in RAW_TO_ISO or _NAME_TO_ISO
+    # 1. Known non-country strings — silent None, no warning
+    if normalized in _KNOWN_NON_COUNTRIES:
+        return None
+
+    # 2. Exact match in RAW_TO_ISO or _NAME_TO_ISO
     if normalized in _ALL_KNOWN_NAMES:
         return _ALL_KNOWN_NAMES[normalized]
 
-    # 2. difflib fuzzy match
+    # 3. difflib fuzzy match
     candidates = list(_ALL_KNOWN_NAMES.keys())
     matches = difflib.get_close_matches(normalized, candidates, n=1, cutoff=0.82)
     if matches:
@@ -378,7 +403,12 @@ def run_country_normalization_pass() -> dict:
 
     try:
         with get_cursor() as cur:
-            cur.execute("SELECT id, country FROM carbon_projects WHERE country IS NOT NULL")
+            # Only process rows that haven't been resolved yet — avoids re-running difflib
+            # on every startup for projects whose country is legitimately unresolvable.
+            cur.execute(
+                "SELECT id, country FROM carbon_projects "
+                "WHERE country IS NOT NULL AND country_iso IS NULL"
+            )
             rows = cur.fetchall()
     except Exception as e:
         logger.error("Failed to fetch carbon_projects for country normalization: %s", e)
