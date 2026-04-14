@@ -33,6 +33,10 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
+    # VM0050 §9.2 / Footnote 22: 26% uncertainty discount when fNRB source is CDM TOOL30
+    _fnrb_source = _ptext(params, "fnrb_source", "")
+    if _fnrb_source.lower() == "tool30":
+        fNRB = fNRB * (1.0 - 0.26)
     hh_size = _pval(params, "household_size", 5.0)
     num_hh = _pval(params, "num_households", 1000)
     leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
@@ -101,22 +105,47 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         consumption_label = f"baseline_fuel_consumption = {bl_consumption:.4f} t/device/yr"
         consumption_pj_label = f"project_fuel_consumption = {pj_consumption:.4f} t/device/yr"
 
-    if is_charcoal_baseline and CF > 1.0:
-        bl_consumption_wood_equiv = bl_consumption * CF
-        cf_note = f"Charcoal baseline: consumption × CF = {bl_consumption:.4f} × {CF} = {bl_consumption_wood_equiv:.4f} t wood-equiv/device/yr"
-    else:
-        bl_consumption_wood_equiv = bl_consumption
-        cf_note = f"Wood baseline: CF not applied (CF={CF})"
+    # SFC_b cap: TPDDTEC v4.0 ICS 18 — hard cap at 0.95 t/person/yr; warn above 0.75
+    _sfc_b_warnings = []
+    _bl_per_person = bl_consumption / hh_size if hh_size > 0 else bl_consumption
+    if is_tpddtec and _bl_per_person > 0.95:
+        bl_consumption = 0.95 * hh_size
+        _sfc_b_warnings.append(
+            f"SFC_b capped at 0.95 t/person/yr (was {_bl_per_person:.3f} t/person/yr). TPDDTEC ICS 18 hard cap applied."
+        )
+    elif is_tpddtec and _bl_per_person > 0.75:
+        _sfc_b_warnings.append(
+            f"SFC_b = {_bl_per_person:.3f} t/person/yr exceeds 0.75 threshold. Third-party study required for justification (TPDDTEC ICS 18)."
+        )
 
-    if is_charcoal_project and CF > 1.0 and not is_method_3:
-        pj_consumption_wood_equiv = pj_consumption * CF
-    else:
-        pj_consumption_wood_equiv = pj_consumption
+    # CF: NOT applied to consumption when charcoal EFs with-production are used.
+    # EF_CO2_charcoal_with_production (165.22 tCO2/TJ) already encodes the production
+    # inefficiency — multiplying consumption by CF would double-count those losses.
+    # NCV_charcoal is used directly on charcoal tonnes consumed.
+    bl_consumption_wood_equiv = bl_consumption
+    cf_note = (
+        f"Charcoal baseline: EF={EF_CO2_b} tCO2/TJ already includes production losses — CF not applied to consumption"
+        if is_charcoal_baseline
+        else f"Wood baseline: CF not applicable (CF={CF})"
+    )
+    pj_consumption_wood_equiv = pj_consumption
 
     ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
     ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
 
     be_per_hh = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+
+    # VM0050 Eq. 3 — Stove-stacking cross-check cap
+    # If eta_new and eta_old provided, cap baseline energy to EC_est = EC_p × (eta_new / eta_old)
+    _stove_stacking_applied = False
+    _eta_new = _pval(params, "eta_new", 0.0) or _pval(params, "eta_project", 0.0)
+    _eta_old = _pval(params, "eta_old", 0.0) or _pval(params, "eta_baseline", 0.0)
+    if not is_method_3 and _eta_new > 0 and _eta_old > 0 and methodology == "VM0050":
+        ec_b_est = ec_p * (_eta_new / _eta_old)
+        if ec_b > ec_b_est:
+            ec_b = ec_b_est
+            be_per_hh = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+            _stove_stacking_applied = True
 
     # Detect electric project device path (VM0050 Eq. 8)
     # Electric pressure cooker projects: PE = EC_elec (MWh/device/yr) × EF_el (tCO2e/MWh) × (1+TDL)
@@ -272,9 +301,16 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
     # Average annual energy saved in GWh/yr (AMS-II.G scale threshold: 60 GWh/yr)
     avg_energy_saved_gwh_yr = round((total_energy_saved_tj / crediting_years) / 3.6, 2)
 
+    _calc_warnings = _sfc_b_warnings[:]
+    if _stove_stacking_applied:
+        _calc_warnings.append("VM0050 Eq. 3 stove-stacking cap applied: baseline energy capped to EC_p × (eta_new / eta_old).")
+    if _fnrb_source.lower() == "tool30":
+        _calc_warnings.append(f"fNRB TOOL30 discount applied: fNRB × (1 - 0.26). Applied value = {fNRB:.4f}.")
+
     return {
         "calculation_steps": calculation_steps,
         "years": years,
+        "warnings": _calc_warnings,
         "summary": {
             "total_er": round(total_er, 2),
             "total_baseline": round(total_be, 2),
@@ -336,6 +372,10 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
+    # VM0050 §9.2 / Footnote 22: 26% uncertainty discount when fNRB source is CDM TOOL30
+    _fnrb_source_c = _ptext(params, "fnrb_source", "")
+    if _fnrb_source_c.lower() == "tool30":
+        fNRB = fNRB * (1.0 - 0.26)
     num_hh = int(_pval(params, "num_households", 1000))
     hh_size = _pval(params, "household_size", 5.0)
     leakage_pct = 1.0 - _pval(params, "leakage_discount", 0.95)
@@ -385,15 +425,23 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         bl_consumption = _pval(params, "baseline_fuel_consumption", 0.5)
         pj_consumption = _pval(params, "project_fuel_consumption", bl_consumption * 0.5)
 
-    if is_charcoal_baseline and CF > 1.0:
-        bl_consumption_wood_equiv = bl_consumption * CF
-    else:
-        bl_consumption_wood_equiv = bl_consumption
+    # SFC_b cap: TPDDTEC v4.0 ICS 18 — hard cap at 0.95 t/person/yr; warn above 0.75
+    _sfc_b_warnings_c = []
+    _bl_per_person_c = bl_consumption / hh_size if hh_size > 0 else bl_consumption
+    if is_tpddtec and _bl_per_person_c > 0.95:
+        bl_consumption = 0.95 * hh_size
+        _sfc_b_warnings_c.append(
+            f"SFC_b capped at 0.95 t/person/yr (was {_bl_per_person_c:.3f} t/person/yr). TPDDTEC ICS 18 hard cap applied."
+        )
+    elif is_tpddtec and _bl_per_person_c > 0.75:
+        _sfc_b_warnings_c.append(
+            f"SFC_b = {_bl_per_person_c:.3f} t/person/yr exceeds 0.75 threshold. Third-party study required for justification (TPDDTEC ICS 18)."
+        )
 
-    if is_charcoal_project and CF > 1.0 and not is_method_3:
-        pj_consumption_wood_equiv = pj_consumption * CF
-    else:
-        pj_consumption_wood_equiv = pj_consumption
+    # CF: NOT applied to consumption when charcoal EFs with-production are used.
+    # EF_CO2_charcoal_with_production (165.22 tCO2/TJ) already encodes production losses.
+    bl_consumption_wood_equiv = bl_consumption
+    pj_consumption_wood_equiv = pj_consumption
 
     ec_b = bl_consumption_wood_equiv * NCV_b / 1000.0
     ec_p = pj_consumption_wood_equiv * NCV_p / 1000.0
@@ -403,6 +451,18 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         pe_per_unit = ec_p * (EF_CO2_p + EF_nonCO2_p)
     else:
         pe_per_unit = ec_p * (fNRB * EF_CO2_p + EF_nonCO2_p)
+
+    # VM0050 Eq. 3 — Stove-stacking cross-check cap (cohort path)
+    _stove_stacking_applied_c = False
+    _eta_new_c = _pval(params, "eta_new", 0.0) or _pval(params, "eta_project", 0.0)
+    _eta_old_c = _pval(params, "eta_old", 0.0) or _pval(params, "eta_baseline", 0.0)
+    if not is_method_3 and _eta_new_c > 0 and _eta_old_c > 0 and methodology == "VM0050":
+        ec_b_est_c = ec_p * (_eta_new_c / _eta_old_c)
+        if ec_b > ec_b_est_c:
+            ec_b = ec_b_est_c
+            be_per_unit = ec_b * (fNRB * EF_CO2_b + EF_nonCO2_b)
+            _stove_stacking_applied_c = True
+
     er_per_unit = be_per_unit - pe_per_unit
 
     deployment_mode = deployment_config.get("deployment_mode", "instant")
@@ -600,10 +660,10 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         if is_method_3 else
         f"EC_p × (fNRB × EF_CO2_p + EF_nonCO2_p) = {ec_p:.6f} × ({fNRB} × {EF_CO2_p} + {EF_nonCO2_p})"
     )
-    if is_charcoal_baseline and CF > 1.0:
-        cf_formula_cohort = f"SFC_b × CF = {bl_consumption:.6f} × {CF}"
+    if is_charcoal_baseline:
+        cf_formula_cohort = f"Charcoal: EF={EF_CO2_b} tCO2/TJ includes production — CF not applied to consumption. SFC_b={bl_consumption:.6f} t charcoal/device/yr"
     else:
-        cf_formula_cohort = f"SFC_b (wood, CF=1): {bl_consumption:.6f}"
+        cf_formula_cohort = f"Wood baseline: SFC_b={bl_consumption:.6f} t/device/yr"
     calculation_steps = [
         {"step": 1, "canonical_key": "baseline_fuel_consumption",
          "name": "Baseline fuel consumption per device",
@@ -652,9 +712,16 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
     for yd in years:
         yd["active_households"] = yd.get("effectively_used", yd.get("active_units", 0))
 
+    _cohort_warnings = _sfc_b_warnings_c[:]
+    if _stove_stacking_applied_c:
+        _cohort_warnings.append("VM0050 Eq. 3 stove-stacking cap applied: baseline energy capped to EC_p × (eta_new / eta_old).")
+    if _fnrb_source_c.lower() == "tool30":
+        _cohort_warnings.append(f"fNRB TOOL30 discount applied: fNRB × (1 - 0.26). Applied value = {fNRB:.4f}.")
+
     return {
         "calculation_steps": calculation_steps,
         "years": years,
+        "warnings": _cohort_warnings,
         "deployment_timeline": deployment_timeline,
         "cohort_count": len(cohorts),
         "cohorts_summary": [{"month": c["month"], "count": c["count"]} for c in cohorts[:50]],

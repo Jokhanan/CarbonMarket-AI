@@ -445,6 +445,10 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
     top_level_fnrb = _pval(params, "fNRB",
                             _pval(params, "fnrb", 0.30, lo=0.0, hi=1.0),
                             lo=0.0, hi=1.0)
+    # VM0050 §9.2 / Footnote 22: 26% uncertainty discount when fNRB source is CDM TOOL30
+    _mecd_fnrb_source = str(params.get("fnrb_source") or params.get("fNRB_source") or "")
+    if _mecd_fnrb_source.lower() == "tool30":
+        top_level_fnrb = top_level_fnrb * (1.0 - 0.26)
 
     if not baseline_fuels:
         baseline_fuels = [{
