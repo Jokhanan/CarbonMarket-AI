@@ -447,8 +447,10 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
                             lo=0.0, hi=1.0)
     # VM0050 §9.2 / Footnote 22: 26% uncertainty discount when fNRB source is CDM TOOL30
     _mecd_fnrb_source = str(params.get("fnrb_source") or params.get("fNRB_source") or "")
+    _mecd_warnings = []
     if _mecd_fnrb_source.lower() == "tool30":
         top_level_fnrb = top_level_fnrb * (1.0 - 0.26)
+        _mecd_warnings.append(f"fNRB TOOL30 discount applied: fNRB × (1 - 0.26). Applied value = {top_level_fnrb:.4f}.")
 
     if not baseline_fuels:
         baseline_fuels = [{
@@ -555,4 +557,5 @@ def calculate_mecd_er(params: dict, crediting_years: int = 5, start_year: int = 
         "avg_annual_er_tCO2e": round(total_er / crediting_years, 2) if crediting_years else 0.0,
         "n_persons": n_persons,
         "leakage_option": leakage_option,
+        "warnings": _mecd_warnings,
     }

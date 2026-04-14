@@ -148,6 +148,10 @@ def _render_live_simulator(project_id, methodology, project_name="Project"):
                 _render_param_value_display("HH Size", _safe_float(params, "household_size", None), "persons", _safe_status(params, "household_size"), _safe_source(params, "household_size"))
             with pv_col2:
                 _render_param_value_display("fNRB", _safe_float(params, "fNRB", None), "", _safe_status(params, "fNRB"), _safe_source(params, "fNRB"))
+                _fnrb_src_raw = _safe_text(params, "fnrb_source", "")
+                if _fnrb_src_raw:
+                    _fnrb_src_label = "TOOL30 (-26%)" if _fnrb_src_raw.lower() == "tool30" else _fnrb_src_raw.upper()
+                    _render_param_value_display("fNRB Source", _fnrb_src_label, "", "set", "project")
                 _render_param_value_display("NCV bl", _safe_float(params, "NCV_baseline", None), "TJ/Gg", _safe_status(params, "NCV_baseline"), _safe_source(params, "NCV_baseline"))
                 _render_param_value_display("EF CO2 bl", _safe_float(params, "EF_CO2_baseline", None), "tCO2/TJ", _safe_status(params, "EF_CO2_baseline"), _safe_source(params, "EF_CO2_baseline"))
             with pv_col3:
@@ -561,6 +565,11 @@ def _render_er_results(result, project_name="Project"):
         st.metric("Average Annual ER", f"{summary['average_annual_er']:,.0f} tCO2e/yr")
     with col3:
         st.metric("Crediting Period", f"{summary['crediting_years']} years")
+
+    _calc_warnings = result.get("warnings", [])
+    if _calc_warnings:
+        for _w in _calc_warnings:
+            st.warning(_w)
 
     if summary.get("deployment_mode") and summary["deployment_mode"] != "instant":
         col4, col5, col6 = st.columns(3)

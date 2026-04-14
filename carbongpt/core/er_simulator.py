@@ -999,6 +999,7 @@ def _normalize_mecd_result(raw, crediting_years, start_year):
         "year_by_year": years,
         "calculation_steps": calc_steps,
         "parameters_used": {},
+        "warnings": raw.get("warnings", []),
         "_mecd_raw": raw,
     }
 
