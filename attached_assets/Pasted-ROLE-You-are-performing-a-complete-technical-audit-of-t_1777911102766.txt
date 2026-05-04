@@ -1,0 +1,95 @@
+ROLE
+You are performing a complete technical audit of this Replit project. 
+I'm going to share your full analysis with another AI assistant (Claude) 
+who will help me improve the application. Your job is to give an exhaustive, 
+no-fluff inventory of what exists, what works, what doesn't, and what's 
+missing — so Claude can advise without having to ask follow-up questions.
+
+CONTEXT
+This project is an early-stage attempt at building a SaaS tool for carbon 
+project developers (Verra VCS, Gold Standard, CDM/Article 6.4 methodologies). 
+The intended use cases involve helping developers draft and maintain MRV 
+documentation, respond to CARs from DOE verifiers, manage PDDs and 
+Monitoring Reports, and stay aligned with methodology updates.
+
+I need you to walk through EVERYTHING that has been built, integrated, 
+attempted, abandoned, or left as a stub.
+
+DELIVERABLE — please structure your response in these exact sections:
+
+1. PROJECT OVERVIEW
+   - One-paragraph description of what the app currently is
+   - Current state: prototype / MVP / partial build / broken / functional
+   - Last meaningful change and what it did
+
+2. TECH STACK
+   - Frontend framework + version
+   - Backend framework + version
+   - Database (type, schema overview, ORM if any)
+   - Authentication (provider, current state)
+   - Hosting/deployment setup on Replit
+   - Any external services (Supabase, Firebase, Stripe, etc.)
+   - Environment variables required (list keys, not values)
+
+3. FILE & FOLDER STRUCTURE
+   - Tree view of the main folders and key files
+   - For each main file, one-line description of its purpose
+
+4. FEATURES IMPLEMENTED (working)
+   For each feature:
+   - Name
+   - What it does from the user's perspective
+   - Where it lives in the code (file paths)
+   - Known limitations or rough edges
+
+5. FEATURES PARTIALLY IMPLEMENTED
+   For each:
+   - Name
+   - What works, what doesn't
+   - Why it was left incomplete (if you can tell from the code/history)
+
+6. FEATURES PLANNED BUT NOT STARTED
+   - Anything referenced in code comments, TODOs, README, or scaffolding 
+     that has no actual implementation
+
+7. AI / LLM INTEGRATION
+   - Which model(s) are called (OpenAI, Anthropic, etc.)
+   - Where in the code the API calls happen
+   - Current prompt(s) used — paste them verbatim
+   - How context/RAG is handled (if at all)
+   - Any vector DB, embeddings, or document ingestion pipeline
+
+8. DATA MODEL
+   - Tables/collections and their fields
+   - Relationships
+   - Sample row(s) if available
+   - What's seeded vs. empty
+
+9. USER FLOWS
+   - The main paths a user can take through the app today, step by step
+   - Which flows are complete and which break
+
+10. KNOWN BUGS & ISSUES
+    - Anything broken, flaky, or producing wrong output
+    - Console errors, failed builds, deprecated dependencies
+
+11. EXTERNAL DOCUMENTS / KNOWLEDGE BASE
+    - Any uploaded files (PDFs of methodologies, sample PDDs, etc.)
+    - How they're stored and whether they're actually used by the app
+
+12. WHAT YOU THINK IS MISSING
+    - Your own honest assessment: given the stated use case (carbon project 
+      MRV / CAR responses / PDD drafting), what gaps stand out the most?
+
+13. RAW DUMP
+    - Paste the contents of: README.md, package.json (or equivalent), 
+      .replit config, any schema file, and the main entry point file
+    - If a file is over 200 lines, paste the first 100 + last 50 and note 
+      the truncation
+
+RULES
+- Do not summarize or soften. If something is broken, say it's broken.
+- Do not invent features that don't exist in the code.
+- If you're unsure about something, say "uncertain — would need to check X".
+- Use file paths, function names, and line numbers wherever possible.
+- Length is not a concern. Completeness is.
