@@ -179,6 +179,10 @@ def health_check() -> dict:
     return {"status": "ok", "app": APP_TITLE, "version": APP_VERSION}
 
 
+_MAX_UPLOAD_BYTES = int(os.getenv("CARBONGPT_MAX_UPLOAD_MB", "50")) * 1024 * 1024
+_DOCX_MAGIC = b"PK\x03\x04"  # DOCX/ZIP magic bytes
+
+
 @app.post(
     "/upload-document",
     response_model=UploadResponse,
@@ -189,13 +193,11 @@ async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
     if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Only .docx files are accepted.")
 
-    _max_bytes = int(os.getenv("CARBONGPT_MAX_UPLOAD_MB", "50")) * 1024 * 1024
-    _docx_magic = b"PK\x03\x04"  # DOCX/ZIP magic bytes
-
+    # Read full content to validate magic bytes and size
     content = await file.read()
-    if len(content) > _max_bytes:
-        raise HTTPException(status_code=413, detail=f"File exceeds maximum size of {_max_bytes // (1024*1024)} MB.")
-    if not content.startswith(_docx_magic):
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File exceeds maximum size of {_MAX_UPLOAD_BYTES // (1024*1024)} MB.")
+    if not content.startswith(_DOCX_MAGIC):
         raise HTTPException(status_code=400, detail="File content does not match .docx format.")
 
     unique_stem = f"{uuid.uuid4().hex}_{Path(file.filename).stem}"

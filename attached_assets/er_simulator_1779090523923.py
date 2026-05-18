@@ -30,6 +30,8 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
         TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+        TPDDTEC_EF_CO2_CHARCOAL_CAP,
+        TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5,
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
@@ -81,6 +83,15 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         NCV_p = _pval(params, "NCV_project", NCV_b)
         EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
         EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+
+    # TPDDTEC v4.0 — charcoal EF hard caps (ICS §8/9, Table A: 197.15 / 92.29 tCO2/TJ)
+    # Applies to user-supplied parameter overrides; default values (165.22 / 44.83) are below cap.
+    if is_tpddtec and is_charcoal_baseline:
+        EF_CO2_b = min(EF_CO2_b, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+        EF_nonCO2_b = min(EF_nonCO2_b, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
+    if is_tpddtec and is_charcoal_project:
+        EF_CO2_p = min(EF_CO2_p, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+        EF_nonCO2_p = min(EF_nonCO2_p, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
 
     if methodology in ("VM0050",) and not is_tpddtec:
         bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.5)
@@ -369,6 +380,8 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
         TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+        TPDDTEC_EF_CO2_CHARCOAL_CAP,
+        TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5,
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
@@ -413,6 +426,15 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         NCV_p = _pval(params, "NCV_project", NCV_b)
         EF_CO2_p = _pval(params, "EF_CO2_project", EF_CO2_b)
         EF_nonCO2_p = _pval(params, "EF_nonCO2_project", EF_nonCO2_b)
+
+    # TPDDTEC v4.0 — charcoal EF hard caps (ICS §8/9, Table A: 197.15 / 92.29 tCO2/TJ)
+    # Applies to user-supplied parameter overrides; default values (165.22 / 44.83) are below cap.
+    if is_tpddtec and is_charcoal_baseline:
+        EF_CO2_b = min(EF_CO2_b, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+        EF_nonCO2_b = min(EF_nonCO2_b, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
+    if is_tpddtec and is_charcoal_project:
+        EF_CO2_p = min(EF_CO2_p, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+        EF_nonCO2_p = min(EF_nonCO2_p, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
 
     if methodology in ("VM0050",) and not is_tpddtec:
         bl_consumption = _pval(params, "baseline_fuel_consumption", hh_size * 0.5)
@@ -1054,13 +1076,13 @@ def run_scenario(project_id, scenario_id=None, parameter_overrides=None, deploym
                 params, crediting_years, start_year, methodology,
                 method_id=method_id,
             )
+    elif methodology in ("RECH", "GS-RECH", "GS-RECH-V5", "RECH-V5", "GS_RECH_V5"):
+        from carbongpt.core.gs_rech_v5 import calculate_gs_rech_v5_er
+        result = calculate_gs_rech_v5_er(params, crediting_years=crediting_years, start_year=start_year)
     elif methodology in ("MECD", "GS-MECD"):
         from carbongpt.core.mecd_simulator import calculate_mecd_er
         raw = calculate_mecd_er(params, crediting_years=crediting_years, start_year=start_year)
         result = _normalize_mecd_result(raw, crediting_years, start_year)
-    elif methodology in ("RECH", "GS-RECH", "GS-RECH-V5", "RECH-V5", "GS_RECH_V5"):
-        from carbongpt.core.gs_rech_v5 import calculate_gs_rech_v5_er
-        result = calculate_gs_rech_v5_er(params, crediting_years=crediting_years, start_year=start_year)
     elif methodology in ("ACM0002", "AMS-I.D.", "AMSID"):
         result = calculate_grid_er(params, crediting_years, start_year, methodology)
     else:
