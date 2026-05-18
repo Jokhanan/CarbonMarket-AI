@@ -3,20 +3,32 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import Layout from "@/components/Layout";
+import Dashboard from "@/pages/Dashboard";
+import Calculator from "@/pages/Calculator";
+import Projects from "@/pages/Projects";
+import Project from "@/pages/Project";
+import Analyze from "@/pages/Analyze";
+import AIReview from "@/pages/AIReview";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
-    <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
-      <Route component={NotFound} />
-    </Switch>
+    <Layout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/calculator" component={Calculator} />
+        <Route path="/projects" component={Projects} />
+        <Route path="/projects/:id" component={Project} />
+        <Route path="/analyze" component={Analyze} />
+        <Route path="/review" component={AIReview} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -26,5 +38,3 @@ function App() {
     </QueryClientProvider>
   );
 }
-
-export default App;

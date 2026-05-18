@@ -30,6 +30,8 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
         TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+        TPDDTEC_EF_CO2_CHARCOAL_CAP,
+        TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5,
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
@@ -74,6 +76,13 @@ def calculate_cookstove_er(params, crediting_years=7, start_year=2025, methodolo
             NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
+        # TPDDTEC ICS §8/9: hard upper caps on charcoal EF (user overrides may not exceed these)
+        if is_charcoal_baseline:
+            EF_CO2_b = min(EF_CO2_b, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+            EF_nonCO2_b = min(EF_nonCO2_b, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
+        if is_charcoal_project:
+            EF_CO2_p = min(EF_CO2_p, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+            EF_nonCO2_p = min(EF_nonCO2_p, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
     else:
         NCV_b = _pval(params, "NCV_baseline", 15.6)
         EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)
@@ -369,6 +378,8 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
         TPDDTEC_EF_NONCO2_CHARCOAL_WITH_PRODUCTION_AR5,
         TPDDTEC_NCV_CHARCOAL_TJ_PER_GG,
         TPDDTEC_METHOD2_DEFAULT_CONSUMPTION,
+        TPDDTEC_EF_CO2_CHARCOAL_CAP,
+        TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5,
     )
 
     fNRB = _pval(params, "fNRB", 0.30)
@@ -406,6 +417,13 @@ def calculate_cookstove_er_cohort(params, crediting_years=7, start_year=2025, me
             NCV_p = _pval(params, "NCV_project", TPDDTEC_NCV_WOOD_TJ_PER_GG)
             EF_CO2_p = _pval(params, "EF_CO2_project", TPDDTEC_EF_CO2_WOOD)
             EF_nonCO2_p = _pval(params, "EF_nonCO2_project", TPDDTEC_EF_NONCO2_WOOD_AR5)
+        # TPDDTEC ICS §8/9: hard upper caps on charcoal EF (user overrides may not exceed these)
+        if is_charcoal_baseline:
+            EF_CO2_b = min(EF_CO2_b, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+            EF_nonCO2_b = min(EF_nonCO2_b, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
+        if is_charcoal_project:
+            EF_CO2_p = min(EF_CO2_p, TPDDTEC_EF_CO2_CHARCOAL_CAP)
+            EF_nonCO2_p = min(EF_nonCO2_p, TPDDTEC_EF_NONCO2_CHARCOAL_CAP_AR5)
     else:
         NCV_b = _pval(params, "NCV_baseline", 15.6)
         EF_CO2_b = _pval(params, "EF_CO2_baseline", 112.0)

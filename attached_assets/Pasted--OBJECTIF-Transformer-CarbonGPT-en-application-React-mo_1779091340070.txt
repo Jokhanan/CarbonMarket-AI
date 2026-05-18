@@ -1,0 +1,106 @@
+## OBJECTIF : Transformer CarbonGPT en application React moderne
+
+L'application tourne actuellement sur Streamlit. L'objectif est de la 
+remplacer par une interface React professionnelle tout en conservant le 
+backend FastAPI existant intact.
+
+Le projet a déjà un dossier client/ avec Vite + React + TypeScript + 
+Shadcn/ui installés. C'est là qu'on construit tout.
+
+---
+
+## PARTIE 1 — CORRECTIONS BACKEND (à faire en premier)
+
+### 1A. Activer GS MECD v2
+Le calculateur mecd_simulator.py existe déjà. Dans er_simulator.py, 
+assure-toi que MECD est bien branché dans run_scenario() au même titre 
+que TPDDTEC, VM0050 et RECH.
+
+### 1B. Vérifier les caps TPDDTEC charbon
+Dans er_simulator.py, pour la méthodologie TPDDTEC, les EF charbon 
+doivent être plafonnés : EF_CO2 max 197.15 tCO2/TJ, EF_nonCO2 max 
+92.29 tCO2e/TJ (ICS §8/9). Vérifie que c'est bien appliqué.
+
+---
+
+## PARTIE 2 — FRONTEND REACT (remplacement de Streamlit)
+
+Configure le proxy Vite dans vite.config.ts :
+/api → http://localhost:3000 (FastAPI)
+
+### Design system à appliquer partout
+- Fond : #0f1117 (dark mode)
+- Accent : #00C896 (vert émeraude)
+- Surface : #1e2130
+- Texte : #e2e8f0
+- Police : Inter (Google Fonts)
+- Composants : Shadcn/ui (Card, Table, Badge, Button, Tabs, Dialog)
+- Style : SaaS premium, épuré, typographie soignée
+
+### Page 1 — Dashboard (route /)
+- Header avec nom de l'app + navigation latérale
+- 4 métriques en cards : Total projets / Actifs / Brouillons / Documents
+- Liste des projets récents avec statut (badge coloré)
+- Bouton "Nouveau projet"
+- Données depuis GET /projects
+
+### Page 2 — Calculateur ER (route /calculator)
+C'est la page la plus importante. Elle doit avoir :
+
+**Mode Standard (une méthodologie)**
+- Sélection méthodologie : RECH v5 / TPDDTEC v4 / VM0050 v1 / MECD v2
+- Formulaire paramètres : fNRB, N_distributed, Pb, Pp, HNb, 
+  adoption_rate, stacking_factor, baseline_fuel, project_fuel, DAF 
+  (RECH seulement), crediting_years (slider 1-10)
+- Résultats : total crédits mis en valeur + tableau année par année 
+  + graphique bar chart évolution annuelle
+- Données depuis POST /v1/calculate
+
+**Mode Comparaison (toggle)**
+- Mêmes paramètres d'entrée
+- Lance le calcul sur les 4 méthodologies simultanément
+- Tableau comparatif côte à côte : ERy an 1 / Total / Moyenne/an / 
+  Leakage
+- Bar chart groupé
+- Met en évidence la méthodologie la plus favorable
+
+### Page 3 — Projet (route /projects/:id)
+- Infos projet (nom, standard, méthodologie, pays, statut)
+- Upload de documents (PDD, MR, données terrain)
+- Liste des documents uploadés
+- Données depuis GET/PATCH /projects/:id et POST /projects/:id/documents
+
+### Page 4 — Analyse Compliance (route /analyze)
+- Upload d'un fichier .docx
+- Sélection standard + type de document
+- Affichage des findings (ERROR / WARNING / INFO) avec code couleur
+- Score de compliance en pourcentage
+- Données depuis POST /upload-document puis POST /analyze-selected
+
+### Page 5 — AI Review (route /review)
+- Upload document + lancement review async
+- Polling sur GET /ai-review/:task_id
+- Affichage section par section avec niveau (CAR / CL / FAR)
+- Données depuis POST /ai-review
+
+---
+
+## PARTIE 3 — NAVIGATION
+
+Sidebar fixe à gauche avec :
+- Logo "CarbonGPT" en haut
+- Liens : Dashboard / Calculateur / Projets / Analyse / AI Review
+- Icônes Lucide React pour chaque lien
+
+---
+
+## ORDRE D'EXÉCUTION
+
+1. Corrections backend (Partie 1)
+2. Setup Vite proxy + layout de base (sidebar + routing)
+3. Page Calculateur ER en priorité absolue
+4. Dashboard
+5. Pages restantes
+
+Lance les tests backend après la Partie 1. Pour le frontend, 
+assure-toi que npm run build passe sans erreur TypeScript.

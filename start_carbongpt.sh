@@ -28,9 +28,7 @@ for PORT in 5000 3000; do
   done
 done
 
-/home/runner/workspace/.pythonlibs/bin/streamlit run carbongpt/ui/streamlit_app.py \
-  --server.port 5000 --server.headless true --server.address 0.0.0.0 \
-  --server.enableCORS false --server.enableXsrfProtection false &
+PORT=5000 NODE_ENV=development node_modules/.bin/tsx server/index.ts >> /tmp/node_app.log 2>&1 &
 
 setsid nohup /home/runner/workspace/.pythonlibs/bin/python -u carbongpt/core/ai_review_worker.py \
   >> /tmp/ai_worker.log 2>&1 &
