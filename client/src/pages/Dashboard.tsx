@@ -119,10 +119,11 @@ export default function Dashboard() {
                     <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                     <td className="px-6 py-3 text-muted-foreground">{p.doc_count ?? 0}</td>
                     <td className="px-6 py-3">
-                      <Link href={`/projects/${p.id}`}>
-                        <a className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs">
-                          Voir <ArrowRight className="w-3 h-3" />
-                        </a>
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs"
+                      >
+                        Voir <ArrowRight className="w-3 h-3" />
                       </Link>
                     </td>
                   </tr>

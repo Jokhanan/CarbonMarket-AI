@@ -15,6 +15,8 @@ done
 pkill -9 -f "streamlit" 2>/dev/null || true
 pkill -9 -f "uvicorn" 2>/dev/null || true
 pkill -9 -f "ai_review_worker.py" 2>/dev/null || true
+pkill -9 -f "tsx server/index" 2>/dev/null || true
+pkill -9 -f "node_modules/.bin/tsx" 2>/dev/null || true
 
 # Wait until both ports are confirmed free
 for PORT in 5000 3000; do

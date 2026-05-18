@@ -42,11 +42,12 @@ export default function Projects() {
       ) : (
         <div className="space-y-2">
           {projects.map((p) => (
-            <Link key={p.id} href={`/projects/${p.id}`}>
-              <a
-                data-testid={`card-project-${p.id}`}
-                className="flex items-center justify-between px-5 py-4 bg-card border border-card-border rounded-lg hover:border-primary/30 hover:bg-accent/30 transition-all cursor-pointer"
-              >
+            <Link
+              key={p.id}
+              href={`/projects/${p.id}`}
+              data-testid={`card-project-${p.id}`}
+              className="flex items-center justify-between px-5 py-4 bg-card border border-card-border rounded-lg hover:border-primary/30 hover:bg-accent/30 transition-all cursor-pointer"
+            >
                 <div className="flex items-center gap-4 min-w-0">
                   <FolderOpen className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
@@ -63,7 +64,6 @@ export default function Projects() {
                   <span className="text-xs text-muted-foreground">{p.doc_count ?? 0} docs</span>
                   <ArrowRight className="w-4 h-4 text-muted-foreground" />
                 </div>
-              </a>
             </Link>
           ))}
         </div>
