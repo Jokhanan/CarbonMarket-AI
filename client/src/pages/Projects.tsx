@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { FolderOpen, ArrowRight, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Project } from "@/lib/api";
 
@@ -23,10 +24,16 @@ export default function Projects() {
         <div className="flex items-center gap-3">
           <FolderOpen className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Projets</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{projects?.length ?? 0} projets</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{projects?.length ?? 0} projects</p>
           </div>
         </div>
+        <Link href="/projects/new">
+          <Button data-testid="button-new-project-list" className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Project
+          </Button>
+        </Link>
       </div>
 
       {isLoading ? (
@@ -36,7 +43,8 @@ export default function Projects() {
       ) : !projects?.length ? (
         <Card className="bg-card border-card-border">
           <CardContent className="py-16 text-center text-muted-foreground text-sm">
-            Aucun projet. Utilisez le formulaire Streamlit ou l'API pour creer des projets.
+            No projects yet.{" "}
+            <Link href="/projects/new" className="text-primary hover:underline">Create your first project</Link>
           </CardContent>
         </Card>
       ) : (

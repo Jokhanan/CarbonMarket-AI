@@ -6,14 +6,15 @@ import {
   FileSearch,
   Sparkles,
   Leaf,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/calculator", label: "Calculateur ER", icon: Calculator },
-  { href: "/projects", label: "Projets", icon: FolderOpen },
-  { href: "/analyze", label: "Analyse", icon: FileSearch },
+  { href: "/calculator", label: "ER Calculator", icon: Calculator },
+  { href: "/projects", label: "Projects", icon: FolderOpen },
+  { href: "/analyze", label: "Analyze", icon: FileSearch },
   { href: "/review", label: "AI Review", icon: Sparkles },
 ] as const;
 
@@ -30,7 +31,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </span>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <div className="px-3 pt-3 pb-1">
+          <Link href="/projects/new">
+            <button
+              data-testid="nav-new-project"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Project
+            </button>
+          </Link>
+        </div>
+
+        <nav className="flex-1 px-3 py-2 space-y-0.5">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? location === "/" : location.startsWith(href);
             return (

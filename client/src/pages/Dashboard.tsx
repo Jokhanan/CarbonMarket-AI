@@ -49,10 +49,10 @@ export default function Dashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Vue d'ensemble de votre portefeuille carbone</p>
         </div>
-        <Link href="/projects">
+        <Link href="/projects/new">
           <Button data-testid="button-new-project" className="gap-2">
             <Plus className="w-4 h-4" />
-            Nouveau projet
+            New Project
           </Button>
         </Link>
       </div>
