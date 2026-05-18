@@ -1,14 +1,11 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Upload, RefreshCw, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 
 interface Finding {
   id: number;
@@ -79,7 +76,8 @@ function FindingRow({ finding, projectId }: { finding: Finding; projectId: numbe
     }
   }
 
-  const typeColor = TYPE_COLORS[finding.finding_type?.toUpperCase()] ?? "text-muted-foreground bg-muted border-border";
+  const typeKey = (finding.finding_type ?? "").toUpperCase();
+  const typeColor = TYPE_COLORS[typeKey] ?? "text-muted-foreground bg-muted border-border";
 
   return (
     <div className="border border-border/50 rounded-lg overflow-hidden">
@@ -90,7 +88,7 @@ function FindingRow({ finding, projectId }: { finding: Finding; projectId: numbe
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded border ${typeColor}`}>
-            {finding.finding_type?.toUpperCase() ?? "—"}
+            {typeKey || "OBS"}
           </span>
           <span className="text-sm font-medium truncate">{finding.title}</span>
           {finding.section_ref && (
@@ -157,8 +155,6 @@ export default function FindingsTab({ projectId }: { projectId: number }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [newFinding, setNewFinding] = useState({ title: "", description: "", finding_type: "CAR", section_ref: "" });
-  const [adding, setAdding] = useState(false);
 
   const { data: findings, isLoading } = useQuery<Finding[]>({
     queryKey: ["/api/projects", projectId, "findings"],
@@ -166,15 +162,27 @@ export default function FindingsTab({ projectId }: { projectId: number }) {
       const r = await fetch(`/api/projects/${projectId}/audit-simulation/history`);
       if (!r.ok) throw new Error("Failed");
       const history = await r.json();
-      const latest = Array.isArray(history) ? history[0] : null;
-      if (!latest) return [];
-      const detail = await fetch(`/api/projects/${projectId}/audit-simulation/history`);
+      if (!Array.isArray(history) || history.length === 0) return [];
+
+      // Flatten findings from all audit runs, normalising field names.
+      // Audit findings shape: { type, title, severity, description, category }
+      // Our Finding interface:  { finding_type, title, status, description, ... }
       const findings: Finding[] = [];
-      if (Array.isArray(history)) {
-        for (const h of history) {
-          const raw = h.findings ?? [];
-          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-          for (const f of parsed) findings.push({ ...f, id: f.id ?? Math.random() });
+      let uid = 1;
+      for (const sim of history) {
+        const raw = sim.findings ?? [];
+        const parsed: any[] = typeof raw === "string" ? JSON.parse(raw) : raw;
+        for (const f of parsed) {
+          findings.push({
+            id: f.id ?? uid++,
+            finding_type: (f.finding_type ?? f.type ?? "OBS").toUpperCase(),
+            title: f.title ?? f.message ?? "Untitled",
+            description: f.description ?? "",
+            status: f.status ?? "open",
+            response: f.response,
+            section_ref: f.section_ref ?? f.category,
+            severity: f.severity,
+          });
         }
       }
       return findings;
@@ -240,7 +248,7 @@ export default function FindingsTab({ projectId }: { projectId: number }) {
       ) : (
         <div className="space-y-2">
           {findings.map((f, i) => (
-            <FindingRow key={f.id ?? i} finding={f} projectId={projectId} />
+            <FindingRow key={`${f.id}-${i}`} finding={f} projectId={projectId} />
           ))}
         </div>
       )}

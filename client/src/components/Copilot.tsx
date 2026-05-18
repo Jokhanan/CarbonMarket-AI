@@ -1,13 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { MessageSquare, X, Send, RefreshCw, Minimize2, Bot } from "lucide-react";
+import { Send, RefreshCw, Minimize2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ChatMessage } from "@/lib/api";
-
-interface CopilotProps {
-  projectId?: number;
-}
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
@@ -31,8 +27,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
-export default function Copilot({ projectId }: CopilotProps) {
-  const [, navigate] = useLocation();
+export default function Copilot() {
+  const [location, navigate] = useLocation();
+
+  // Auto-detect project from URL /projects/:id
+  const projectIdMatch = location.match(/^\/projects\/(\d+)/);
+  const projectId = projectIdMatch ? parseInt(projectIdMatch[1]) : undefined;
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {

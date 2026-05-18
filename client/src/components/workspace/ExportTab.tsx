@@ -14,10 +14,19 @@ export default function ExportTab({ project }: { project: Project }) {
   async function exportDoc() {
     setExporting(true);
     try {
-      const r = await fetch(`/api/projects/${project.id}/export-calculation`, {
+      const docType = project.doc_type?.toLowerCase() ?? "pdd";
+      const url =
+        format === "xlsx"
+          ? `/api/projects/${project.id}/export-calculation`
+          : `/api/projects/${project.id}/generate-template`;
+      const body =
+        format === "xlsx"
+          ? { doc_type: docType }
+          : { doc_type: docType, include_calculations: true };
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(await r.text());
 

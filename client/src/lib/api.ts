@@ -189,6 +189,7 @@ export interface AIReviewResult {
   task_id?: string;
   status: string;
   sections?: Array<{ section: string; findings: { level: string; message: string }[]; score?: number }>;
+  results?: Array<{ section: string; findings: { level: string; message: string }[]; score?: number }>;
   error?: string;
 }
 
@@ -263,7 +264,7 @@ export async function uploadDocx(file: File): Promise<{ file_path: string; filen
 }
 
 export async function calculate(req: CalcRequest): Promise<CalcResult> {
-  const res = await fetch("/api/calculate", {
+  const res = await fetch("/api/v1/calculate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),

@@ -46,9 +46,12 @@ function ParamRow({
 
   async function confirm() {
     try {
-      await fetch(`/api/projects/${projectId}/parameters/${param.param_key}/confirm`, {
-        method: "POST",
+      const r = await fetch(`/api/projects/${projectId}/parameters/${param.param_key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_type: "user_override", value: String(param.value ?? "") }),
       });
+      if (!r.ok) throw new Error(await r.text());
       onUpdated();
     } catch (e) {
       toast({ title: "Confirm failed", description: String(e), variant: "destructive" });
@@ -177,7 +180,7 @@ export default function ParametersTab({ projectId }: { projectId: number }) {
     }
   }
 
-  const groups = params ? [...new Set(params.map((p) => p.group ?? p.section ?? "General"))] : [];
+  const groups = params ? Array.from(new Set(params.map((p) => p.group ?? p.section ?? "General"))) : [];
   const filtered = params
     ? groupFilter === "all"
       ? params

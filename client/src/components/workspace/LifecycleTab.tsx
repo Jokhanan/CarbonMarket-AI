@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, CheckCircle, Circle, RefreshCw, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,10 +48,11 @@ export default function LifecycleTab({ projectId }: { projectId: number }) {
     },
   });
 
+  // Tasks use the dedicated /tasks endpoint (returns { tasks: [...] })
   const { data: tasks, isLoading: loadingTasks } = useQuery<LifecycleTask[]>({
-    queryKey: ["/api/projects", projectId, "lifecycle-tasks"],
+    queryKey: ["/api/projects", projectId, "tasks"],
     queryFn: async () => {
-      const r = await fetch(`/api/projects/${projectId}/lifecycle`);
+      const r = await fetch(`/api/projects/${projectId}/tasks`);
       if (!r.ok) throw new Error("Failed");
       const data = await r.json();
       return data.tasks ?? [];
@@ -77,7 +78,7 @@ export default function LifecycleTab({ projectId }: { projectId: number }) {
       });
       if (!r.ok) throw new Error(await r.text());
       qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "lifecycle"] });
-      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "lifecycle-tasks"] });
+      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
       toast({ title: "Lifecycle initialized" });
     } catch (e) {
       toast({ title: "Failed", description: String(e), variant: "destructive" });
@@ -102,30 +103,39 @@ export default function LifecycleTab({ projectId }: { projectId: number }) {
     }
   }
 
+  // Toggle task status via PUT /tasks/{task_id}
   async function toggleTask(task: LifecycleTask) {
     const newStatus = task.status === "completed" ? "pending" : "completed";
     try {
-      await fetch(`/api/projects/${projectId}/lifecycle`, {
-        method: "PATCH",
+      const r = await fetch(`/api/tasks/${task.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: task.id, status: newStatus }),
+        body: JSON.stringify({ status: newStatus }),
       });
-      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "lifecycle-tasks"] });
+      if (!r.ok) throw new Error(await r.text());
+      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
     } catch (e) {
       toast({ title: "Update failed", description: String(e), variant: "destructive" });
     }
   }
 
+  // Add task via POST /projects/{id}/tasks
   async function addTask() {
     if (!newTask.title.trim()) return;
     setAddingTask(true);
     try {
-      await fetch(`/api/projects/${projectId}/lifecycle`, {
+      const r = await fetch(`/api/projects/${projectId}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newTask),
+        body: JSON.stringify({
+          title: newTask.title,
+          stage: newTask.stage,
+          priority: newTask.priority,
+          task_type: "general",
+        }),
       });
-      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "lifecycle-tasks"] });
+      if (!r.ok) throw new Error(await r.text());
+      qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
       setNewTask({ title: "", stage: lifecycle?.current_stage ?? "feasibility", priority: "medium" });
       toast({ title: "Task added" });
     } catch (e) {
@@ -175,7 +185,7 @@ export default function LifecycleTab({ projectId }: { projectId: number }) {
           {lifecycle.stages.map((stage, i) => (
             <div key={stage.key} className="flex items-center">
               <div className="flex flex-col items-center gap-1 px-2">
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${STATUS_COLORS_STAGE[stage.status]}`}>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${STATUS_COLORS_STAGE[stage.status] ?? STATUS_COLORS_STAGE.upcoming}`}>
                   {stage.status === "completed" ? "✓" : i + 1}
                 </div>
                 <span className={`text-[10px] font-medium whitespace-nowrap ${stage.status === "active" ? "text-primary" : stage.status === "completed" ? "text-green-400" : "text-muted-foreground"}`}>
@@ -261,7 +271,9 @@ export default function LifecycleTab({ projectId }: { projectId: number }) {
 
       {activeView === "stages" && hasLifecycle && (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Current stage: <strong className="text-foreground">{STAGE_LABELS[lifecycle?.current_stage ?? ""] ?? lifecycle?.current_stage}</strong></p>
+          <p className="text-sm text-muted-foreground">
+            Current stage: <strong className="text-foreground">{STAGE_LABELS[lifecycle?.current_stage ?? ""] ?? lifecycle?.current_stage}</strong>
+          </p>
           <Button
             data-testid="button-advance-stage"
             onClick={advanceStage}

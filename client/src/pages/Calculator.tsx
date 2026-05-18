@@ -89,6 +89,8 @@ function buildParams(methodology: Methodology, form: FormValues): Record<string,
         N_households: form.numHouseholds,
         household_size: form.householdSize,
       };
+    default:
+      return base;
   }
 }
 

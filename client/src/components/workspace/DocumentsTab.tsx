@@ -57,8 +57,14 @@ export default function DocumentsTab({ projectId }: { projectId: number }) {
   });
 
   const toggleAIMut = useMutation({
-    mutationFn: ({ id, use }: { id: number; use: boolean }) =>
-      apiRequest("PATCH", `/api/projects/${projectId}/documents/${id}/ai-context`, { use_as_ai_context: use }),
+    mutationFn: async ({ id, use }: { id: number; use: boolean }) => {
+      const r = await fetch(
+        `/api/projects/${projectId}/documents/${id}/ai-context?use_as_ai_context=${use}`,
+        { method: "PATCH" }
+      );
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "documents"] }),
   });
 

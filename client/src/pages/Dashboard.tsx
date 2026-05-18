@@ -36,9 +36,9 @@ export default function Dashboard() {
   const totalDocs = projects?.reduce((s, p) => s + (p.doc_count ?? 0), 0) ?? 0;
 
   const metrics = [
-    { label: "Total projets", value: total, icon: FolderOpen, color: "text-primary" },
-    { label: "Actifs", value: active, icon: Activity, color: "text-green-400" },
-    { label: "Brouillons", value: drafts, icon: FileText, color: "text-yellow-400" },
+    { label: "Total Projects", value: total, icon: FolderOpen, color: "text-primary" },
+    { label: "Active", value: active, icon: Activity, color: "text-green-400" },
+    { label: "Drafts", value: drafts, icon: FileText, color: "text-yellow-400" },
     { label: "Documents", value: totalDocs, icon: FileText, color: "text-blue-400" },
   ];
 
@@ -47,7 +47,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Vue d'ensemble de votre portefeuille carbone</p>
+          <p className="text-sm text-muted-foreground mt-1">Overview of your carbon portfolio</p>
         </div>
         <Link href="/projects/new">
           <Button data-testid="button-new-project" className="gap-2">
@@ -79,7 +79,7 @@ export default function Dashboard() {
 
       <Card className="bg-card border-card-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Projets recents</CardTitle>
+          <CardTitle className="text-base font-semibold">Recent Projects</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -90,17 +90,17 @@ export default function Dashboard() {
             </div>
           ) : !projects?.length ? (
             <div className="px-6 py-12 text-center text-muted-foreground text-sm">
-              Aucun projet. Commencez par en creer un.
+              No projects yet. Create your first one.
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nom</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Standard</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Methodologie</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Pays</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Statut</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Methodology</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Docs</th>
                   <th className="px-6 py-3" />
                 </tr>
@@ -123,7 +123,7 @@ export default function Dashboard() {
                         href={`/projects/${p.id}`}
                         className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs"
                       >
-                        Voir <ArrowRight className="w-3 h-3" />
+                        Open <ArrowRight className="w-3 h-3" />
                       </Link>
                     </td>
                   </tr>
