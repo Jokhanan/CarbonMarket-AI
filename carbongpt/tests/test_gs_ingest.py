@@ -202,4 +202,4 @@ class TestRegulatoryValues:
             )
             version_id = cur.fetchone()["id"]
         with pytest.raises(IngestError, match="llm_unverified"):
-            get_regulatory_value(version_id, "fNRB_default")
+            get_regulatory_value(version_id, "DAF_default")

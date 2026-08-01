@@ -200,10 +200,16 @@ l'autre n'est fNRB** : c'est le *threshold value* de consommation bois
 a la même valeur numérique par coïncidence.
 
 **Écart** : **critique. 0.75 comme défaut fNRB n'a aucune base dans le texte
-RECH v5.0.** Marqué `llm_unverified` dans `regulatory_values` (pas
-`llm_extracted`, parce que je n'ai rien pu extraire — c'est une absence
-constatée, pas une valeur lue). Un calcul qui utiliserait cette ligne lèvera
-une erreur, par construction.
+RECH v5.0.**
+
+**Mise à jour du 01.08.2026** : fNRB n'a pas de valeur à chercher dans ce
+document — ce n'est pas une absence de type « je n'ai pas trouvé le
+chiffre », c'est une absence structurelle (le paramètre est par nature
+suivi/dérivé par pays, pas une constante). La ligne correspondante a donc
+été **retirée** de `regulatory_values` plutôt que laissée en
+`llm_unverified` — voir `docs/DECISIONS.md`. fNRB relève de
+`docs/SPEC-02.md` (ingestion des sources de données externes indexées par
+pays), pas d'une valeur en attente de vérification dans SPEC-01.
 
 **Ce que je ne comble pas** : je ne sais pas d'où vient le 0.75 codé. Ce
 n'est ni une erreur de copie évidente (comme 165.22 pourrait l'être d'une
