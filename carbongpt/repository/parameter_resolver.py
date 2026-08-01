@@ -47,6 +47,39 @@ _ANSWER_TO_APPLICABILITY_HINT = {
     "wccf_4_1": {"wccf_ratio": "4:1"},
 }
 
+_OPTION_LABELS = {
+    "combustion_only": "la combustion seule (carbonisation exclue)",
+    "wccf_6_1": "le ratio bois→charbon 6:1 (défaut régional)",
+    "wccf_4_1": "le ratio bois→charbon 4:1 (option conservatrice)",
+}
+
+
+def _applicability_to_answer_kind(applicability: dict[str, Any]) -> str | None:
+    if applicability.get("basis") == "combustion_only":
+        return "combustion_only"
+    if applicability.get("wccf_ratio") == "6:1":
+        return "wccf_6_1"
+    if applicability.get("wccf_ratio") == "4:1":
+        return "wccf_4_1"
+    return None
+
+
+def _rejection_reason(chosen_answer: str, alt_applicability: dict[str, Any], alt_rationale: str) -> str:
+    """A rejection reason must say why this candidate does NOT apply to THIS
+    project — not describe the candidate's own merits (that was the original
+    bug: 'always available, more conservative' reads as an argument FOR the
+    option, not against it). The real reason it's rejected here is always the
+    same: the project's own answer to the open question pointed elsewhere.
+    The static rule text is kept as supporting context, not as the headline."""
+    alt_kind = _applicability_to_answer_kind(alt_applicability)
+    alt_label = _OPTION_LABELS.get(alt_kind, "cette option")
+    chosen_label = _OPTION_LABELS.get(chosen_answer, "l'option retenue")
+    return (
+        f"Non retenu pour ce projet : le développeur a confirmé {chosen_label} "
+        f"(réponse à la question sur le traitement de la carbonisation), pas {alt_label}. "
+        f"{alt_rationale}"
+    )
+
 _KILN_QUESTION_TEXT = (
     "Pour calculer le facteur d'émission du charbon de ce projet, il faut savoir "
     "comment traiter les émissions de fabrication du charbon (carbonisation) :\n"
@@ -242,13 +275,14 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
              json.dumps(chosen["applicability"]), chosen["rank"]),
         )
         for alt in alternatives:
+            reason = _rejection_reason(question["answer_value"], alt["applicability"], alt["rationale"])
             cur.execute(
                 """INSERT INTO project_parameter_alternatives
                        (project_parameter_id, value, unit, regulatory_value_id, section_ref,
                         applicability, rank, is_selected, rejection_reason)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s)""",
                 (pp_id, alt["value"], alt["unit"], alt["regulatory_value_id"], alt["section_ref"],
-                 json.dumps(alt["applicability"]), alt["rank"], alt["rationale"]),
+                 json.dumps(alt["applicability"]), alt["rank"], reason),
             )
 
     return {
@@ -260,7 +294,8 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
         "obligation": chosen["obligation"],
         "defendability_argument": defendability_argument,
         "alternatives": [
-            {"value": a["value"], "unit": a["unit"], "rank": a["rank"], "rejection_reason": a["rationale"]}
+            {"value": a["value"], "unit": a["unit"], "rank": a["rank"],
+             "rejection_reason": _rejection_reason(question["answer_value"], a["applicability"], a["rationale"])}
             for a in alternatives
         ],
     }

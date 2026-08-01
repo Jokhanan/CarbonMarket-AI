@@ -6,6 +6,12 @@
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:carbongpt@localhost:5432/carbongpt}"
 export PYTHONPATH="${PYTHONPATH:-.}"
 export PORT="${PORT:-5000}"

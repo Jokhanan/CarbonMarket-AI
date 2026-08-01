@@ -130,6 +130,32 @@ Les modifier uniquement si la spec en cours le demande explicitement.
 - Démarrage local : `./start_local.sh` (depuis WSL, à la racine) lance
   PostgreSQL, le backend et le frontend ensemble ; Ctrl+C arrête tout proprement.
 
+### Clés d'API
+
+Deux variables d'environnement distinctes, chacune requise pour une
+capacité précise — aucune des deux ne dégrade silencieusement en son
+absence, l'appel échoue avec un message explicite :
+
+- `ANTHROPIC_API_KEY` — génération de texte (rédaction, revue, extraction,
+  argument de défendabilité...). Toute la génération de texte passe par
+  `carbongpt/core/openai_client.py` (nom historique conservé, contenu
+  bascule vers Claude), modèle par défaut `claude-sonnet-5`.
+- `OPENAI_API_KEY` — embeddings uniquement (`text-embedding-3-small`).
+  Anthropic ne propose pas d'API d'embeddings. Utilisé par
+  `carbongpt/repository/ingestion.py`.
+
+Placer les deux dans un fichier `.env` à la racine du dépôt (non suivi par
+Git — vérifier que `.env` est bien dans `.gitignore`) ou comme variables
+d'environnement du shell avant de lancer `./start_local.sh`.
+
+**Point d'attention non résolu** : `carbongpt/core/openai_client.py` est le
+seul point vraiment centralisé — `ai_writer.py` et `calculation_engine.py`
+passent par lui. Mais `methodology_parser.py`, `evidence_engine.py`,
+`methodology_kb.py` et `research_orchestrator.py` ont chacun leur propre
+`_call_openai` local, qui appelle OpenAI directement, sans passer par ce
+fichier. Ils ne sont pas concernés par la bascule vers Anthropic — à
+traiter dans une passe séparée si on veut une vraie centralisation.
+
 ---
 
 ## 6. Interlocuteurs

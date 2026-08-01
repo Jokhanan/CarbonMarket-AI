@@ -193,10 +193,16 @@ est ouverte), `status` (`open`, `answered`, `not_applicable`),
    volée.
 5. Trier les candidats par `rank`. Retenir le rang 1 comme **valeur
    proposée**, écrire les autres dans `project_parameter_alternatives` avec
-   `rejection_reason` dérivé de `rationale` (ex. « Écartée : le ratio 4:1
-   est la version plus conservatrice, toujours autorisée, mais le ratio 6:1
-   est le défaut applicable à ce pays (Afrique subsaharienne/PMA) » pour une
-   alternative de rang 2 sous `obligation='optional_conservative_override'`).
+   `rejection_reason` **composé, pas simplement recopié de `rationale`** :
+   un motif de rejet doit dire pourquoi l'alternative ne s'applique pas à
+   *ce* projet, jamais décrire ses qualités propres (erreur relevée par
+   l'utilisateur le 01.08.2026 — « toujours disponible, plus conservateur »
+   est un argument en faveur de l'option, pas un motif de rejet). Le motif
+   correct mène par le fait contextuel — la réponse du projet à la question
+   ouverte — puis ajoute la règle source en complément : « Non retenu pour
+   ce projet : le développeur a confirmé le ratio 6:1 (réponse à la
+   question sur la carbonisation), pas le ratio 4:1. [rationale de la règle
+   source en complément] ».
 6. Générer l'**argument de défendabilité** : gabarit textuel combinant
    source, référence de section, `obligation` (« shall »/« may »/optionnel)
    et `rationale` de la règle de rang 1, plus toute mention de
