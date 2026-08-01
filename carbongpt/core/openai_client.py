@@ -122,8 +122,12 @@ def call_openai(
                        tool input (same contract as before: callers already
                        do json.loads(result) on it).
     max_tokens       : Maximum tokens to generate. Default 4000.
-    temperature      : Sampling temperature. Use 0.4 for narrative writing,
-                       0.1 for deterministic structured extraction.
+    temperature      : Accepted for backward compatibility with the ~15
+                       existing call sites, but NOT sent to Anthropic —
+                       claude-sonnet-5/claude-opus-5 reject the parameter
+                       outright ("temperature is deprecated for this
+                       model"). Has no effect today; kept in the signature
+                       so callers don't need to change.
     model_override   : Override the default model for this call only. A
                        stale OpenAI model name is detected and replaced —
                        see _resolve_model().
@@ -140,7 +144,6 @@ def call_openai(
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_prompt}],
         "max_tokens": max_tokens,
-        "temperature": temperature,
     }
 
     if response_format:
@@ -228,6 +231,8 @@ def call_with_tools(
     messages       : OpenAI-style message list (role: user/assistant/tool).
     tools          : OpenAI-style tool definitions
                      ([{"type": "function", "function": {name, description, parameters}}]).
+    temperature    : Accepted for backward compatibility, NOT sent to
+                     Anthropic — see call_openai()'s docstring. No effect today.
     model_override : Same stale-name guard as call_openai() — see _resolve_model().
 
     Returns
@@ -244,7 +249,6 @@ def call_with_tools(
         "system": system_prompt,
         "messages": _to_anthropic_messages(messages),
         "max_tokens": max_tokens,
-        "temperature": temperature,
     }
     if tools:
         payload["tools"] = [_openai_tool_to_anthropic(t) for t in tools]
