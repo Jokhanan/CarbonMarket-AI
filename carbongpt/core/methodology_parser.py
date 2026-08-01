@@ -1,12 +1,10 @@
 import json
 import logging
-import os
 import re
 
-logger = logging.getLogger(__name__)
+from carbongpt.core.openai_client import PARSE_MODEL, DEFAULT_MODEL as CALC_MODEL
 
-PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "claude-opus-5")
-CALC_MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+logger = logging.getLogger(__name__)
 
 MAX_CONTEXT_CHARS = 80000
 

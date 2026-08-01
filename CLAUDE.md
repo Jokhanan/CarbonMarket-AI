@@ -169,6 +169,14 @@ Claude (plus de `gpt-4o`/`gpt-4o-mini` en dur), et `call_openai()` remplace
 par son propre défaut, avec un avertissement loggé, toute valeur qui
 ressemblerait quand même à un nom de modèle OpenAI (`_resolve_model()`).
 
+**Noms de modèles centralisés (01.08.2026)** : `openai_client.py` est la
+seule source des noms de modèle (`DEFAULT_MODEL`, `UPGRADE_MODEL`,
+`PARSE_MODEL`, `STRUCTURE_MODEL`) — `"claude-sonnet-5"`/`"claude-opus-5"`
+n'apparaît plus qu'à cet unique endroit. Les dix modules ci-dessus
+importent l'une de ces quatre constantes au lieu de relire
+`os.getenv(...)` avec leur propre valeur par défaut codée en dur. Changer
+de modèle un jour ne demande plus qu'à éditer ces quatre lignes.
+
 ---
 
 ## 6. Interlocuteurs

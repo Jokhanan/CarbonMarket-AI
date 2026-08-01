@@ -1,13 +1,11 @@
 import json
 import logging
-import os
 import re
 
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
-
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 FINDINGS_EXTRACTION_PROMPT = """You are an expert carbon credit auditor analyzing a Verification or Validation Report from a VVB (Validation/Verification Body).
 

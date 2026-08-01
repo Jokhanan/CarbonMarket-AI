@@ -1,15 +1,12 @@
 import json
 import logging
-import os
 import re
 from collections import defaultdict
 
 from carbongpt.repository.db import get_cursor
+from carbongpt.core.openai_client import PARSE_MODEL, STRUCTURE_MODEL
 
 logger = logging.getLogger(__name__)
-
-PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "claude-opus-5")
-STRUCTURE_MODEL = os.getenv("CARBONGPT_STRUCTURE_MODEL", "claude-sonnet-5")
 
 CHUNK_TYPES = [
     "applicability", "method_selection", "equations", "parameters",

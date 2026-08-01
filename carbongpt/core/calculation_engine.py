@@ -1,12 +1,11 @@
 import json
 import logging
-import os
 
 import requests as http_client
 
-logger = logging.getLogger(__name__)
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+logger = logging.getLogger(__name__)
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=6000):

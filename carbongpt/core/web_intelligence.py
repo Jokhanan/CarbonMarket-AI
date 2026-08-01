@@ -5,9 +5,10 @@ import re
 
 import requests as http_client
 
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL
+
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 SERPER_API_URL = "https://google.serper.dev/search"
 
 

@@ -1,13 +1,11 @@
 import json
 import logging
-import os
 import re
 from carbongpt.repository.db import get_cursor
 from carbongpt.core.parameter_engine import get_extraction_metadata
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL
 
 logger = logging.getLogger(__name__)
-
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 PERCENT_UNITS = {"percent", "%", "pct", "percentage"}
 

@@ -28,7 +28,16 @@ logger = logging.getLogger(__name__)
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_API_VERSION = "2023-06-01"
 
-_DEFAULT_MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+# Single source of truth for Claude model names. Every other module that
+# needs a model name imports one of these constants instead of hardcoding
+# "claude-sonnet-5"/"claude-opus-5" — changing model generation means
+# editing these four lines, not every caller.
+DEFAULT_MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "claude-opus-5")
+PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "claude-opus-5")
+STRUCTURE_MODEL = os.getenv("CARBONGPT_STRUCTURE_MODEL", "claude-sonnet-5")
+
+_DEFAULT_MODEL = DEFAULT_MODEL
 
 
 def _get_anthropic_api_key() -> str:

@@ -1,13 +1,10 @@
 import json
 import logging
-import os
 
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL, UPGRADE_MODEL
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
-
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
-UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "claude-opus-5")
 
 LAYER_GENERAL_CONTEXT = "general_context"
 LAYER_METHODOLOGY_RULES = "methodology_rules"

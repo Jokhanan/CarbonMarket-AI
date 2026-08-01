@@ -23,9 +23,7 @@ from carbongpt.tools.section_mapper import map_sections
 from carbongpt.tools.rule_engine import _normalize_text, _get_section_text
 from carbongpt.core.knowledge_retrieval import retrieve_section_context, format_context_for_prompt
 from carbongpt.core.compliance_checker import check_document_compliance, format_compliance_findings_for_prompt
-
-
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+from carbongpt.core.openai_client import DEFAULT_MODEL as MODEL
 
 
 STANDARD_LABELS: dict[str, str] = {
