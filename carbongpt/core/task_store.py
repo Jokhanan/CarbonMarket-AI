@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-TASK_DIR = Path("/tmp/carbongpt_tasks")
+TASK_DIR = Path(tempfile.gettempdir()) / "carbongpt_tasks"
 TASK_DIR.mkdir(exist_ok=True)
 
 
