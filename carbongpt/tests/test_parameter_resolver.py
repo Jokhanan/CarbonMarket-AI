@@ -143,3 +143,45 @@ class TestParameterResolver:
             cur.execute("UPDATE user_projects SET country_iso='FRA' WHERE id=%s", (self.project_id,))
         with pytest.raises(ResolutionError):
             resolve_parameter(self.project_id, "EF_CO2", self.version_id)
+
+    def test_falls_back_to_template_when_ai_generation_unavailable(self, monkeypatch):
+        # No ANTHROPIC_API_KEY at all in this test env -> generate_defendability_argument()
+        # raises inside resolve_parameter()'s try/except -> must degrade to the SPEC-03
+        # template, never leave defendability_argument empty or crash the caller (SPEC-04).
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        from carbongpt.repository.parameter_resolver import answer_question, resolve_parameter
+        answer_question(self.project_id, "kiln_type_wccf_ratio", "wccf_6_1", answered_by="test")
+        result = resolve_parameter(self.project_id, "EF_CO2", self.version_id)
+        assert result["status"] == "resolved"
+        assert result["defendability_argument_source"] == "template"
+        assert result["defendability_argument_model"] is None
+        assert result["defendability_argument"] == result["defendability_argument_template"]
+
+    def test_uses_ai_generated_argument_when_available(self, monkeypatch):
+        from carbongpt.repository.parameter_resolver import answer_question, resolve_parameter
+
+        def fake_call_openai(system_prompt, user_prompt, **kwargs):
+            return "Argument genere par le modele, citant uniquement les faits fournis."
+
+        monkeypatch.setattr("carbongpt.core.openai_client.call_openai", fake_call_openai)
+        monkeypatch.setattr("carbongpt.core.openai_client._resolve_model", lambda override: "claude-sonnet-5")
+
+        answer_question(self.project_id, "kiln_type_wccf_ratio", "wccf_6_1", answered_by="test")
+        result = resolve_parameter(self.project_id, "EF_CO2", self.version_id)
+
+        assert result["defendability_argument_source"] == "ai_generated"
+        assert result["defendability_argument_model"] == "claude-sonnet-5"
+        assert result["defendability_argument"] == "Argument genere par le modele, citant uniquement les faits fournis."
+        assert result["defendability_argument"] != result["defendability_argument_template"]
+
+        from carbongpt.repository.db import get_cursor
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT defendability_argument_source, defendability_argument_model, "
+                "defendability_argument_generated_at FROM project_parameters "
+                "WHERE project_id=%s AND param_key='EF_CO2'", (self.project_id,),
+            )
+            row = cur.fetchone()
+        assert row["defendability_argument_source"] == "ai_generated"
+        assert row["defendability_argument_model"] == "claude-sonnet-5"
+        assert row["defendability_argument_generated_at"] is not None

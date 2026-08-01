@@ -1090,6 +1090,19 @@ CREATE TABLE IF NOT EXISTS project_open_questions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_poq_project_status ON project_open_questions(project_id, status);
+
+-- ============================================================
+-- SPEC-04 -- Generation de l'argument de defendabilite par IA (docs/SPEC-04.md)
+--
+-- Additive uniquement. Le gabarit structure (SPEC-03) n'est pas supprime --
+-- c'est le repli systematique quand la generation IA echoue ou est rejetee
+-- par le garde-fou (aucun chiffre/reference hors du fact set fourni).
+-- ============================================================
+
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_source VARCHAR(20)
+    DEFAULT 'template' CHECK (defendability_argument_source IN ('ai_generated', 'template'));
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_model VARCHAR(50);
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_generated_at TIMESTAMPTZ;
 """
 
 

@@ -20,6 +20,7 @@ import logging
 from typing import Any
 
 from carbongpt.repository.db import get_cursor
+from carbongpt.repository.defendability import build_fact_set, generate_defendability_argument
 
 logger = logging.getLogger(__name__)
 
@@ -212,12 +213,45 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
         raise ResolutionError(f"Answer {question['answer_value']!r} matches no candidate for {param_key!r}")
 
     alternatives = [r for r in usable if r["regulatory_value_id"] != chosen["regulatory_value_id"]]
+    alt_reasons = [
+        (alt, _rejection_reason(question["answer_value"], alt["applicability"], alt["rationale"]))
+        for alt in alternatives
+    ]
 
-    defendability_argument = (
+    template_argument = (
         f"{param_key} = {chosen['value']} {chosen['unit'] or ''}. "
         f"Source : {chosen['section_ref']}, page {chosen['page_ref']}. "
         f"Statut : {chosen['obligation']}. {chosen['rationale']}"
     ).strip()
+
+    defendability_argument = template_argument
+    argument_source = "template"
+    argument_model = None
+    argument_generated_at = None
+
+    try:
+        fact_set = build_fact_set(
+            param_key=param_key,
+            chosen=chosen,
+            alternatives=[
+                {"value": alt["value"], "unit": alt["unit"], "section_ref": alt["section_ref"],
+                 "rejection_reason": reason}
+                for alt, reason in alt_reasons
+            ],
+            project_context=context,
+            question_answer=question["answer_value"],
+            question_text=_KILN_QUESTION_TEXT,
+        )
+        ai_text, ai_model = generate_defendability_argument(fact_set)
+        defendability_argument = ai_text
+        argument_source = "ai_generated"
+        argument_model = ai_model
+        argument_generated_at = datetime.datetime.now(datetime.timezone.utc)
+    except Exception as exc:
+        logger.warning(
+            "Génération IA de l'argument de défendabilité indisponible pour project=%s param=%s, "
+            "repli sur le gabarit SPEC-03 : %s", project_id, param_key, exc,
+        )
 
     with get_cursor() as cur:
         cur.execute(
@@ -245,23 +279,29 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
                 """UPDATE project_parameters SET
                        value = %s, unit = %s, source_type = 'methodology', source_reference = %s,
                        defendability_argument = %s, original_proposed_value = %s,
-                       resolution_engine_version = %s, resolved_at = NOW(), updated_at = NOW()
+                       resolution_engine_version = %s, resolved_at = NOW(), updated_at = NOW(),
+                       defendability_argument_source = %s, defendability_argument_model = %s,
+                       defendability_argument_generated_at = %s
                    WHERE id = %s
                    RETURNING id""",
                 (chosen["value"], chosen["unit"], chosen["section_ref"], defendability_argument,
-                 chosen["value"], engine_version, existing["id"]),
+                 chosen["value"], engine_version, argument_source, argument_model,
+                 argument_generated_at, existing["id"]),
             )
         else:
             cur.execute(
                 """INSERT INTO project_parameters
                        (project_id, param_key, param_name, category, value, unit, data_type,
                         source_type, source_reference, methodology_code, defendability_argument,
-                        original_proposed_value, resolution_engine_version, resolved_at)
+                        original_proposed_value, resolution_engine_version, resolved_at,
+                        defendability_argument_source, defendability_argument_model,
+                        defendability_argument_generated_at)
                    VALUES (%s, %s, %s, 'emission_factor', %s, %s, 'number',
-                           'methodology', %s, '407', %s, %s, %s, NOW())
+                           'methodology', %s, '407', %s, %s, %s, NOW(), %s, %s, %s)
                    RETURNING id""",
                 (project_id, param_key, param_key, chosen["value"], chosen["unit"], chosen["section_ref"],
-                 defendability_argument, chosen["value"], engine_version),
+                 defendability_argument, chosen["value"], engine_version,
+                 argument_source, argument_model, argument_generated_at),
             )
         pp_id = cur.fetchone()["id"]
 
@@ -274,8 +314,7 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
             (pp_id, chosen["value"], chosen["unit"], chosen["regulatory_value_id"], chosen["section_ref"],
              json.dumps(chosen["applicability"]), chosen["rank"]),
         )
-        for alt in alternatives:
-            reason = _rejection_reason(question["answer_value"], alt["applicability"], alt["rationale"])
+        for alt, reason in alt_reasons:
             cur.execute(
                 """INSERT INTO project_parameter_alternatives
                        (project_parameter_id, value, unit, regulatory_value_id, section_ref,
@@ -293,10 +332,12 @@ def resolve_parameter(project_id: int, param_key: str, methodology_version_id: i
         "unit": chosen["unit"],
         "obligation": chosen["obligation"],
         "defendability_argument": defendability_argument,
+        "defendability_argument_source": argument_source,
+        "defendability_argument_model": argument_model,
+        "defendability_argument_template": template_argument,
         "alternatives": [
-            {"value": a["value"], "unit": a["unit"], "rank": a["rank"],
-             "rejection_reason": _rejection_reason(question["answer_value"], a["applicability"], a["rationale"])}
-            for a in alternatives
+            {"value": a["value"], "unit": a["unit"], "rank": a["rank"], "rejection_reason": reason}
+            for a, reason in alt_reasons
         ],
     }
 

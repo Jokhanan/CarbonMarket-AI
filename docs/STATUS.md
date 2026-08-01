@@ -122,14 +122,16 @@ Avancés très simple (44 pays, texte plat, UN DESA). Détail dans
   citant §2, page 7 → `override_parameter()` avec conservation de la
   proposition initiale → `resolve_parameter()` confirmé sans écraser
   l'override.
-  **Anomalie de données trouvée en cours de route, non corrigée** : la
-  fiche du projet a `country = 'Afghanistan'` alors que son nom (« Gh ») et
-  sa méthodologie suggèrent fortement le Ghana. Signalée, pas corrigée sans
-  confirmation.
-- Tests : `carbongpt/tests/test_parameter_resolver.py`, 9 tests, contre un
-  projet jetable créé et détruit par test (jamais le portefeuille réel).
-
-**Suite complète (SPEC-01 + SPEC-03)** : 158 tests passent.
+  **Anomalie de données trouvée en cours de route, corrigée le 01.08.2026
+  sur confirmation explicite de l'utilisateur** : la fiche avait
+  `country = 'Afghanistan'` ; c'est en réalité un projet au Ghana
+  (`country = 'Ghana'`, `country_iso = 'GHA'`). Seule cette ligne a été
+  corrigée — aucune autre donnée du projet n'a été touchée, et l'audit de
+  cohérence pays sur l'ensemble du portefeuille (22 lignes sans
+  `country_iso`, 2 sans `country`) n'a pas été corrigé sans accord.
+- Tests : `carbongpt/tests/test_parameter_resolver.py`, 11 tests (9 SPEC-03
+  + 2 SPEC-04 : repli gabarit, argument généré par IA), contre un projet
+  jetable créé et détruit par test (jamais le portefeuille réel).
 
 **Travail de suite identifié, non fait** :
 1. Valider le design sur ce seul paramètre avant d'étendre.
@@ -138,7 +140,52 @@ Avancés très simple (44 pays, texte plat, UN DESA). Détail dans
 3. Étendre `resolve_parameter()` aux autres paramètres de RECH (NCV, PCAP,
    embodied, leakage marché — chacun a besoin de sa propre hiérarchie dans
    `regulatory_value_preferences`).
-4. Corriger (ou faire corriger) le champ pays du projet `id=12`.
+
+---
+
+## SPEC-04 — Argument de défendabilité généré par IA (Couche 4)
+
+**Statut : implémentée sur le même périmètre que SPEC-03 (`EF_CO2`/`EF_nonCO2`,
+charbon). Non démontrée avec un vrai appel au modèle — clés absentes de `.env`
+au moment du test, voir plus bas.**
+
+- Schéma (migration additive) : `project_parameters` gagne
+  `defendability_argument_source` (`'ai_generated'` | `'template'`, défaut
+  `'template'`), `defendability_argument_model`,
+  `defendability_argument_generated_at`.
+- `carbongpt/repository/defendability.py` (nouveau) : `build_fact_set()`
+  assemble un jeu de faits fermé — uniquement la valeur retenue, sa source,
+  le contexte projet, la réponse à la question ouverte, et les alternatives
+  écartées avec leur motif — rien d'autre n'est visible du modèle (pas le
+  PDF brut, pas de recherche web). `generate_defendability_argument()`
+  appelle `openai_client.call_openai()` puis `validate_generated_argument()`,
+  qui rejette mécaniquement tout nombre ou référence de section absent du
+  jeu de faits.
+  **Bug trouvé et corrigé avant la démo** : le contrôle de la page source
+  ne pouvait jamais réussir — `page_ref` est stocké comme nombre nu dans le
+  JSON (`"page_ref": "12"`), jamais sous la forme littérale « page 12 »,
+  donc toute mention naturelle d'un numéro de page par le modèle aurait
+  toujours été signalée à tort comme une hallucination. Corrigé en
+  enregistrant explicitement cette forme attendue avant comparaison.
+- `carbongpt/repository/parameter_resolver.py::resolve_parameter()` :
+  tente la génération IA en premier ; en cas d'échec (clé absente, erreur
+  réseau, argument rejeté par le validateur), repli automatique et
+  silencieux-pour-l'utilisateur-final-mais-loggé sur le gabarit SPEC-03,
+  `defendability_argument_source` posé à `'template'`. Jamais de crash côté
+  appelant.
+- Démonstration charbon relancée sur le projet réel `user_projects.id=12`
+  (Ghana) après la correction du pays : chaîne complète rejouée avec
+  succès, mais `.env` ne contient encore aucune clé (`ANTHROPIC_API_KEY`
+  absente) — le moteur est donc retombé sur le gabarit, comme prévu. Le
+  comparatif texte-IA vs gabarit demandé par l'utilisateur n'a pas pu être
+  produit dans cette session ; à rejouer dès que les clés sont en place.
+- Tests : 7 dans `carbongpt/tests/test_defendability.py` (jeu de faits,
+  validateur accepté/rejeté nombre/section, délégation à `call_openai()`,
+  clé manquante) + 2 dans `test_parameter_resolver.py` (repli gabarit,
+  argument IA effectivement utilisé et persisté — avec `call_openai()`
+  simulé, sans réseau).
+
+**Suite complète (SPEC-01 + SPEC-03 + SPEC-04)** : 179 tests passent.
 
 ---
 
