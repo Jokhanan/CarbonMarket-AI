@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import requests as http_client
 
 logger = logging.getLogger(__name__)
 
@@ -510,10 +509,6 @@ def _action_get_project_status(project_id: int | None) -> dict:
 
 
 def process_copilot_message(message: str, project_id: int | None, history: list[dict], project_context: str = "") -> dict:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return {"reply": "OpenAI API key not configured.", "action_taken": None, "navigation_hint": None}
-
     system_prompt = (
         "You are CarbonGPT Copilot, an intelligent AI assistant that helps users develop carbon credit projects.\n\n"
         "You can perform actions directly:\n"
@@ -540,7 +535,7 @@ def process_copilot_message(message: str, project_id: int | None, history: list[
     if project_context:
         system_prompt += f"\n\nCURRENT PROJECT CONTEXT:\n{project_context}"
 
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = []
     for msg in (history or [])[-10:]:
         role = msg.get("role", "user")
         content = msg.get("content", "")
@@ -549,26 +544,14 @@ def process_copilot_message(message: str, project_id: int | None, history: list[
     messages.append({"role": "user", "content": message})
 
     try:
-        model = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": 2000,
-            "temperature": 0.3,
-            "tools": COPILOT_TOOLS,
-            "tool_choice": "auto",
-        }
-        resp = http_client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
+        from carbongpt.core.openai_client import call_with_tools
+        model = os.getenv("CARBONGPT_AI_MODEL")  # None is fine — call_with_tools falls back to its own default
+        choice = call_with_tools(
+            system_prompt, messages, COPILOT_TOOLS,
+            max_tokens=2000, temperature=0.3, model_override=model,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        choice = data["choices"][0]
-        finish_reason = choice.get("finish_reason", "")
-        assistant_msg = choice.get("message", {})
+        finish_reason = choice["finish_reason"]
+        assistant_msg = choice["message"]
 
         if finish_reason == "tool_calls" and assistant_msg.get("tool_calls"):
             tool_call = assistant_msg["tool_calls"][0]
@@ -586,21 +569,11 @@ def process_copilot_message(message: str, project_id: int | None, history: list[
                 assistant_msg,
                 {"role": "tool", "tool_call_id": tool_call["id"], "content": tool_result_msg},
             ]
-            followup_payload = {
-                "model": model,
-                "messages": followup_messages,
-                "max_tokens": 1500,
-                "temperature": 0.3,
-            }
-            followup_resp = http_client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=followup_payload,
-                timeout=60,
+            followup_choice = call_with_tools(
+                system_prompt, followup_messages, [],
+                max_tokens=1500, temperature=0.3, model_override=model,
             )
-            followup_resp.raise_for_status()
-            followup_data = followup_resp.json()
-            reply = followup_data["choices"][0]["message"]["content"]
+            reply = followup_choice["message"]["content"]
 
             nav_hint = action_result.get("navigation_hint")
             nav_index = action_result.get("navigation_index")
@@ -612,7 +585,7 @@ def process_copilot_message(message: str, project_id: int | None, history: list[
                 "navigation_index": nav_index,
             }
         else:
-            reply = assistant_msg.get("content", "I'm sorry, I couldn't process that request.")
+            reply = assistant_msg.get("content") or "I'm sorry, I couldn't process that request."
             return {"reply": reply, "action_taken": None, "navigation_hint": None}
 
     except Exception as e:

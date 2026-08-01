@@ -2,14 +2,12 @@ import json
 import logging
 import os
 import re
-import requests
 from carbongpt.repository.db import get_cursor
 from carbongpt.core.parameter_engine import get_extraction_metadata
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 PERCENT_UNITS = {"percent", "%", "pct", "percentage"}
 
@@ -699,24 +697,5 @@ def get_evidence_decision_summary(project_id):
 
 
 def _call_openai(system_prompt, user_prompt):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": 4000,
-        "temperature": 0.1,
-    }
-    resp = requests.post(
-        OPENAI_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    from carbongpt.core.openai_client import call_openai
+    return call_openai(system_prompt, user_prompt, max_tokens=4000, temperature=0.1, model_override=MODEL)

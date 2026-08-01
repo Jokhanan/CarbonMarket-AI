@@ -160,3 +160,111 @@ def call_openai(
 
     text_blocks = [b["text"] for b in data.get("content", []) if b.get("type") == "text"]
     return "".join(text_blocks)
+
+
+def _openai_tool_to_anthropic(tool: dict) -> dict:
+    fn = tool.get("function", tool)
+    return {"name": fn["name"], "description": fn.get("description", ""), "input_schema": fn.get("parameters", {})}
+
+
+def _to_anthropic_messages(messages: list[dict]) -> list[dict]:
+    """Translates OpenAI-shaped chat messages (role: system/user/assistant/tool,
+    with tool_calls / tool_call_id) into Anthropic's format. `system` messages
+    are dropped here — call_with_tools() takes system_prompt separately."""
+    result = []
+    for m in messages:
+        role = m.get("role")
+        if role == "system":
+            continue
+        if role == "tool":
+            result.append({"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": m["tool_call_id"], "content": m.get("content", "")},
+            ]})
+        elif role == "assistant" and m.get("tool_calls"):
+            blocks = []
+            if m.get("content"):
+                blocks.append({"type": "text", "text": m["content"]})
+            for tc in m["tool_calls"]:
+                args = tc["function"].get("arguments", "{}")
+                if isinstance(args, str):
+                    args = json.loads(args) if args else {}
+                blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["function"]["name"], "input": args})
+            result.append({"role": "assistant", "content": blocks})
+        else:
+            result.append({"role": role, "content": m.get("content", "")})
+    return result
+
+
+def call_with_tools(
+    system_prompt: str,
+    messages: list[dict],
+    tools: list[dict],
+    max_tokens: int = 2000,
+    temperature: float = 0.3,
+    model_override: str | None = None,
+) -> dict:
+    """
+    Agentic tool-calling call: the model decides whether to invoke a tool or
+    just reply conversationally (Anthropic tool_choice="auto"). Used by
+    copilot.py — the one caller in this codebase where the model needs to
+    pick actions, not just produce structured output.
+
+    Takes and returns OpenAI-shaped data (messages, tools, and the response)
+    so callers written against the OpenAI chat-completions shape don't need
+    to change — only this function knows about Anthropic's wire format.
+
+    Parameters
+    ----------
+    system_prompt  : System message content.
+    messages       : OpenAI-style message list (role: user/assistant/tool).
+    tools          : OpenAI-style tool definitions
+                     ([{"type": "function", "function": {name, description, parameters}}]).
+    model_override : Same stale-name guard as call_openai() — see _resolve_model().
+
+    Returns
+    -------
+    dict shaped like an OpenAI choice: {"finish_reason": "tool_calls" | "stop",
+    "message": {"role": "assistant", "content": str | None,
+                "tool_calls": [{"id", "type": "function", "function": {"name", "arguments"}}] | None}}
+    """
+    api_key = _get_anthropic_api_key()
+    model = _resolve_model(model_override)
+
+    payload = {
+        "model": model,
+        "system": system_prompt,
+        "messages": _to_anthropic_messages(messages),
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if tools:
+        payload["tools"] = [_openai_tool_to_anthropic(t) for t in tools]
+        payload["tool_choice"] = {"type": "auto"}
+
+    resp = http_client.post(
+        ANTHROPIC_API_URL,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_API_VERSION,
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=180,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    content_blocks = data.get("content", [])
+    text = "".join(b["text"] for b in content_blocks if b.get("type") == "text")
+    tool_use_blocks = [b for b in content_blocks if b.get("type") == "tool_use"]
+
+    tool_calls = [
+        {"id": b["id"], "type": "function",
+         "function": {"name": b["name"], "arguments": json.dumps(b.get("input", {}))}}
+        for b in tool_use_blocks
+    ]
+
+    return {
+        "finish_reason": "tool_calls" if tool_calls else "stop",
+        "message": {"role": "assistant", "content": text or None, "tool_calls": tool_calls or None},
+    }

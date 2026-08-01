@@ -2,15 +2,13 @@ import json
 import logging
 import os
 import re
-import requests
 
 from carbongpt.repository.db import get_cursor
 from carbongpt.core.knowledge_retrieval import map_section_to_purpose
 
 logger = logging.getLogger(__name__)
 
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 DOMAIN_KEYWORDS = {
     "baseline": [
@@ -46,25 +44,9 @@ PILOT_DOC_IDS = [
 
 
 def _call_llm(system_prompt, user_prompt, temperature=0):
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        return None
+    from carbongpt.core.openai_client import call_openai
     try:
-        resp = requests.post(
-            OPENAI_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": temperature,
-            },
-            timeout=60,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        return call_openai(system_prompt, user_prompt, temperature=temperature, model_override=MODEL)
     except Exception as e:
         logger.error("LLM call failed: %s", e)
         return None

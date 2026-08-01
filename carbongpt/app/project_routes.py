@@ -1324,20 +1324,10 @@ def respond_to_finding(project_id: int, data: dict):
     user_prompt += "Draft a professional response to this finding."
 
     try:
-        import openai, json, os as _os
-        api_key = _os.getenv("OPENAI_API_KEY")
-        client = openai.OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=3000,
-            temperature=0.3,
-            response_format={"type": "json_object"},
-        )
-        result = json.loads(response.choices[0].message.content)
+        import json
+        from carbongpt.core.openai_client import call_openai
+        content = call_openai(system_prompt, user_prompt, max_tokens=3000, temperature=0.3)
+        result = json.loads(content)
         return result
     except Exception as e:
         logger.error("Finding response generation failed: %s", e)
@@ -1397,10 +1387,6 @@ def parse_findings_document(
     if not parsed_text or len(parsed_text.strip()) < 50:
         raise HTTPException(status_code=400, detail="Could not extract meaningful text from the document.")
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.")
-
     max_chunk_chars = 12000
     chunks = []
     words = parsed_text.split()
@@ -1432,22 +1418,13 @@ def parse_findings_document(
 
     all_findings = []
     failed_chunks = []
-    import openai, json
-    client = openai.OpenAI(api_key=api_key)
+    import json
+    from carbongpt.core.openai_client import call_openai
 
     for i, chunk in enumerate(chunks):
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": extraction_prompt},
-                    {"role": "user", "content": chunk},
-                ],
-                max_tokens=4000,
-                temperature=0.1,
-                response_format={"type": "json_object"},
-            )
-            result = json.loads(response.choices[0].message.content)
+            content = call_openai(extraction_prompt, chunk, max_tokens=4000, temperature=0.1)
+            result = json.loads(content)
             chunk_findings = result.get("findings", [])
             all_findings.extend(chunk_findings)
             logger.info("Chunk %d/%d: extracted %d findings", i + 1, len(chunks), len(chunk_findings))
@@ -1494,10 +1471,6 @@ def batch_respond_to_findings(project_id: int, data: dict):
     if not findings:
         raise HTTPException(status_code=400, detail="No findings provided.")
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.")
-
     project_info = {
         "name": project["name"],
         "methodology": project.get("methodology"),
@@ -1533,8 +1506,8 @@ def batch_respond_to_findings(project_id: int, data: dict):
         pass
 
     responses = []
-    import openai, json
-    client = openai.OpenAI(api_key=api_key)
+    import json
+    from carbongpt.core.openai_client import call_openai
 
     for idx, finding in enumerate(findings):
         finding_text = finding.get("description", "")
@@ -1581,17 +1554,8 @@ def batch_respond_to_findings(project_id: int, data: dict):
         user_prompt += "Draft a professional response."
 
         try:
-            resp = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=2500,
-                temperature=0.3,
-                response_format={"type": "json_object"},
-            )
-            ai_result = json.loads(resp.choices[0].message.content)
+            content = call_openai(system_prompt, user_prompt, max_tokens=2500, temperature=0.3)
+            ai_result = json.loads(content)
             responses.append({
                 "finding_id": finding_id,
                 "finding_type": finding_type,

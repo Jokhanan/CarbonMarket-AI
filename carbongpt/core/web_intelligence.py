@@ -7,13 +7,8 @@ import requests as http_client
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 SERPER_API_URL = "https://google.serper.dev/search"
-
-
-def _get_api_key():
-    return os.environ.get("OPENAI_API_KEY", "")
 
 
 def _get_serper_key():
@@ -66,10 +61,8 @@ def verify_methodology_status(
     methodology: str,
     standard: str = "Verra VCS",
 ) -> dict | None:
-    api_key = _get_api_key()
-    if not api_key:
-        return None
-
+    # Text generation now needs ANTHROPIC_API_KEY, not OPENAI_API_KEY — the
+    # check happens inside call_openai() itself (raises, caught below).
     search_query = f"{standard} {methodology} methodology status approved deprecated transition 2024 2025 2026"
     search_results = web_search(search_query)
 
@@ -107,33 +100,16 @@ def verify_methodology_status(
     )
 
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a carbon credit methodology expert. "
-                        "You provide accurate, factual information about methodology status "
-                        "under carbon credit standards (Verra VCS, Gold Standard, CDM/UNFCCC). "
-                        "Only state facts you are confident about. "
-                        "If unsure, set confidence to 'low' and explain what you don't know. "
-                        "Respond ONLY with valid JSON."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-
-        resp = http_client.post(OPENAI_API_URL, headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+        from carbongpt.core.openai_client import call_openai
+        system_prompt = (
+            "You are a carbon credit methodology expert. "
+            "You provide accurate, factual information about methodology status "
+            "under carbon credit standards (Verra VCS, Gold Standard, CDM/UNFCCC). "
+            "Only state facts you are confident about. "
+            "If unsure, set confidence to 'low' and explain what you don't know. "
+            "Respond ONLY with valid JSON."
+        )
+        content = call_openai(system_prompt, prompt, temperature=0.1, model_override=MODEL)
         return json.loads(content)
     except Exception as e:
         logger.warning("Failed to verify methodology status: %s", e)
@@ -205,10 +181,8 @@ def research_standard_updates(
             f"{standard} crediting period changes buffer pool updates",
         ]
 
-    api_key = _get_api_key()
-    if not api_key:
-        return []
-
+    # Text generation now needs ANTHROPIC_API_KEY, not OPENAI_API_KEY — the
+    # check happens inside call_openai() itself (raises, caught below).
     all_snippets = []
     for topic in topics:
         results = web_search(topic)
@@ -239,30 +213,13 @@ def research_standard_updates(
     )
 
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a carbon credit regulatory analyst. Extract factual regulatory "
-                        "updates from search results. Only include findings with high or medium confidence. "
-                        "Do not fabricate information. Respond ONLY with valid JSON."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-
-        resp = http_client.post(OPENAI_API_URL, headers=headers, json=payload, timeout=60)
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+        from carbongpt.core.openai_client import call_openai
+        system_prompt = (
+            "You are a carbon credit regulatory analyst. Extract factual regulatory "
+            "updates from search results. Only include findings with high or medium confidence. "
+            "Do not fabricate information. Respond ONLY with valid JSON."
+        )
+        content = call_openai(system_prompt, prompt, temperature=0.1, model_override=MODEL)
         data = json.loads(content)
 
         proposed_rules = []

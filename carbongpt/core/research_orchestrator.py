@@ -2,15 +2,12 @@ import json
 import logging
 import os
 
-import requests as http_client
-
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "gpt-4o")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
+UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "claude-opus-5")
 
 LAYER_GENERAL_CONTEXT = "general_context"
 LAYER_METHODOLOGY_RULES = "methodology_rules"
@@ -82,20 +79,15 @@ TECHNICAL_PARAM_FIELDS = [
 
 
 def _call_openai(messages, model=None, temperature=0.3):
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        return ""
-    if model is None:
-        model = MODEL
+    from carbongpt.core.openai_client import call_openai
+    system_prompt = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+    user_prompt = "\n".join(m["content"] for m in messages if m.get("role") != "system")
     try:
-        resp = http_client.post(
-            OPENAI_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": 2000},
-            timeout=60,
+        result = call_openai(
+            system_prompt, user_prompt, max_tokens=2000, temperature=temperature,
+            model_override=model or MODEL,
         )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+        return result.strip()
     except Exception as e:
         logger.error("OpenAI call failed in research orchestrator: %s", e)
         return ""

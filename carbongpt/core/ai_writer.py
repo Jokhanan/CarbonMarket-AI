@@ -2,8 +2,6 @@ import json
 import logging
 import os
 
-import requests as http_client
-
 from carbongpt.guides import load_guide, DOC_TYPE_LABELS, GUIDE_REGISTRY
 from carbongpt.core.knowledge_retrieval import (
     retrieve_section_context, format_context_for_prompt,
@@ -12,8 +10,7 @@ from carbongpt.core.knowledge_retrieval import (
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 STANDARD_LABELS = {
     "GoldStandard": "Gold Standard",
@@ -775,13 +772,6 @@ def get_sections_for_doc_type(standard, project_doc_type):
         return None
 
 
-def _get_api_key():
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    return api_key
-
-
 COMPLEX_CONTENT_FORMATS = {"equations_and_prose", "parameter_blocks"}
 
 COMPLEX_SECTION_PATTERNS = [
@@ -794,7 +784,7 @@ COMPLEX_SECTION_IDS = {
     "2.3", "2.4", "2.5", "3.1", "3.2", "3.3", "3.4", "4.1", "4.2", "4.3", "4.4",
 }
 
-UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "gpt-4o")
+UPGRADE_MODEL = os.getenv("CARBONGPT_UPGRADE_MODEL", "claude-opus-5")
 MIN_WORDS_FOR_ESCALATION = 200
 
 

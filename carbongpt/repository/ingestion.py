@@ -201,25 +201,12 @@ def detect_document_metadata(text_preview: str, api_key: str, filename: str = ""
         prompt += f"Filename: {filename}\n\n"
     prompt += f"Document text (first ~2000 words):\n{text_preview[:8000]}"
 
-    resp = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "You are a carbon credit standards expert. Analyze documents and classify them accurately. Return only valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": 0,
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
+    # `api_key` kept for backward compatibility with existing callers — text
+    # generation now goes through carbongpt.core.openai_client, which manages
+    # ANTHROPIC_API_KEY itself (see CLAUDE.md §5).
+    from carbongpt.core.openai_client import call_openai
+    system_prompt = "You are a carbon credit standards expert. Analyze documents and classify them accurately. Return only valid JSON."
+    content = call_openai(system_prompt, prompt, temperature=0)
     return json.loads(content)
 
 
@@ -292,8 +279,10 @@ def _build_chunk_metadata(chunk, doc_info):
 
 
 def generate_document_summary(text_preview: str, api_key: str) -> str:
-    import requests
-    import json
+    # `api_key` kept for backward compatibility with existing callers — text
+    # generation now goes through carbongpt.core.openai_client, which manages
+    # ANTHROPIC_API_KEY itself (see CLAUDE.md §5).
+    from carbongpt.core.openai_client import call_openai
 
     prompt = (
         "Write a concise 2-3 sentence summary of this carbon credit document. "
@@ -301,26 +290,8 @@ def generate_document_summary(text_preview: str, api_key: str) -> str:
         "the project type or sector, and key topics covered.\n\n"
         f"Document text (first ~3000 words):\n{text_preview[:12000]}"
     )
-
-    resp = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "You are a carbon credit standards expert. Summarize documents concisely."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0,
-            "max_tokens": 200,
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    system_prompt = "You are a carbon credit standards expert. Summarize documents concisely."
+    return call_openai(system_prompt, prompt, temperature=0, max_tokens=200).strip()
 
 
 def ingest_document(doc_id: int, file_path: str, api_key: str = None):
@@ -353,25 +324,29 @@ def ingest_document(doc_id: int, file_path: str, api_key: str = None):
                 logger.info("Pre-classified doc %s as '%s' (filename=%s, content=%s)",
                             doc_id, pre_category, filename_cat, content_cat)
 
-        if api_key:
-            try:
-                detection = detect_document_metadata(full_text[:8000], api_key, filename=doc_title)
-                store.update_document_detection(
-                    doc_id,
-                    auto_standard=detection.get("standard"),
-                    auto_version=detection.get("version"),
-                    auto_category=detection.get("category"),
-                    auto_applicability=detection.get("applicability"),
-                )
-                _auto_apply_detection(doc_id, detection)
-            except Exception as e:
-                logger.warning("Auto-detection failed for doc %s: %s", doc_id, e)
+        # Metadata detection and summary generation are text generation (Claude,
+        # via call_openai) now, not embeddings — they no longer depend on
+        # OPENAI_API_KEY. Each call is wrapped independently so a missing
+        # ANTHROPIC_API_KEY only skips these two steps, logged, not the whole
+        # ingestion (embeddings below still gate on `api_key`, correctly).
+        try:
+            detection = detect_document_metadata(full_text[:8000], api_key, filename=doc_title)
+            store.update_document_detection(
+                doc_id,
+                auto_standard=detection.get("standard"),
+                auto_version=detection.get("version"),
+                auto_category=detection.get("category"),
+                auto_applicability=detection.get("applicability"),
+            )
+            _auto_apply_detection(doc_id, detection)
+        except Exception as e:
+            logger.warning("Auto-detection failed for doc %s: %s", doc_id, e)
 
-            try:
-                summary = generate_document_summary(full_text[:12000], api_key)
-                store.update_document_summary(doc_id, summary)
-            except Exception as e:
-                logger.warning("Summary generation failed for doc %s: %s", doc_id, e)
+        try:
+            summary = generate_document_summary(full_text[:12000], api_key)
+            store.update_document_summary(doc_id, summary)
+        except Exception as e:
+            logger.warning("Summary generation failed for doc %s: %s", doc_id, e)
 
         chunks = chunk_text(full_text)
 

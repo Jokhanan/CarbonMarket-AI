@@ -15,8 +15,6 @@ import json
 import logging
 import os
 
-import requests as http_client
-
 logger = logging.getLogger(__name__)
 
 from carbongpt.guides import load_guide, DOC_TYPE_LABELS
@@ -27,8 +25,7 @@ from carbongpt.core.knowledge_retrieval import retrieve_section_context, format_
 from carbongpt.core.compliance_checker import check_document_compliance, format_compliance_findings_for_prompt
 
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 
 STANDARD_LABELS: dict[str, str] = {
@@ -127,9 +124,11 @@ GLOBAL_SUMMARY_SCHEMA = {
 
 
 def _get_api_key() -> str:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    # Kept as a pre-flight check so callers fail before doing per-section
+    # work, not mid-way through. Text generation now needs ANTHROPIC_API_KEY.
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set.")
     return api_key
 
 
@@ -202,36 +201,18 @@ def _call_openai_structured(
     schema: dict,
     schema_name: str,
 ) -> dict:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
+    # `api_key` is kept for backward compatibility with existing callers —
+    # text generation now goes through carbongpt.core.openai_client, which
+    # manages ANTHROPIC_API_KEY itself (see CLAUDE.md §5).
+    from carbongpt.core.openai_client import call_openai
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {"name": schema_name, "strict": True, "schema": schema},
     }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": schema_name,
-                "strict": True,
-                "schema": schema,
-            },
-        },
-        "temperature": 0.2,
-    }
-
-    resp = http_client.post(
-        OPENAI_API_URL,
-        headers=headers,
-        json=payload,
-        timeout=120,
+    content = call_openai(
+        system_prompt, user_prompt, response_format=response_format,
+        temperature=0.2, model_override=MODEL,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
     return json.loads(content)
 
 

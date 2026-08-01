@@ -3,41 +3,20 @@ import logging
 import os
 import re
 
-import requests as http_client
-
 logger = logging.getLogger(__name__)
 
-PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "gpt-4o")
-CALC_MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "claude-opus-5")
+CALC_MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 MAX_CONTEXT_CHARS = 80000
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=8000, model=None):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    payload = {
-        "model": model or CALC_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.1,
-    }
-    if response_format:
-        payload["response_format"] = response_format
-    resp = http_client.post(
-        OPENAI_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=180,
+    from carbongpt.core.openai_client import call_openai
+    return call_openai(
+        system_prompt, user_prompt, response_format=response_format,
+        max_tokens=max_tokens, temperature=0.1, model_override=model or CALC_MODEL,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
 
 
 PARSE_SCHEMA = {

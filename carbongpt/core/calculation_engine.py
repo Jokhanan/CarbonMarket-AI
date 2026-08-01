@@ -6,8 +6,7 @@ import requests as http_client
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("CARBONGPT_AI_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = os.getenv("CARBONGPT_AI_MODEL", "claude-sonnet-5")
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=6000):

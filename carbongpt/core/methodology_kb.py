@@ -4,15 +4,12 @@ import os
 import re
 from collections import defaultdict
 
-import requests as http_client
-
 from carbongpt.repository.db import get_cursor
 
 logger = logging.getLogger(__name__)
 
-PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "gpt-4o")
-STRUCTURE_MODEL = os.getenv("CARBONGPT_STRUCTURE_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+PARSE_MODEL = os.getenv("CARBONGPT_PARSE_MODEL", "claude-opus-5")
+STRUCTURE_MODEL = os.getenv("CARBONGPT_STRUCTURE_MODEL", "claude-sonnet-5")
 
 CHUNK_TYPES = [
     "applicability", "method_selection", "equations", "parameters",
@@ -109,29 +106,11 @@ EQUATION_PATTERNS = [
 
 
 def _call_openai(system_prompt, user_prompt, response_format=None, max_tokens=4000, model=None):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set.")
-    payload = {
-        "model": model or STRUCTURE_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.1,
-    }
-    if response_format:
-        payload["response_format"] = response_format
-    resp = http_client.post(
-        OPENAI_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=120,
+    from carbongpt.core.openai_client import call_openai
+    return call_openai(
+        system_prompt, user_prompt, response_format=response_format,
+        max_tokens=max_tokens, temperature=0.1, model_override=model or STRUCTURE_MODEL,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
 
 
 def _get_document_sections(document_id):

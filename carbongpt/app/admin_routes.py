@@ -179,17 +179,21 @@ async def upload_repository_document(
     )
 
     if file_type in ("pdf", "docx"):
+        # ingest_document() degrades gracefully per-capability: metadata
+        # detection and summary (Claude/ANTHROPIC_API_KEY) and embeddings
+        # (OPENAI_API_KEY) are each optional and independently skipped (with
+        # a warning) if their key is missing — no reason to gate starting
+        # ingestion on OPENAI_API_KEY specifically.
         api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            thread = threading.Thread(
-                target=_run_ingestion_background,
-                args=(doc_id, str(dest_path), api_key),
-                daemon=True,
-            )
-            thread.start()
-            msg = "Document uploaded. Ingestion started in background."
-        else:
-            msg = "Document uploaded. Set OPENAI_API_KEY for auto-ingestion."
+        thread = threading.Thread(
+            target=_run_ingestion_background,
+            args=(doc_id, str(dest_path), api_key),
+            daemon=True,
+        )
+        thread.start()
+        msg = "Document uploaded. Ingestion started in background."
+        if not api_key:
+            msg += " (OPENAI_API_KEY not set — embeddings/semantic search will be skipped for this document.)"
     else:
         from carbongpt.repository.store import update_document_ingestion
         update_document_ingestion(doc_id, "unsupported")
@@ -263,9 +267,9 @@ def reingest_document(doc_id: int):
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
+    # ingest_document() degrades gracefully per-capability (see upload_document
+    # above) — no reason to hard-block re-ingestion on OPENAI_API_KEY.
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY not set.")
     if doc["file_type"] not in ("pdf", "docx"):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files can be ingested.")
 
@@ -283,8 +287,6 @@ def batch_reingest_documents():
     from carbongpt.repository.store import list_documents
 
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY not set.")
 
     all_docs = list_documents()
     needs_ingestion = []
@@ -614,9 +616,8 @@ class KnowledgeRefreshRequest(BaseModel):
 
 @router.post("/web-intelligence/verify-methodology")
 def verify_methodology_via_web(data: WebVerifyRequest):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY required for web intelligence.")
 
     from carbongpt.core.web_intelligence import verify_methodology_status
     result = verify_methodology_status(data.methodology, data.standard)
@@ -627,9 +628,8 @@ def verify_methodology_via_web(data: WebVerifyRequest):
 
 @router.post("/web-intelligence/propose-rule")
 def propose_rule_from_web(data: WebVerifyRequest):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY required for web intelligence.")
 
     from carbongpt.core.web_intelligence import propose_compliance_rule_from_web
     proposed = propose_compliance_rule_from_web(data.methodology, data.standard, data.standard_id)
@@ -640,9 +640,8 @@ def propose_rule_from_web(data: WebVerifyRequest):
 
 @router.post("/web-intelligence/knowledge-refresh")
 def run_knowledge_refresh(data: KnowledgeRefreshRequest):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for web intelligence.")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY required for web intelligence.")
 
     from carbongpt.core.web_intelligence import research_standard_updates
     proposed_rules = research_standard_updates(data.standard, data.standard_id, data.topics)

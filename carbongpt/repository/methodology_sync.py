@@ -1125,7 +1125,7 @@ def scrape_verra_methodology_docs(
                     "code": code, "category": category, "doc_id": doc_id,
                 })
 
-                if ingest and api_key and ext == "pdf":
+                if ingest and ext == "pdf":
                     import threading
                     thread = threading.Thread(
                         target=_safe_ingest,

@@ -148,13 +148,26 @@ Placer les deux dans un fichier `.env` à la racine du dépôt (non suivi par
 Git — vérifier que `.env` est bien dans `.gitignore`) ou comme variables
 d'environnement du shell avant de lancer `./start_local.sh`.
 
-**Point d'attention non résolu** : `carbongpt/core/openai_client.py` est le
-seul point vraiment centralisé — `ai_writer.py` et `calculation_engine.py`
-passent par lui. Mais `methodology_parser.py`, `evidence_engine.py`,
-`methodology_kb.py` et `research_orchestrator.py` ont chacun leur propre
-`_call_openai` local, qui appelle OpenAI directement, sans passer par ce
-fichier. Ils ne sont pas concernés par la bascule vers Anthropic — à
-traiter dans une passe séparée si on veut une vraie centralisation.
+**Centralisation (01.08.2026)** : tous les modules de génération de texte
+passent maintenant par `carbongpt/core/openai_client.py` — plus aucune URL
+d'API ni nom de modèle OpenAI en dur ailleurs dans `carbongpt/`. Unifiés :
+`ai_writer.py`, `calculation_engine.py`, `ai_review.py`, `copilot.py`,
+`evidence_engine.py`, `findings_extractor.py`, `methodology_parser.py`,
+`methodology_kb.py`, `research_orchestrator.py`, `section_classifier.py`,
+`web_intelligence.py`, `project_routes.py`, et les deux fonctions de
+génération de texte de `repository/ingestion.py` (`detect_document_metadata`,
+`generate_document_summary` — les embeddings de ce même fichier restent sur
+OpenAI, normal). `copilot.py` utilise `call_with_tools()` (nouvelle fonction
+du client, distincte de `call_openai()`) pour l'appel d'outils à choix libre
+du modèle — Anthropic n'a pas d'équivalent direct de `tool_choice: "auto"`
+d'OpenAI, la traduction est faite dans `openai_client.py`.
+
+`CARBONGPT_AI_MODEL` (et les variantes `CARBONGPT_PARSE_MODEL` /
+`CARBONGPT_STRUCTURE_MODEL` / `CARBONGPT_UPGRADE_MODEL`) sont maintenant
+sans danger à partager entre tous ces modules : chacun a un défaut Python
+Claude (plus de `gpt-4o`/`gpt-4o-mini` en dur), et `call_openai()` remplace
+par son propre défaut, avec un avertissement loggé, toute valeur qui
+ressemblerait quand même à un nom de modèle OpenAI (`_resolve_model()`).
 
 ---
 
