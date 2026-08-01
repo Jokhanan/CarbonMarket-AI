@@ -38,7 +38,7 @@ class TestRegistryLookup:
         assert lookup("GoldStandard", "MR", "DOES_NOT_EXIST") is None
 
     def test_lookup_pdd_placeholder(self):
-        entry = lookup("GoldStandard", "PDD", "PDD_v1_0")
+        entry = lookup("GoldStandard", "PDD", "PDD_v1_5")
         assert entry is not None
         assert entry["template_path"] is None
         assert entry["rules_path"] is None
@@ -116,7 +116,7 @@ class TestAnalyzeSelected:
             run_selected_analysis(
                 standard="GoldStandard",
                 doc_type="PDD",
-                version="PDD_v1_0",
+                version="PDD_v1_5",
                 user_doc_path=path,
             )
 

@@ -178,7 +178,7 @@ class TestPromptBuilding:
             {"section_id": "A.1", "section_title": "General description", "completeness_score": 80, "issues": ["Missing mechanism"]},
             {"section_id": "A.2", "section_title": "Location", "completeness_score": 60, "issues": ["No coordinates"]},
         ]
-        prompt = _build_global_prompt(reviews)
+        prompt = _build_global_prompt(reviews, "Monitoring Report")
         assert "A.1" in prompt
         assert "A.2" in prompt
         assert "score=80" in prompt
