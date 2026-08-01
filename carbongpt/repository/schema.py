@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS documents (
     category VARCHAR(50) NOT NULL CHECK (category IN (
         'standard_text', 'methodology', 'guidance', 'tool',
         'template', 'example_pdd', 'example_mr', 'example_fvr',
-        'example_valver', 'example_other', 'rule_update', 'other'
+        'example_valver', 'example_other', 'rule_update',
+        'rule_clarification', 'deviation', 'clarification_request', 'other'
     )),
     title VARCHAR(500) NOT NULL,
     reference_id VARCHAR(100),
@@ -191,6 +192,8 @@ CREATE TABLE IF NOT EXISTS methodologies (
     id SERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(500),
+    short_name VARCHAR(100),
+    former_name VARCHAR(200),
     standard VARCHAR(50),
     category VARCHAR(100),
     sector VARCHAR(200),
@@ -200,6 +203,7 @@ CREATE TABLE IF NOT EXISTS methodologies (
     source_url TEXT,
     superseded_by VARCHAR(50),
     project_count INTEGER DEFAULT 0,
+    last_checked_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -899,6 +903,14 @@ CREATE TABLE IF NOT EXISTS methodology_version_history (
     methodology_code  VARCHAR(50)  NOT NULL,
     registry          VARCHAR(30)  NOT NULL,
     version           VARCHAR(30)  NOT NULL,
+    released_date     DATE,
+    effective_from    DATE,
+    effective_until   DATE,
+    is_current        BOOLEAN      DEFAULT FALSE,
+    paris_aligned     BOOLEAN      DEFAULT FALSE,
+    document_name     VARCHAR(300),
+    pdf_url           TEXT,
+    local_path        TEXT,
     detected_at       TIMESTAMPTZ  DEFAULT NOW(),
     source_url        TEXT,
     content_hash      VARCHAR(64),
@@ -926,6 +938,72 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_profiles_type ON user_profiles(profile_type);
+
+-- ============================================================
+-- SPEC-01 -- Corpus reglementaire versionne (docs/SPEC-01.md)
+--
+-- Migration additive : etend methodologies, methodology_version_history
+-- et documents (nouvelles colonnes nullable uniquement, rien de supprime
+-- ni de modifie) ; cree regulatory_values, qui n'a pas d'equivalent
+-- existant. Voir docs/DECISIONS.md pour la justification.
+-- ============================================================
+
+ALTER TABLE methodologies ADD COLUMN IF NOT EXISTS short_name VARCHAR(100);
+ALTER TABLE methodologies ADD COLUMN IF NOT EXISTS former_name VARCHAR(200);
+ALTER TABLE methodologies ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP;
+
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS released_date DATE;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS effective_from DATE;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS effective_until DATE;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS is_current BOOLEAN DEFAULT FALSE;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS paris_aligned BOOLEAN DEFAULT FALSE;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS document_name VARCHAR(300);
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE methodology_version_history ADD COLUMN IF NOT EXISTS local_path TEXT;
+
+-- Widen the category check to cover the related-document types SPEC-01
+-- needs (rule_clarification, deviation, clarification_request). Only
+-- adds allowed values, so every existing row still satisfies it.
+ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_category_check;
+ALTER TABLE documents ADD CONSTRAINT documents_category_check CHECK (category IN (
+    'standard_text', 'methodology', 'guidance', 'tool',
+    'template', 'example_pdd', 'example_mr', 'example_fvr',
+    'example_valver', 'example_other', 'rule_update',
+    'rule_clarification', 'deviation', 'clarification_request', 'other'
+));
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS methodology_version_id INTEGER
+    REFERENCES methodology_version_history(id) ON DELETE SET NULL;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS sha256 VARCHAR(64);
+CREATE INDEX IF NOT EXISTS idx_documents_methodology_version ON documents(methodology_version_id);
+
+-- Every regulatory constant, with its source. No row without version_id
+-- and section_ref. Multiple rows may share the same key, differentiated
+-- by applicability (e.g. several charcoal emission factors depending on
+-- carbonisation losses, kiln yield, wood-to-charcoal ratio, or whether
+-- the source is an IPCC default, a national value or a field measurement).
+-- The system never picks one on its own. extraction_method='llm_unverified'
+-- values must never be silently consumed by a calculation; extraction_method
+-- ='llm_extracted' values become trusted only once verified_by/verified_at
+-- are set by a human.
+CREATE TABLE IF NOT EXISTS regulatory_values (
+    id                 SERIAL       PRIMARY KEY,
+    version_id         INTEGER      NOT NULL REFERENCES methodology_version_history(id) ON DELETE CASCADE,
+    key                VARCHAR(200) NOT NULL,
+    value              TEXT         NOT NULL,
+    unit               VARCHAR(50),
+    applicability      JSONB        NOT NULL DEFAULT '{}',
+    section_ref        VARCHAR(200) NOT NULL,
+    page_ref           VARCHAR(50),
+    extraction_method  VARCHAR(20)  NOT NULL DEFAULT 'llm_extracted'
+        CHECK (extraction_method IN ('manual', 'llm_extracted', 'llm_unverified')),
+    verified_by        VARCHAR(200),
+    verified_at        TIMESTAMPTZ,
+    notes              TEXT,
+    created_at         TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_regulatory_values_version ON regulatory_values(version_id);
+CREATE INDEX IF NOT EXISTS idx_regulatory_values_key ON regulatory_values(key);
 """
 
 

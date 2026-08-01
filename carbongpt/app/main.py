@@ -45,6 +45,7 @@ from carbongpt.app.project_routes import router as project_router
 from carbongpt.app.pack_routes import router as pack_router
 from carbongpt.app.profile_routes import router as profile_router
 from carbongpt.app.calculate_routes import router as calculate_router
+from carbongpt.app.methodology_routes import router as methodology_router
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ app.include_router(project_router)
 app.include_router(pack_router)
 app.include_router(profile_router)
 app.include_router(calculate_router)
+app.include_router(methodology_router)
 
 
 @app.on_event("startup")
