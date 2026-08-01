@@ -1004,6 +1004,92 @@ CREATE TABLE IF NOT EXISTS regulatory_values (
 
 CREATE INDEX IF NOT EXISTS idx_regulatory_values_version ON regulatory_values(version_id);
 CREATE INDEX IF NOT EXISTS idx_regulatory_values_key ON regulatory_values(key);
+
+-- ============================================================
+-- SPEC-03 -- Moteur de resolution de parametres (docs/SPEC-03.md)
+--
+-- Tranche fine : schema complet (T1-T4), moteur limite a EF_CO2/EF_nonCO2
+-- charbon. Migration additive -- etend project_parameters (existant),
+-- cree regulatory_value_preferences, project_parameter_alternatives et
+-- project_open_questions.
+-- ============================================================
+
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument TEXT;
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS original_proposed_value TEXT;
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS resolution_engine_version VARCHAR(20);
+ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+
+-- Hierarchie de preference entre valeurs regulatory_values candidates pour
+-- une meme cle, sous une condition de contexte projet donnee. N'existait pas
+-- dans SPEC-01 (qui extrait des valeurs, pas des ordres de preference) --
+-- ajoutee ici a la demande de l'utilisateur (01.08.2026), avec la meme
+-- discipline de tracabilite que regulatory_values : une regle
+-- extraction_method='llm_unverified' ne peut jamais servir a classer
+-- automatiquement.
+CREATE TABLE IF NOT EXISTS regulatory_value_preferences (
+    id                 SERIAL       PRIMARY KEY,
+    version_id         INTEGER      NOT NULL REFERENCES methodology_version_history(id) ON DELETE CASCADE,
+    key                VARCHAR(200) NOT NULL,
+    context_condition  JSONB        NOT NULL DEFAULT '{}',
+    regulatory_value_id INTEGER     NOT NULL REFERENCES regulatory_values(id) ON DELETE CASCADE,
+    rank               INTEGER      NOT NULL,
+    obligation         VARCHAR(30)  NOT NULL
+        CHECK (obligation IN ('mandatory', 'default_permitted', 'optional_conservative_override')),
+    rationale          TEXT         NOT NULL,
+    section_ref        VARCHAR(200) NOT NULL,
+    page_ref           VARCHAR(50),
+    extraction_method  VARCHAR(20)  NOT NULL DEFAULT 'llm_extracted'
+        CHECK (extraction_method IN ('manual', 'llm_extracted', 'llm_unverified')),
+    verified_by        VARCHAR(200),
+    verified_at        TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rvp_version_key ON regulatory_value_preferences(version_id, key);
+
+-- Une ligne par candidat pour un parametre d'un projet donne : le retenu et
+-- les ecartes. `rank` est la position dans la hierarchie de preference de la
+-- methodologie (regulatory_value_preferences) -- elle ne dit PAS a elle
+-- seule lequel est retenu, puisqu'un fait non deductible (reponse de
+-- l'utilisateur a une project_open_questions) peut faire retenir une option
+-- de rang 2 ou 3. `is_selected` porte cette information explicitement ; tout
+-- candidat non retenu doit avoir un motif.
+CREATE TABLE IF NOT EXISTS project_parameter_alternatives (
+    id                          SERIAL       PRIMARY KEY,
+    project_parameter_id        INTEGER      NOT NULL REFERENCES project_parameters(id) ON DELETE CASCADE,
+    value                       TEXT         NOT NULL,
+    unit                        VARCHAR(50),
+    regulatory_value_id         INTEGER      REFERENCES regulatory_values(id) ON DELETE SET NULL,
+    external_reference_value_id INTEGER,
+    section_ref                 VARCHAR(200),
+    applicability                JSONB       NOT NULL DEFAULT '{}',
+    rank                        INTEGER      NOT NULL,
+    is_selected                 BOOLEAN      NOT NULL DEFAULT FALSE,
+    rejection_reason            TEXT,
+    created_at                  TIMESTAMPTZ  DEFAULT NOW(),
+    CHECK (is_selected OR rejection_reason IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ppa_project_parameter ON project_parameter_alternatives(project_parameter_id);
+
+-- Un fait que le moteur ne peut pas deduire du contexte du projet, pose a
+-- l'utilisateur plutot que suppose.
+CREATE TABLE IF NOT EXISTS project_open_questions (
+    id                SERIAL       PRIMARY KEY,
+    project_id        INTEGER      NOT NULL REFERENCES user_projects(id) ON DELETE CASCADE,
+    question_key      VARCHAR(100) NOT NULL,
+    question_text     TEXT         NOT NULL,
+    blocks_param_keys TEXT[]       NOT NULL DEFAULT '{}',
+    status            VARCHAR(20)  NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'answered', 'not_applicable')),
+    answer_value      TEXT,
+    answered_by       VARCHAR(200),
+    answered_at       TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  DEFAULT NOW(),
+    UNIQUE (project_id, question_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_poq_project_status ON project_open_questions(project_id, status);
 """
 
 

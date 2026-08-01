@@ -52,9 +52,18 @@ Ce qui lui manque, et que rien d'autre ne couvre :
    permet de choisir — aujourd'hui, en l'absence de valeur, le paramètre
    reste simplement vide, sans distinction entre « pas encore renseigné » et
    « le système ne peut pas le déduire, il faut te le demander ».
+4. **Une hiérarchie de préférence entre valeurs candidates.**
+   `regulatory_values` (SPEC-01) stocke des **valeurs**, différenciées par
+   `applicability` — pas un **ordre** entre elles. Or classer les candidats
+   sans savoir lequel la méthodologie préfère (« shall » vs « may » vs
+   optionnel plus conservateur) revient à choisir arbitrairement, ce que ce
+   moteur a précisément pour but d'éviter. Corrigé dans cette version de la
+   spec (T2) — signalé par l'utilisateur le 01.08.2026 en relisant la
+   première version, qui prévoyait de « lire la hiérarchie dans
+   `regulatory_values` » sans que la table ait de champ pour ça.
 
 **Décision** (à valider) : étendre `project_parameters` (colonnes additives)
-et créer deux tables neuves, plutôt que dupliquer ce qui existe déjà — même
+et créer trois tables neuves, plutôt que dupliquer ce qui existe déjà — même
 principe que SPEC-01.
 
 ---
@@ -65,7 +74,7 @@ principe que SPEC-01.
 
 1. Moteur générique `resolve_parameter()` qui lit `regulatory_values`
    (SPEC-01) et `external_reference_values` (SPEC-02) selon le contexte
-   projet, et écrit dans `project_parameters` + les deux nouvelles tables
+   projet, et écrit dans `project_parameters` + les trois nouvelles tables
 2. Modélisation des alternatives écartées, avec motif
 3. Génération de l'argument de défendabilité (gabarit textuel, pas de
    rédaction libre par IA à ce stade — voir T4)
@@ -96,7 +105,41 @@ version de la logique de résolution a produit la proposition — utile si la
 logique change plus tard et qu'il faut ré-évaluer d'anciens projets),
 `resolved_at TIMESTAMP`.
 
-### T2 — `project_parameter_alternatives`
+### T2 — `regulatory_value_preferences` — la hiérarchie manquante
+
+**La correction demandée.** Formalise, avec la même discipline de
+traçabilité que `regulatory_values` (source, section, `extraction_method`,
+`verified_by`/`verified_at`), l'ordre de préférence entre plusieurs lignes
+`regulatory_values` candidates pour une même clé, **sous une condition de
+contexte donnée** — parce que l'ordre n'est pas fixe : WCCF 6:1 est le
+défaut « autorisé » en Afrique subsaharienne/PMA, mais devient une
+alternative plus conservatrice ailleurs, où c'est 4:1 qui est obligatoire.
+Le classement dépend du contexte du projet, pas seulement de la clé.
+
+`id`, `version_id` (FK `methodology_version_history(id)`, même ancrage que
+`regulatory_values`), `key` (ex. `EF_CO2`), `context_condition` (JSONB — la
+condition de contexte projet sous laquelle ce classement s'applique, ex.
+`{"region_classification": "sub_saharan_africa_or_ldc"}` ; `{}` = s'applique
+à tout contexte), `regulatory_value_id` (FK `regulatory_values(id)` — la
+ligne de valeur que ce rang concerne), `rank` (INTEGER, 1 = préférée sous
+cette condition), `obligation` (`mandatory` | `default_permitted` |
+`optional_conservative_override` — capture la nuance shall/may/optionnel du
+texte source, plus riche qu'un simple numéro), `rationale` (TEXT, motivation
+proche du texte source, ex. « shall be applied » / « may be applied » /
+« optional conservative application »), `section_ref`, `page_ref`,
+`extraction_method` (même enum que `regulatory_values` : `manual`,
+`llm_extracted`, `llm_unverified`), `verified_by`, `verified_at`,
+`created_at`.
+
+**Garde-fou, symétrique à celui de `regulatory_values`** : une règle
+`extraction_method='llm_unverified'` ne peut jamais servir à classer
+automatiquement. Si le moteur (T5) ne trouve, pour une clé et un contexte
+donnés, aucune règle utilisable — ni `manual` ni `llm_extracted` — il lève
+une erreur explicite plutôt que d'improviser un tri. C'est un signal qu'il
+manque une extraction de hiérarchie (retour à SPEC-01/SPEC-02 pour cette
+clé), pas une situation que ce moteur doit deviner.
+
+### T3 — `project_parameter_alternatives`
 
 Une ligne par alternative écartée pour un paramètre d'un projet donné.
 
@@ -105,12 +148,14 @@ Une ligne par alternative écartée pour un paramètre d'un projet donné.
 `external_reference_value_id` (FK `external_reference_values(id)`,
 nullable — exactement une des deux FK doit être renseignée), `section_ref`,
 `applicability` (JSONB, copié de la source au moment de la résolution, pour
-ne pas dépendre d'un changement ultérieur de la source), `rank` (1 =
-proposition retenue, 2+ = écartées, dans l'ordre de la hiérarchie de
-préférence), `rejection_reason` (TEXT, **obligatoire si `rank` > 1**),
+ne pas dépendre d'un changement ultérieur de la source), `rank` (copié de
+`regulatory_value_preferences.rank` — 1 = proposition retenue, 2+ =
+écartées, dans l'ordre de préférence effectivement appliqué),
+`rejection_reason` (TEXT, **obligatoire si `rank` > 1** ; dérivé de
+`regulatory_value_preferences.rationale`, adapté au contexte du projet),
 `created_at`.
 
-### T3 — `project_open_questions`
+### T4 — `project_open_questions`
 
 Un fait que le moteur ne peut pas déduire du contexte du projet, posé à
 l'utilisateur plutôt que supposé.
@@ -123,7 +168,7 @@ paramètres de `project_parameters` restent non résolus tant que la question
 est ouverte), `status` (`open`, `answered`, `not_applicable`),
 `answer_value`, `answered_by`, `answered_at`, `created_at`.
 
-### T4 — Le moteur : `resolve_parameter(project_id, param_key, methodology_version_id)`
+### T5 — Le moteur : `resolve_parameter(project_id, param_key, methodology_version_id)`
 
 1. Rassembler le contexte du projet : pays, combustible(s) baseline/activité,
    technologie, date/millésime — depuis `user_projects` et les paramètres
@@ -139,27 +184,28 @@ est ouverte), `status` (`open`, `answered`, `not_applicable`),
    à jour une `project_open_questions`, **ne rien écrire dans
    `project_parameters` pour ce paramètre**, et arrêter là pour ce
    paramètre. Ne jamais deviner à la place de l'utilisateur.
-4. Sinon, classer les candidats restants selon la **hiérarchie de
-   préférence que la méthodologie elle-même énonce** — RECH v5.0 la donne
-   explicitement pour chaque paramètre (ex. « Choice of data or measurement
-   methods and procedures: i. IPCC defaults ii. Activity-specific field
-   tests... »), ce n'est pas à inventer, c'est à lire dans
-   `regulatory_values`/le texte source.
-5. Retenir le premier candidat de la hiérarchie comme **valeur proposée**,
-   écrire les autres dans `project_parameter_alternatives` avec un motif
-   dérivé du contexte (ex. « Écartée : valeur nationale non disponible pour
-   ce pays, défaut IPCC retenu » ou « Écartée : suppose des émissions de
-   carbonisation incluses (WCCF 6:1), non confirmé pour ce projet »).
+4. Sinon, chercher dans **`regulatory_value_preferences`** (T2) les règles
+   dont `version_id`/`key` correspondent et dont `context_condition` est
+   satisfait par le contexte du projet. **Si aucune règle utilisable
+   n'existe** (aucune ligne `manual`/`llm_extracted` pour cette clé et ce
+   contexte) : lever une erreur explicite — la hiérarchie n'a pas encore été
+   extraite pour ce paramètre, ce n'est pas au moteur de l'inventer à la
+   volée.
+5. Trier les candidats par `rank`. Retenir le rang 1 comme **valeur
+   proposée**, écrire les autres dans `project_parameter_alternatives` avec
+   `rejection_reason` dérivé de `rationale` (ex. « Écartée : le ratio 4:1
+   est la version plus conservatrice, toujours autorisée, mais le ratio 6:1
+   est le défaut applicable à ce pays (Afrique subsaharienne/PMA) » pour une
+   alternative de rang 2 sous `obligation='optional_conservative_override'`).
 6. Générer l'**argument de défendabilité** : gabarit textuel combinant
-   source, référence de section, position dans la hiérarchie de préférence,
-   et toute mention de conservativité que le texte source signale
-   explicitement (RECH le fait souvent — « conservative default »,
-   « conservativeness discount »).
+   source, référence de section, `obligation` (« shall »/« may »/optionnel)
+   et `rationale` de la règle de rang 1, plus toute mention de
+   conservativité que le texte source signale explicitement.
 7. Écrire la valeur retenue dans `project_parameters`
    (`resolution_engine_version` renseigné) et les alternatives dans
    `project_parameter_alternatives`.
 
-### T5 — Modification tracée
+### T6 — Modification tracée
 
 `override_parameter(project_id, param_key, new_value, reason, user)` :
 seul chemin pour modifier une valeur résolue automatiquement.
@@ -178,7 +224,7 @@ seul chemin pour modifier une valeur résolue automatiquement.
   ingestion d'une nouvelle version de Tool 05) propose la mise à jour, elle
   ne l'impose pas.
 
-### T6 — Faits non déductibles, par paramètre
+### T7 — Faits non déductibles, par paramètre
 
 Une liste ouverte, à enrichir au fil des méthodologies, des faits qu'aucun
 contexte projet ne permet de déduire automatiquement. Pour RECH v5.0,
@@ -193,7 +239,7 @@ identifiés dans cette passe :
 
 Le moteur consulte cette liste avant de tenter une résolution automatique ;
 si la réponse n'existe pas déjà dans `project_parameters`, il pose la
-question (T3) au lieu de proposer une valeur.
+question (T4) au lieu de proposer une valeur.
 
 ---
 
@@ -213,15 +259,20 @@ question (T3) au lieu de proposer une valeur.
 - Un paramètre sans aucune ligne `regulatory_values`/`external_reference_values`
   correspondante lève une erreur explicite (pas de valeur par défaut
   inventée par le moteur lui-même)
+- Un paramètre dont les valeurs candidates existent, mais sans aucune règle
+  `regulatory_value_preferences` utilisable (`manual`/`llm_extracted`) pour
+  le contexte donné, lève une erreur explicite distincte — le moteur ne
+  trie jamais des candidats sans hiérarchie sourcée
 
 ---
 
 ## Livrables
 
 1. Migration de schéma (additive) : `project_parameters` étendue,
-   `project_parameter_alternatives` et `project_open_questions` créées
+   `regulatory_value_preferences`, `project_parameter_alternatives` et
+   `project_open_questions` créées
 2. `resolve_parameter()`, `override_parameter()` + tests
-3. Liste des faits non déductibles pour RECH v5.0 (T6), extensible aux
+3. Liste des faits non déductibles pour RECH v5.0 (T7), extensible aux
    méthodologies suivantes
 4. `docs/STATUS.md` mis à jour
 

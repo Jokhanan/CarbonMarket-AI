@@ -141,6 +141,81 @@ n'appellent pas le même traitement.
 
 ## Travaux
 
+### T0 — Vérifier la disponibilité réelle de chaque source, avant d'écrire un ingesteur
+
+Fait le 01.08.2026, par nécessité avant d'écrire le moindre code : rien ne
+garantit qu'une source « externe » est publiée sous une forme exploitable
+par pays. Vérifié pour les 4 sources en jeu.
+
+**1. GS4GG Tool 05 (DAF)** — ✅ **exploitable, même famille de traitement que RECH.**
+PDF officiel Gold Standard :
+`https://globalgoals.goldstandard.org/standards/457_v1.0_PAA-MS_400_05_Downward-adjustment-factor-determination.pdf`
+(41 pages). Contient un vrai tableau, une ligne par pays, **188 pays**
+couverts, période de validité 2026-2030, avec le DAF en pourcentage et le
+mode de détermination (« Ambition Floor (Peer Group) » ou « Country DAF »).
+Vérifié concrètement : Burkina Faso (≈3.45%) et Ghana (≈2.76%) sont tous
+deux présents. `pdfplumber` extrait les tableaux mais certaines cellules
+s'étalent sur plusieurs lignes (à nettoyer, comme pour RECH — pas un
+obstacle, juste du travail de parsing prévisible).
+
+**2. Outil A6.4 fNRB (A6.4-MEP012-A04, UNFCCC)** — ⚠️ **bloqué en accès
+automatisé, à traiter différemment.**
+`https://unfccc.int/sites/default/files/resource/A6.4-MEP012-A04.pdf` est
+protégé par Incapsula (pare-feu anti-bot) : une requête HTTP simple reçoit
+une page de challenge JavaScript vide (212 octets), pas le PDF. Un
+navigateur réel passerait probablement, mais un ingesteur automatisé de
+type `requests`/`curl` — le modèle utilisé pour RECH et Tool 05 — ne
+fonctionnera pas tel quel ici. **À traiter au cas par cas** : soit
+téléchargement manuel périodique (le document ne change pas souvent, il
+est en version « Draft A04 » depuis mars 2026), soit une automatisation par
+navigateur piloté (Playwright/Selenium), plus lourde à maintenir qu'un
+simple `requests.get()`. Je recommande le téléchargement manuel pour un
+premier amorçage, et ne pas construire d'automatisation tant que la
+fréquence réelle de mise à jour ne justifie pas l'effort.
+
+**3. MoFuSS** — ✅ **exploitable, mais uniquement en PDF, pas de CSV/API.**
+Le rapport de référence (« Updated fNRB Values for Woodfuel Interventions »,
+juin 2024, 68 pages,
+`https://www.mofuss.unam.mx/mofuss/files/Report_on_Updated_fNRB_Values_20_June_2024.pdf`,
+aussi archivé sur Zenodo) n'expose **aucun fichier de données structuré** —
+seulement ce PDF. Vérifié : il contient bien un tableau par pays (Burkina
+Faso et Ghana confirmés présents, page 32, avec plusieurs valeurs
+administratives par pays — le rapport travaille à trois niveaux
+administratifs, pas un seul chiffre nationale). Extractible comme RECH et
+Tool 05, pas de blocage d'accès contrairement à l'UNFCCC.
+
+**Point important, qui affine (sans l'invalider) la mise en garde de
+l'utilisateur** : le tool A6.4 (point 2) se présente lui-même comme fondé
+sur MoFuSS. Ce n'est donc pas nécessairement deux méthodologies
+indépendantes, mais ça ne veut pas dire que leurs chiffres publiés
+coïncident pour un pays et une date donnés — la version A6.4 officiellement
+adoptée peut être en retard sur la dernière publication MoFuSS (celle de
+juin 2024 n'est peut-être pas encore celle intégrée à la version « Draft
+A04 » de l'outil UNFCCC). **Confirme la décision déjà prise dans cette
+spec : deux sources, deux lignes, jamais fusionnées automatiquement.**
+
+**4. Liste des Pays les Moins Avancés (PMA/LDC)** — ✅ **la plus simple des
+quatre.**
+Liste officielle tenue par la Division des politiques économiques et
+sociales de l'ONU (DESA/OHRLLS) :
+`https://policy.desa.un.org/themes/least-developed-countries-category/list-of-ldcs-and-country-fact-sheets`.
+44 pays actuellement (32 Afrique, 8 Asie, 1 Caraïbes, 3 Pacifique), texte
+plat, pas de blocage d'accès constaté. Le Burkina Faso y figure ; le Ghana
+n'y figure pas (il qualifie pour le WCCF 6:1 de RECH via le critère « Afrique
+subsaharienne », pas via le statut PMA — les deux critères de RECH §2 sont
+liés par « ou », pas « et »). Bonus : la liste indique déjà les dates de
+sortie programmées (ex. Bangladesh, Laos, Népal sortent le 24.11.2026),
+utile pour l'indexation temporelle que cette spec demande. La classification
+« Afrique subsaharienne » elle-même est une région géographique standard
+(regroupement M49 de la Division statistique de l'ONU), quasi statique —
+pas besoin d'un pipeline d'ingestion récurrent pour celle-là, une table de
+correspondance suffit.
+
+**Conséquence sur T2** : deux modules d'ingestion « faciles » (Tool 05,
+MoFuSS — même patron que `gs_ingest.py`), un module « à téléchargement
+manuel assumé » (A6.4), un module quasi trivial (liste PMA + table de
+correspondance régionale statique, pas vraiment un « ingesteur »).
+
 ### T1 — Modèle de données
 
 Suivre la même discipline que `regulatory_values` (SPEC-01) : source

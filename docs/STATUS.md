@@ -55,17 +55,90 @@ Dernière mise à jour : 01.08.2026
   n'est pas défini ou si RECH n'a pas encore été ingéré — la suite reste
   exécutable sans base de données.
 
-**Suite complète** : 149 tests, 149 passent (133 préexistants + 16 nouveaux),
-0 échec.
+**Mise à jour du 01.08.2026** : fNRB retiré de `regulatory_values` (n'est
+structurellement pas une valeur fixe dans RECH v5.0, voir
+[docs/DECISIONS.md](DECISIONS.md)) — 17 lignes restantes, 15
+`llm_extracted`, 1 `llm_unverified` (DAF). Citation exacte de l'entrée en
+vigueur vérifiée : §3.3.1, page 12.
+
+**Suite complète (SPEC-01 seule)** : 149 tests passent.
 
 **Travail de suite identifié, non fait** :
 1. Trancher les écarts du rapport d'audit, valeur par valeur.
-2. Ingérer GS4GG Tool 05 (Downward Adjustment Factor) séparément pour sourcer
-   le DAF — nouvelle spec.
-3. Une fois les valeurs tranchées : migrer `gs_rech_v5.py` vers
+2. Une fois les valeurs tranchées : migrer `gs_rech_v5.py` vers
    `regulatory_values` (T5.4).
-4. Décider si la branche d'amortissement sur 5 ans des embodied emissions
+3. Décider si la branche d'amortissement sur 5 ans des embodied emissions
    (Eq.19 du PDF, absente du code actuel) doit être implémentée.
+
+---
+
+## SPEC-02 — Sources de données externes indexées par pays
+
+**Statut : spec écrite et vérifiée (T0), rien implémenté — décision
+volontaire de l'utilisateur (01.08.2026) : d'abord valider le design de
+SPEC-03 sur un seul paramètre déjà en base avant d'investir dans
+l'ingestion.**
+
+T0 (vérification de disponibilité, préalable à tout code) fait : Tool 05
+exploitable (PDF structuré, 188 pays, Ghana et Burkina Faso confirmés
+présents) ; outil A6.4 fNRB bloqué par une protection anti-bot sur
+unfccc.int (à traiter par téléchargement manuel, pas d'automatisation dans
+l'immédiat) ; MoFuSS exploitable mais seulement en PDF (pas de CSV/API),
+tableaux par pays confirmés (Ghana, Burkina Faso) ; liste des Pays les Moins
+Avancés très simple (44 pays, texte plat, UN DESA). Détail dans
+[docs/SPEC-02.md](SPEC-02.md).
+
+---
+
+## SPEC-03 — Moteur de résolution de paramètres (Couche 3)
+
+**Statut : tranche fine implémentée et démontrée sur un projet réel, limitée
+à `EF_CO2`/`EF_nonCO2` (charbon).**
+
+- Faille corrigée avant implémentation : `regulatory_values` (SPEC-01)
+  n'avait aucun champ pour stocker une hiérarchie de préférence entre
+  valeurs candidates. Ajout de `regulatory_value_preferences` (T2), avec la
+  même discipline de traçabilité que `regulatory_values`
+  (`extraction_method`/`verified_by`/`verified_at`).
+- Schéma complet appliqué (migration additive) : `project_parameters`
+  étendue, `regulatory_value_preferences`, `project_parameter_alternatives`
+  (contrainte au niveau base : un candidat non retenu doit avoir un motif —
+  `CHECK (is_selected OR rejection_reason IS NOT NULL)`), `project_open_questions`.
+- `carbongpt/repository/parameter_resolver.py` : `resolve_parameter()`,
+  `answer_question()`, `override_parameter()`. **Limité par construction à
+  `EF_CO2`/`EF_nonCO2`** — toute autre clé lève une erreur explicite plutôt
+  que de deviner.
+- **STUB explicitement signalé dans le code** : la classification région
+  (Afrique subsaharienne/PMA vs industrialisé) n'est pas SPEC-02 — un
+  dictionnaire minimal couvre seulement Ghana et Burkina Faso, pour les
+  tests et la démonstration. Pas un vrai jeu de données ingéré.
+- 12 règles de préférence insérées pour `EF_CO2`/`EF_nonCO2`, sourcées de
+  RECH v5.0 §2 (définition WCCF, page 7), deux contextes (Afrique
+  subsaharienne/PMA, industrialisé), 3 candidats chacun.
+- **Démontré sur le projet réel `user_projects.id=12` (« Gh »,
+  méthodologie TPDDTEC/RECH)** — voir la conversation du 01.08.2026 pour la
+  trace complète : question posée → réponse → valeur proposée (355.36
+  tCO2/TJ) → 2 alternatives écartées avec motif → argument de défendabilité
+  citant §2, page 7 → `override_parameter()` avec conservation de la
+  proposition initiale → `resolve_parameter()` confirmé sans écraser
+  l'override.
+  **Anomalie de données trouvée en cours de route, non corrigée** : la
+  fiche du projet a `country = 'Afghanistan'` alors que son nom (« Gh ») et
+  sa méthodologie suggèrent fortement le Ghana. Signalée, pas corrigée sans
+  confirmation.
+- Tests : `carbongpt/tests/test_parameter_resolver.py`, 9 tests, contre un
+  projet jetable créé et détruit par test (jamais le portefeuille réel).
+
+**Suite complète (SPEC-01 + SPEC-03)** : 158 tests passent.
+
+**Travail de suite identifié, non fait** :
+1. Valider le design sur ce seul paramètre avant d'étendre.
+2. Implémenter SPEC-02 (au moins Tool 05 et la classification PMA/SSA, les
+   deux sources faciles) pour remplacer le stub de classification région.
+3. Étendre `resolve_parameter()` aux autres paramètres de RECH (NCV, PCAP,
+   embodied, leakage marché — chacun a besoin de sa propre hiérarchie dans
+   `regulatory_value_preferences`).
+4. Corriger (ou faire corriger) le champ pays du projet `id=12`.
 
 ---
 
