@@ -1103,6 +1103,12 @@ ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_s
     DEFAULT 'template' CHECK (defendability_argument_source IN ('ai_generated', 'template'));
 ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_model VARCHAR(50);
 ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_generated_at TIMESTAMPTZ;
+
+-- Language of the DELIVERABLE (PDD/VPA-DD, defendability arguments, etc.),
+-- distinct from the chat interface language (always French for this user).
+-- Defaults to English: both standards currently in scope (Gold Standard,
+-- Verra) require English-language submissions. Overridable per project.
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS document_language VARCHAR(10) DEFAULT 'en';
 """
 
 

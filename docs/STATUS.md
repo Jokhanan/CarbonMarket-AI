@@ -146,8 +146,8 @@ Avancés très simple (44 pays, texte plat, UN DESA). Détail dans
 ## SPEC-04 — Argument de défendabilité généré par IA (Couche 4)
 
 **Statut : implémentée sur le même périmètre que SPEC-03 (`EF_CO2`/`EF_nonCO2`,
-charbon). Non démontrée avec un vrai appel au modèle — clés absentes de `.env`
-au moment du test, voir plus bas.**
+charbon). Démontrée avec un vrai appel au modèle (clés en place le
+01.08.2026) sur le projet réel `id=12` — voir plus bas.**
 
 - Schéma (migration additive) : `project_parameters` gagne
   `defendability_argument_source` (`'ai_generated'` | `'template'`, défaut
@@ -173,19 +173,55 @@ au moment du test, voir plus bas.**
   silencieux-pour-l'utilisateur-final-mais-loggé sur le gabarit SPEC-03,
   `defendability_argument_source` posé à `'template'`. Jamais de crash côté
   appelant.
-- Démonstration charbon relancée sur le projet réel `user_projects.id=12`
-  (Ghana) après la correction du pays : chaîne complète rejouée avec
-  succès, mais `.env` ne contient encore aucune clé (`ANTHROPIC_API_KEY`
-  absente) — le moteur est donc retombé sur le gabarit, comme prévu. Le
-  comparatif texte-IA vs gabarit demandé par l'utilisateur n'a pas pu être
-  produit dans cette session ; à rejouer dès que les clés sont en place.
-- Tests : 7 dans `carbongpt/tests/test_defendability.py` (jeu de faits,
-  validateur accepté/rejeté nombre/section, délégation à `call_openai()`,
-  clé manquante) + 2 dans `test_parameter_resolver.py` (repli gabarit,
-  argument IA effectivement utilisé et persisté — avec `call_openai()`
-  simulé, sans réseau).
+- **Bug bloquant trouvé en vérifiant les clés (call minimal réel)** :
+  `claude-sonnet-5`/`claude-opus-5` rejettent le paramètre `temperature`
+  purement et simplement (`400 — "temperature is deprecated for this
+  model"`), envoyé sur tous les appels. Sans ce correctif, toute
+  génération de texte du produit échouait dès qu'une vraie clé API était
+  utilisée. Corrigé dans `openai_client.py` (`temperature` accepté dans
+  les signatures pour compat, jamais envoyé au payload).
+- **Faille du garde-fou trouvée et corrigée après une première démo** : le
+  texte généré affirmait que le Ghana est une juridiction « Sub-Saharan
+  Africa/LDC » — faux, le Ghana n'est pas un Pays Moins Avancé (le Burkina
+  Faso l'est). Origine structurelle : le champ `applicability.region`
+  d'une valeur candidate décrit la portée de la RÈGLE, sourcée de la
+  méthodologie (« Sub-Saharan Africa or Least Developed Countries ») — ce
+  n'est pas un fait sourcé sur le pays du projet. Le validateur ne
+  vérifiait que les nombres et références de section, pas ce type
+  d'affirmation relationnelle ; une simple présence de la phrase dans le
+  JSON (vraie, mais pour la règle, pas pour le pays) l'aurait laissée
+  passer. Corrigé par : (1) interdiction explicite dans la consigne
+  système de toute classification de pays (LDC, PMA, Afrique
+  subsaharienne, industrialisé, en développement) sous quelque forme que
+  ce soit ; (2) `validate_generated_argument()` étendu pour rejeter
+  mécaniquement toute occurrence de ces termes, sauf si un futur champ
+  `project_context.country_classification` (alimenté par SPEC-02, non
+  implémenté) l'autorise explicitement. En attendant SPEC-02, l'argument
+  généré doit se limiter au nom du pays, sans qualificatif.
+- **Deux défauts de registre corrigés** dans la consigne système : les
+  codes internes (`default_permitted`) doivent être traduits en langage
+  réglementaire, jamais imprimés tels quels ; l'argument expose un
+  raisonnement, il ne dicte pas la conclusion du VVB (interdiction de
+  formulations du type « the VVB should validate »).
+- **Langue du livrable distincte de la langue de l'interface** : nouvelle
+  colonne `user_projects.document_language` (migration additive, défaut
+  `'en'` — Gold Standard et Verra exigent des soumissions en anglais).
+  `generate_defendability_argument()` lit
+  `project_context.document_language` et instruit le modèle en
+  conséquence ; la langue de l'interface (français, pour cet utilisateur)
+  n'a aucune influence sur celle du livrable.
+- Démonstration charbon rejouée sur le projet réel `user_projects.id=12`
+  (Ghana) avec de vraies clés API : argument généré par `claude-sonnet-5`,
+  persisté (`defendability_argument_source='ai_generated'`), sans
+  affirmation de classification, en anglais (défaut Gold Standard),
+  jugé par l'utilisateur nettement supérieur au gabarit.
+- Tests : 11 dans `carbongpt/tests/test_defendability.py` (jeu de faits,
+  validateur nombre/section/classification, langue du livrable, délégation
+  à `call_openai()`, clé manquante) + 2 dans `test_parameter_resolver.py`
+  (repli gabarit, argument IA effectivement utilisé et persisté — avec
+  `call_openai()` simulé, sans réseau).
 
-**Suite complète (SPEC-01 + SPEC-03 + SPEC-04)** : 179 tests passent.
+**Suite complète (SPEC-01 + SPEC-03 + SPEC-04)** : 183 tests passent.
 
 ---
 

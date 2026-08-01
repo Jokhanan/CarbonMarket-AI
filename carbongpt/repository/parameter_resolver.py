@@ -101,11 +101,17 @@ def _region_classification(country_iso: str | None) -> str | None:
 
 def _get_project_context(project_id: int, context_override: dict[str, Any] | None) -> dict[str, Any]:
     with get_cursor() as cur:
-        cur.execute("SELECT country_iso, country FROM user_projects WHERE id = %s", (project_id,))
+        cur.execute(
+            "SELECT country_iso, country, document_language FROM user_projects WHERE id = %s",
+            (project_id,),
+        )
         row = cur.fetchone()
     if row is None:
         raise ResolutionError(f"Project {project_id} not found")
-    context = {"country_iso": row["country_iso"], "country": row["country"]}
+    context = {
+        "country_iso": row["country_iso"], "country": row["country"],
+        "document_language": row["document_language"] or "en",
+    }
     if context_override:
         context.update(context_override)
     return context

@@ -13,14 +13,18 @@ from carbongpt.repository.defendability import (
 
 _CHOSEN = {
     "value": "0.081", "unit": "tCO2/GJ", "section_ref": "§ 4.2", "page_ref": "12",
-    "obligation": "mandatory", "applicability": {"kiln_type": "wccf_6_1"},
+    "obligation": "mandatory",
+    "applicability": {
+        "kiln_type": "wccf_6_1",
+        "region": "Sub-Saharan Africa or Least Developed Countries",
+    },
     "rationale": "Ratio bois-charbon 6:1, defaut regional PMA/Afrique subsaharienne.",
 }
 _ALTERNATIVES = [
     {"value": "0.095", "unit": "tCO2/GJ", "section_ref": "§ 4.3",
      "rejection_reason": "La reponse du projet pointe vers wccf_6_1, pas vers wccf_4_1."},
 ]
-_CONTEXT = {"country_iso": "GHA", "country": "Ghana"}
+_CONTEXT = {"country_iso": "GHA", "country": "Ghana", "document_language": "en"}
 
 
 def _fact_set():
@@ -61,6 +65,26 @@ class TestValidateGeneratedArgument:
         with pytest.raises(ArgumentValidationError):
             validate_generated_argument(text, fact_set)
 
+    def test_rejects_country_classification_claim_not_sourced(self):
+        # Reproduces the real bug: applicability.region legitimately contains
+        # "Least Developed Countries" (it describes the RULE's scope, sourced
+        # from the methodology) — the model must not launder that into a claim
+        # that Ghana itself is an LDC. Ghana is NOT on the UN LDC list (Burkina
+        # Faso is); docs/SPEC-02.md (country classification) isn't implemented,
+        # so no fact set can ever license this claim today.
+        fact_set = _fact_set()
+        text = (
+            "Since Ghana is a Least Developed Country, the value of 0.081 tCO2/GJ "
+            "sourced at § 4.2 applies to this project."
+        )
+        with pytest.raises(ArgumentValidationError, match="classification"):
+            validate_generated_argument(text, fact_set)
+
+    def test_accepts_plain_country_name_with_no_classification_qualifier(self):
+        fact_set = _fact_set()
+        text = "For this project in Ghana, the value of 0.081 tCO2/GJ sourced at § 4.2 applies."
+        validate_generated_argument(text, fact_set)  # must not raise
+
 
 class TestGenerateDefendabilityArgument:
     def test_delegates_to_call_openai_and_returns_model_used(self, monkeypatch):
@@ -97,3 +121,41 @@ class TestGenerateDefendabilityArgument:
         fact_set = _fact_set()
         with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
             generate_defendability_argument(fact_set)
+
+    def test_document_language_drives_system_prompt_instruction(self, monkeypatch):
+        # document_language is the DELIVERABLE's language (per-project, defaults to
+        # 'en' for Gold Standard/Verra) -- distinct from the chat interface language.
+        captured = {}
+
+        def fake_call_openai(system_prompt, user_prompt, **kwargs):
+            captured["system_prompt"] = system_prompt
+            return "0.081 tCO2/GJ, § 4.2."
+
+        monkeypatch.setattr("carbongpt.core.openai_client.call_openai", fake_call_openai)
+        monkeypatch.setattr("carbongpt.core.openai_client._resolve_model", lambda override: "claude-sonnet-5")
+
+        fact_set = build_fact_set(
+            param_key="EF_CO2", chosen=_CHOSEN, alternatives=_ALTERNATIVES,
+            project_context={**_CONTEXT, "document_language": "fr"},
+            question_answer="wccf_6_1", question_text="Quel ratio bois-charbon ?",
+        )
+        generate_defendability_argument(fact_set)
+        assert "francais" in captured["system_prompt"].lower()
+
+    def test_defaults_to_english_when_document_language_absent(self, monkeypatch):
+        captured = {}
+
+        def fake_call_openai(system_prompt, user_prompt, **kwargs):
+            captured["system_prompt"] = system_prompt
+            return "0.081 tCO2/GJ, § 4.2."
+
+        monkeypatch.setattr("carbongpt.core.openai_client.call_openai", fake_call_openai)
+        monkeypatch.setattr("carbongpt.core.openai_client._resolve_model", lambda override: "claude-sonnet-5")
+
+        fact_set = build_fact_set(
+            param_key="EF_CO2", chosen=_CHOSEN, alternatives=_ALTERNATIVES,
+            project_context={"country_iso": "GHA", "country": "Ghana"},  # no document_language key
+            question_answer="wccf_6_1", question_text="Quel ratio bois-charbon ?",
+        )
+        generate_defendability_argument(fact_set)
+        assert "Write the argument in English" in captured["system_prompt"]
