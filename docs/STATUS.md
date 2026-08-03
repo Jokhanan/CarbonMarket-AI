@@ -1,6 +1,133 @@
 # STATUS.md — État du projet
 
-Dernière mise à jour : 01.08.2026
+Dernière mise à jour : 03.08.2026
+
+---
+
+## État du projet — synthèse pour reprise
+
+Cette section résume l'état réel du dépôt pour quelqu'un qui reprendrait le
+projet sans avoir suivi les sessions précédentes. Le détail complet,
+spec par spec et tour par tour, est plus bas dans ce document ; c'est la
+trace de référence en cas de doute sur un choix ou un chiffre.
+
+### Ce qui fonctionne, de bout en bout, aujourd'hui
+
+- **Corpus réglementaire versionné (SPEC-01)** : méthodologie RECH v5.0
+  (Gold Standard 407) entièrement ingérée — 6 versions, historique complet,
+  17 valeurs réglementaires sourcées en base (`regulatory_values`),
+  résolution de version applicable testée. Le moteur de calcul lui-même
+  (`gs_rech_v5.py`) n'est PAS encore branché sur ces valeurs (voir plus
+  bas).
+- **Templates officiels ingérés et analysés (SPEC-05 T0-T3, T6, T7)** :
+  VPA-DD Gold Standard v3.0 ingéré (7 versions historiques), décomposé en
+  161 champs typés et positionnés en base (`template_fields`). 7 documents
+  transversaux Gold Standard ingérés et versionnés (101, 102, 103, 104,
+  118, 119, 201) (SPEC-06 T2). `load_guide()` sert désormais la structure
+  v3.0 issue de la base pour `("GoldStandard", "VPA-DD")`, avec repli
+  automatique et vérifié sur le guide Python pour les 7 autres couples
+  standard/document si la base est indisponible — rien n'est cassé.
+- **Export Word** : les cases à cocher modernes du v3.0 (contrôles de
+  contenu `w:sdt`/`w14:checkbox`, 479 dans ce fichier) se cochent
+  correctement à l'export, en plus du mécanisme hérité — les deux
+  fichiers réels (v2.3 et v3.0) vérifiés directement, aucun des deux
+  n'utilisait le mécanisme hérité seul.
+- **Paramètres RECH extraits et instanciés (SPEC-06 T1/T3/T5)** : les 26
+  paramètres réels de RECH v5.0 extraits du PDF source, tracés section +
+  page, classés ex ante/monitoring (18 instances patron ex ante, 9 patron
+  monitoring, fNRB dans les deux — jamais tranché automatiquement). Patron
+  SDG (T55) correctement remonté comme non couvert par RECH, pas deviné.
+- **Traçabilité champ ↔ source (SPEC-06 T4)** : chacune des 9 sections de
+  niveau 1 du VPA-DD v3.0 est reliée à sa source réelle (méthodologie ou
+  document transversal précis) ; les deux sections sans aucune source
+  (« Contact information of CME », « LUF additional information ») sont
+  identifiées mécaniquement, pas devinées.
+- **Faits non déductibles catalogués (SPEC-06 T6)** : 5 catégories
+  documentées, démontrées sur le projet réel `id=12` (5 questions ouvertes
+  créées).
+- **Rédaction sourcée et validée, démontrée sur données réelles** : deux
+  pipelines de génération IA partagent la même discipline anti-
+  hallucination (jeu de faits fermé + validateur mécanique qui rejette
+  tout nombre, référence de section, ou nom de méthodologie/outil/norme
+  absent des faits fournis) :
+  - `defendability.py` (SPEC-04) — argument de défendabilité, démontré
+    avec un vrai appel API sur `EF_CO2`/`EF_nonCO2` (charbon), projet 12.
+  - `parameter_block_drafting.py` (SPEC-06, intégré à
+    `generate_section_draft()`) — bloc de paramètre de template, démontré
+    sur le projet 12 avec deux paramètres réels (ICS 17 ex ante, ICS 22
+    monitoring). Résultat honnête : ICS 22 directement utilisable ; ICS 17
+    fidèle mais maladroit à cause d'une bizarrerie de rédaction du PDF
+    source lui-même, pas d'une hallucination — le garde-fou a fonctionné
+    comme prévu (préférer un texte fidèle mais imparfait à un texte propre
+    mais faux).
+- **Moteur de résolution de paramètre (SPEC-03)** : `resolve_parameter()`,
+  `answer_question()`, `override_parameter()` démontrés sur le projet réel
+  12 pour `EF_CO2`/`EF_nonCO2` — volontairement limité à ces deux clés.
+- **265/265 tests passent** (suite complète, dernière exécution
+  03.08.2026). Diff Git vide vérifié à chaque tour sur les fichiers
+  protégés (`carbongpt/guides/*.py`, `ai_writer.py`, `doc_exporter.py`)
+  quand la spec ne les touchait pas explicitement.
+
+### Ce qui reste ouvert (par domaine)
+
+- **SPEC-01 T5.4** : `gs_rech_v5.py` (moteur de calcul) n'est toujours pas
+  migré pour lire `regulatory_values` — en attente d'arbitrage utilisateur
+  sur les écarts constatés dans l'audit (EF CO2/non-CO2 charbon, fNRB,
+  leakage marché).
+- **SPEC-02** (sources de données externes par pays) : design vérifié
+  seulement (T0) ; rien implémenté, décision volontaire d'attendre.
+- **SPEC-03** : `resolve_parameter()` ne couvre que `EF_CO2`/`EF_nonCO2` ;
+  la classification région (PMA/Afrique subsaharienne) reste un
+  dictionnaire minimal (Ghana + Burkina Faso), pas SPEC-02.
+- **SPEC-05 T4** (annexe Safeguarding v3.0), **T5** (résolution de version
+  double piste Verra 5.0A/5.0B — schéma prêt, aucune logique), **T8**
+  (fusion du doublon méthodologie GS-TPDDTEC/407 — audité, pas exécuté),
+  **T9** (détection de nouvelles versions au-delà du déclenchement manuel).
+- **Aucun résolveur générique projet → méthodologie** : le champ
+  méthodologie d'un projet est du texte libre non fiable (le projet 12
+  porte « TPDDTEC », pas « 407 ») ; `_draft_parameter_block()` a RECH v5.0
+  codé en dur. Généraliser à d'autres méthodologies suppose de résoudre ce
+  point d'abord.
+- **Bruit d'extraction ICS 17** (« Choice of data or » dans
+  `rech_parameter_extractor.py`) : compromis assumé, documenté, jamais
+  nettoyé — repéré deux fois maintenant sans être traité.
+- **Verra** : jamais réellement ingéré — seule la structure de page a été
+  vérifiée pour les 7 documents transversaux Gold Standard ; aucun travail
+  Verra n'a démarré dans tout cet arc SPEC-05/06.
+- **SPEC-06 T4** : la traçabilité s'arrête aux 9 sections de niveau 1 et
+  aux 3 patrons de bloc — pas encore aux 161 champs individuels du
+  VPA-DD v3.0. « Appendices » (H303) mélange plusieurs sujets sous une
+  seule référence à 101, imprécis.
+- **Land-use & Forests (Activity Requirement 203)** non ingéré — hors
+  périmètre RECH/cookstoves, mais bloquerait toute extension future vers
+  des méthodologies forestières.
+
+### Prochaines étapes, par ordre de priorité
+
+1. **Étendre la rédaction sourcée aux sections prose du VPA-DD v3.0.**
+   C'était l'objectif annoncé après SPEC-05 T6 : faire rédiger 2-3
+   sections complètes, pas seulement des blocs de paramètres. Aujourd'hui
+   seul `content_format == "parameter_blocks"` est routé vers un pipeline
+   sourcé (`parameter_block_drafting.py`) ; les 101 champs `prose` du
+   v3.0 passent encore par le prompt générique de `ai_writer.py`, qui n'a
+   pas accès aux faits de `methodology_parameters`/
+   `field_requirement_linking`/`non_deducible_facts` construits ce
+   trimestre. C'est le point qui rapprocherait le plus vite le système
+   d'un VPA-DD réellement rédigeable.
+2. **Construire le résolveur projet → méthodologie**, aujourd'hui absent.
+   Bloque à la fois l'extension au-delà de RECH v5.0 et la généralisation
+   de `resolve_parameter()` à d'autres paramètres RECH (NCV, PCAP,
+   embodied, leakage marché) — chacun a besoin de sa propre hiérarchie
+   dans `regulatory_value_preferences`, comme fait pour le charbon en
+   SPEC-03.
+3. **Nettoyer l'artefact d'extraction ICS 17** (« Choice of data or ») —
+   correctif ciblé et de faible risque dans
+   `rech_parameter_extractor.py`, déjà documenté deux fois sans être
+   traité.
+4. **Reprendre SPEC-05 T4** (annexe Safeguarding) avec la structure réelle
+   du v3.0 (27 lignes Principe/Sous-principe/Risques/Indicateurs), à
+   concevoir de zéro plutôt qu'en reprenant le plan pensé pour les 339
+   lignes du v2.3.
 
 ---
 
