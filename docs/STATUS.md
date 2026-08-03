@@ -225,6 +225,36 @@ charbon). Démontrée avec un vrai appel au modèle (clés en place le
 
 ---
 
+## SPEC-05 — Ingestion et analyse automatique des templates officiels
+
+**Statut : spec écrite (03.08.2026), non implémentée.**
+
+Changement de cap après une reconnaissance sans code sur les cinq parcours
+documentaires (rien → PDD/VPA-DD ; PoA-DD → VPA-DD ; VPA-DD → premier MR ;
+MR an N → MR an N+1 ; commentaires VVB → réponses CAR/CL). Constat central :
+`carbongpt/guides/*.py` et `doc_exporter.py::TEMPLATE_FILES` encodent à la
+main des templates vieux de plusieurs années (anti-pattern R1) — Gold
+Standard a republié ses quatre templates le même jour (15.05.2026), Verra
+est passé à VCS Version 5 (opérationnalisé 09.06.2026, obligatoire pour
+toute soumission après le 01.01.2027, remplace le template Validation+
+Vérification joint par deux documents séparés) — et le code n'a suivi
+aucun des deux.
+
+`docs/SPEC-05.md` : ingérer et analyser automatiquement les templates
+officiels (même patron que SPEC-01 appliqué aux méthodologies), avec un
+adaptateur de compatibilité pour que `generate_full_document()` et
+`doc_exporter.py` — qui fonctionnent déjà — continuent de tourner sans
+modification pendant la migration progressive. Priorité : VPA-DD Gold
+Standard v3.0 (besoin immédiat), conception prévoyant dès le départ le cas
+Verra 5.0A/5.0B (deux versions valides simultanément selon la date de
+démarrage du projet, pas une succession chronologique simple). Inclut la
+fusion prévue de la méthodologie dupliquée en base (`GS-TPDDTEC` /
+`407` — la seconde est celle que tout le système utilise réellement,
+`applicability`/`sector` NULL ; la première a `applicability` renseigné
+mais n'est référencée nulle part).
+
+---
+
 ## Environnement local
 
 Développement dans WSL (Ubuntu 26.04) — voir CLAUDE.md §5. PostgreSQL 18 +
