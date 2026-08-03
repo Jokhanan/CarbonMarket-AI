@@ -322,6 +322,42 @@ minimale).
 
 ---
 
+## SPEC-06 — Moteur d'instanciation (template × méthodologie × exigences transverses)
+
+**Statut : spec écrite (03.08.2026), non implémentée.**
+
+Correction demandée sur le rapport SPEC-05 : « 3 `parameter_block` » dans
+le VPA-DD v3.0 comptait des **patrons** de bloc (ex ante 10 champs,
+monitoring 18 champs, SDG 13 champs), pas des paramètres réels — un VPA-DD
+réel en contient autant d'exemplaires qu'il a de paramètres de calcul
+(16 pour le VPA-DD Kenya cité en SPEC-04). Le template seul ne dit ni
+combien ni lesquels ; c'est la méthodologie qui le dit, et les sections
+Safeguarding/Genre/Consultation/Développement durable du VPA-DD ne
+viennent pas de RECH mais de documents Gold Standard transversaux séparés.
+
+`docs/SPEC-06.md` : modélise l'équation template × méthodologie ×
+exigences transverses → champs réels. Confirmé par lecture directe du
+PDF RECH v5.0 déjà ingéré : chaque paramètre (« Parameter ID ICS 24 »,
+25, 26...) porte un bloc structuré quasiment identique champ pour champ
+au patron monitoring du VPA-DD v3.0 — le discriminant ex ante/monitoring
+se lit dans le champ « Measurement and updating frequency », pas dans un
+champ séparé. Liste réelle des 7 documents transversaux vérifiée en ligne
+(même démarche que RECH en SPEC-01) : 101 Principles & Requirements,
+102 Stakeholder Consultation, 103 Safeguarding Principles & Requirements,
+104 Gender Equality Requirements & Guidelines, 118 SDG Impact Tool
+Monitoring Indicators, 119 Paris Agreement Alignment Requirements, 201
+Community Services Activity Requirements (daté 2019, signalé comme
+potentiellement obsolète, hors périmètre).
+
+**Piège trouvé en vérifiant avant d'écrire du code** : les pages de ces
+documents transversaux ont le même défaut de balisage `<tr>` non fermé
+que les pages de template (SPEC-05 T0) — pas la structure propre des
+pages de méthodologie. Le mécanisme d'ingestion SPEC-01 est réutilisable
+dans son principe, mais l'implémentation doit reprendre le parseur `lxml`
+de `gs_template_ingest.py`, pas celui de `gs_ingest.py`.
+
+---
+
 ## Environnement local
 
 Développement dans WSL (Ubuntu 26.04) — voir CLAUDE.md §5. PostgreSQL 18 +
