@@ -227,31 +227,98 @@ charbon). Démontrée avec un vrai appel au modèle (clés en place le
 
 ## SPEC-05 — Ingestion et analyse automatique des templates officiels
 
-**Statut : spec écrite (03.08.2026), non implémentée.**
+**Statut : T0-T3 et T7 implémentés (03.08.2026) — VPA-DD Gold Standard v3.0
+ingéré, analysé, consultable en base. T4 (annexes/Safeguarding), T5
+(résolution de version), T6 (adaptateur de compatibilité), T8 (fusion
+méthodologie) et T9 (détection de nouvelles versions au-delà du strict
+nécessaire) restent à faire — voir `docs/SPEC-05.md`.**
 
 Changement de cap après une reconnaissance sans code sur les cinq parcours
-documentaires (rien → PDD/VPA-DD ; PoA-DD → VPA-DD ; VPA-DD → premier MR ;
-MR an N → MR an N+1 ; commentaires VVB → réponses CAR/CL). Constat central :
-`carbongpt/guides/*.py` et `doc_exporter.py::TEMPLATE_FILES` encodent à la
-main des templates vieux de plusieurs années (anti-pattern R1) — Gold
-Standard a republié ses quatre templates le même jour (15.05.2026), Verra
-est passé à VCS Version 5 (opérationnalisé 09.06.2026, obligatoire pour
-toute soumission après le 01.01.2027, remplace le template Validation+
-Vérification joint par deux documents séparés) — et le code n'a suivi
-aucun des deux.
+documentaires. Constat central : `carbongpt/guides/*.py` et
+`doc_exporter.py::TEMPLATE_FILES` encodent à la main des templates vieux de
+plusieurs années (anti-pattern R1) — Gold Standard a republié ses quatre
+templates le même jour (15.05.2026), Verra est passé à VCS Version 5
+(obligatoire après le 01.01.2027, remplace le template Validation+
+Vérification joint par deux documents séparés).
 
-`docs/SPEC-05.md` : ingérer et analyser automatiquement les templates
-officiels (même patron que SPEC-01 appliqué aux méthodologies), avec un
-adaptateur de compatibilité pour que `generate_full_document()` et
-`doc_exporter.py` — qui fonctionnent déjà — continuent de tourner sans
-modification pendant la migration progressive. Priorité : VPA-DD Gold
-Standard v3.0 (besoin immédiat), conception prévoyant dès le départ le cas
-Verra 5.0A/5.0B (deux versions valides simultanément selon la date de
-démarrage du projet, pas une succession chronologique simple). Inclut la
-fusion prévue de la méthodologie dupliquée en base (`GS-TPDDTEC` /
-`407` — la seconde est celle que tout le système utilise réellement,
-`applicability`/`sector` NULL ; la première a `applicability` renseigné
-mais n'est référencée nulle part).
+**Ne casse rien — vérifié explicitement** : `carbongpt/guides/`,
+`carbongpt/core/ai_writer.py` et `carbongpt/core/doc_exporter.py` ont un
+diff Git vide après cette session. `load_guide('GoldStandard', 'VPA-DD')`
+résout toujours vers `gs_vpa_dd_v2_3.py` (27 sous-sections), et
+`doc_exporter._resolve_template_path` fonctionne toujours sur
+`TEMPLATE_FILES`. Les nouvelles tables (`document_templates`,
+`document_template_versions`, `template_fields`) existent à côté, lues par
+personne d'autre que les nouveaux modules eux-mêmes.
+
+**T0** : page GS confirmée exploitable (comme prévu), mais avec un piège
+non anticipé — chaque `<tr>` de la table REVISION HISTORY d'une page de
+*template* (contrairement aux pages de *méthodologie* que `gs_ingest.py`
+sait déjà lire) n'est pas fermé (`</tr>` manquant). Le parser HTML standard
+de Python interprète ça comme un imbrication littérale : un `find_all('td')`
+naïf sur une ligne récupère aussi les cellules de toutes les lignes
+suivantes. Corrigé en utilisant le parser `lxml` (déjà disponible), qui
+ferme chaque `<tr>` au suivant comme le ferait un navigateur — confirmé
+correct (17 lignes propres) contre la vraie page. `gs_ingest.py` n'est pas
+touché, ses propres pages n'ont pas ce défaut.
+
+**T1** : migration additive — `document_templates`,
+`document_template_versions` (avec `project_start_before`/
+`project_start_on_or_after`, pensés dès la conception pour le cas Verra
+5.0A/5.0B), `template_fields` (`field_type` parmi prose/table/single_value/
+checkbox/parameter_block/checklist_item/attachment, `position` JSONB avec
+ancrage réel dans le document, `repeat_of` prévu pour T4). Sauvegarde
+complète de la base prise avant migration (`db_backups/`, hors dépôt Git).
+
+**T2** : `carbongpt/repository/gs_template_ingest.py` — même contrat que
+`gs_ingest.py` (parsing isolé et testable, idempotent, erreur explicite).
+Les 7 versions du VPA-DD (v1.0 à v3.0) ingérées et téléchargées, dédupliquées
+par sha256.
+
+**T3** : `carbongpt/repository/template_docx_parser.py` — analyse un
+`.docx` en champs typés et positionnés (position = indices structurels
+réels du document, jamais une heuristique de titre). Bug trouvé et corrigé
+en écrivant les tests : la détection de case à cocher héritée de
+`doc_exporter.py::_check_checkbox_in_cell` (champs de formulaire hérités
+`w:ffData/w:checkBox`) ne détecte **aucune** des 479 cases à cocher réelles
+du VPA-DD v3.0 — le nouveau template utilise des contrôles de contenu
+modernes (`w:sdt`/`w14:checkbox`), un mécanisme entièrement différent.
+Corrigé dans le nouveau parseur ; **`doc_exporter.py` lui-même n'a pas été
+touché** (hors périmètre — mais signalé ici : le jour où l'export vers
+v3.0 sera branché, `_check_checkbox_in_cell` ne saura pas cocher ces
+cases-là sans son propre correctif).
+
+**T7 — VPA-DD v3.0, résultat concret** : 161 champs extraits (101 prose,
+38 checkbox, 18 table, 3 parameter_block, 1 single_value), contre 29 pour
+v2.3 (11/8/5/3/2). Changements structurels majeurs entre v2.3 et v3.0 :
+abandon complet du codage de section par lettre (A.1, B.6.2...) au profit
+de vrais styles Word Heading 1/2/3 avec titres descriptifs (92
+sous-sections niveau 2/3, contre 27 sous-sections A–F dans le guide
+actuel) ; l'annexe Safeguarding passe de 339 lignes/116 questions
+pré-écrites à 27 lignes dans un format d'évaluation de risque ouvert
+(Principe/Sous-principe/Risques identifiés/Indicateurs de suivi, à
+remplir par le porteur de projet plutôt que 116 réponses Oui/Non) ; les
+blocs de paramètres de calcul passent de 2 formes (8 et 10 champs) à 3
+formes plus riches (10, 18 et 13 champs, dont un nouveau bloc dédié aux
+paramètres SDG/développement durable) ; nouvelles questions de diligence
+Article 6.4/PACM en tête de document (cohérent avec le préfixe de nom de
+fichier « PAA » — Paris Agreement Alignment) ; la section Genre est
+passée d'un sous-point (D.2, ~1 sous-section) à une section majeure
+complète (13 sous-sections).
+
+Tests : `carbongpt/tests/test_gs_template_ingest.py` (9, fixture HTML
+sauvegardée) et `carbongpt/tests/test_template_docx_parser.py` (9, contre
+les vrais fichiers v2.3/v3.0 déjà dans `document_repository/`). 201/201
+tests de la suite complète passent.
+
+**Travail de suite identifié, non fait (session suivante)** : T4
+(décomposition de l'annexe Safeguarding en 27 `checklist_item` individuels
+et détection des pièces jointes), T5 (résolution de version applicable,
+mode double piste Verra), T6 (adaptateur `load_guide()`/
+`_resolve_template_path()` — c'est lui qui rendra cette analyse
+réellement utile à `generate_full_document()`), T8 (fusion `GS-TPDDTEC`/
+`407`), T9 (endpoints/automatisation de la détection de nouvelles
+versions — la fonction `check_for_template_updates()` existe déjà,
+minimale).
 
 ---
 

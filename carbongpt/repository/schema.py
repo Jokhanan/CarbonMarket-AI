@@ -1109,6 +1109,75 @@ ALTER TABLE project_parameters ADD COLUMN IF NOT EXISTS defendability_argument_g
 -- Defaults to English: both standards currently in scope (Gold Standard,
 -- Verra) require English-language submissions. Overridable per project.
 ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS document_language VARCHAR(10) DEFAULT 'en';
+
+-- SPEC-05 (03.08.2026, T1) : templates de documents officiels, ingeres et
+-- analyses automatiquement en champs types et positionnes. Coexiste avec
+-- carbongpt/guides/*.py et doc_exporter.py::TEMPLATE_FILES sans les
+-- remplacer -- ni load_guide() ni generate_full_document() ni
+-- doc_exporter.py ne lisent ces tables pour l'instant (adaptateur de
+-- compatibilite = T6, hors perimetre de cette session). Additive
+-- uniquement, ne modifie aucune table existante.
+
+CREATE TABLE IF NOT EXISTS document_templates (
+    id SERIAL PRIMARY KEY,
+    standard VARCHAR(50) NOT NULL,
+    doc_type VARCHAR(50) NOT NULL,
+    name VARCHAR(255),
+    source_url TEXT,
+    last_checked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (standard, doc_type)
+);
+
+CREATE TABLE IF NOT EXISTS document_template_versions (
+    id SERIAL PRIMARY KEY,
+    template_id INTEGER NOT NULL REFERENCES document_templates(id) ON DELETE CASCADE,
+    version VARCHAR(20) NOT NULL,
+    released_date DATE,
+    effective_from DATE,
+    effective_until DATE,
+    is_current BOOLEAN DEFAULT FALSE,
+    -- Verra 5.0A/5.0B : deux versions valides simultanement selon la date de
+    -- demarrage du projet, pas une succession chronologique simple (voir
+    -- docs/SPEC-05.md, section Priorite). NULL pour le cas succession simple
+    -- (Gold Standard aujourd'hui).
+    project_start_before DATE,
+    project_start_on_or_after DATE,
+    document_name VARCHAR(500),
+    download_url TEXT,
+    local_path TEXT,
+    sha256 VARCHAR(64),
+    ingested_at TIMESTAMPTZ,
+    parsed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (template_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS template_fields (
+    id SERIAL PRIMARY KEY,
+    template_version_id INTEGER NOT NULL REFERENCES document_template_versions(id) ON DELETE CASCADE,
+    field_key VARCHAR(50) NOT NULL,
+    parent_section VARCHAR(255),
+    title TEXT,
+    field_type VARCHAR(30) NOT NULL CHECK (field_type IN (
+        'prose', 'table', 'single_value', 'checkbox', 'parameter_block',
+        'checklist_item', 'attachment'
+    )),
+    -- Ancrage reel dans le .docx (ex. {"table_index": 7, "row_index": 2} ou
+    -- {"paragraph_index": 42}), pas une heuristique de titre -- condition
+    -- posee dans docs/SPEC-05.md T3.
+    position JSONB,
+    -- Modele d'un bloc repete (ex. le bloc parametre de B.6.2). Rempli en
+    -- T4 (annexes/checklist Safeguarding) -- laisse NULL par le parseur T3
+    -- de cette session, la structure existe deja pour ne pas re-migrer.
+    repeat_of INTEGER REFERENCES template_fields(id) ON DELETE SET NULL,
+    must_include TEXT,
+    format_instructions TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (template_version_id, field_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_template_fields_version ON template_fields(template_version_id);
 """
 
 
