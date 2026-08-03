@@ -865,6 +865,53 @@ def _get_format_closing_instruction(content_format):
     return FORMAT_CLOSING_INSTRUCTIONS.get(content_format, "Use proper formatting with sub-headings where appropriate.")
 
 
+def _draft_parameter_block(parameter_id, project_info):
+    """SPEC-06 T5: looks up one methodology_parameters row and drafts its
+    template block through the closed-fact-set pipeline
+    (parameter_block_drafting.py). Scoped to RECH v5.0 only for now
+    (methodology_code='407') — matching this session's periemeter across
+    SPEC-06 T1-T6. project_info['methodology'] is a stale free-text field
+    (e.g. project id=12 has 'TPDDTEC', not '407') and this codebase has no
+    reliable project -> methodology_version_id resolver yet; generalizing
+    beyond RECH is future work, not assumed here.
+
+    Returns (block_text, model_used, fact_set) — the fact_set is returned
+    too so callers (e.g. a demo script) can show it alongside the result.
+    """
+    from carbongpt.repository.db import get_cursor
+    from carbongpt.repository.parameter_block_drafting import (
+        build_parameter_fact_set,
+        generate_parameter_block_content,
+    )
+
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, version, document_name FROM methodology_version_history "
+            "WHERE methodology_code = '407' AND is_current = true"
+        )
+        meth_row = cur.fetchone()
+        if meth_row is None:
+            raise ValueError("RECH (407) has no current version ingested — cannot source a parameter block")
+
+        cur.execute(
+            "SELECT * FROM methodology_parameters WHERE methodology_version_id = %s AND parameter_id = %s",
+            (meth_row["id"], parameter_id),
+        )
+        param_row = cur.fetchone()
+        if param_row is None:
+            raise ValueError(
+                f"Parameter {parameter_id!r} not found in methodology_parameters for RECH v{meth_row['version']} "
+                "— run rech_parameter_extractor.extract_rech_parameters()/store_rech_parameters() first"
+            )
+
+    fact_set = build_parameter_fact_set(
+        dict(param_row), methodology_code="407", methodology_version=meth_row["version"],
+        document_name=meth_row["document_name"], document_language=project_info.get("document_language"),
+    )
+    text, model = generate_parameter_block_content(fact_set)
+    return text, model, fact_set
+
+
 def generate_section_draft(
     standard,
     project_doc_type,
@@ -873,6 +920,7 @@ def generate_section_draft(
     existing_pdd_text=None,
     reference_docs_text=None,
     user_instructions=None,
+    parameter_id=None,
 ):
     guide_dt = get_guide_doc_type(standard, project_doc_type)
     if not guide_dt:
@@ -882,6 +930,24 @@ def generate_section_draft(
     subsection = guide.SUBSECTIONS.get(section_id)
     if not subsection:
         raise ValueError(f"Section {section_id} not found in guide")
+
+    # SPEC-06 T5 integration (03.08.2026): a parameter_blocks-format
+    # section (SPEC-05 field_type='parameter_block') is not free-form
+    # prose — it's N repetitions of a fixed patron, one per methodology
+    # parameter (SPEC-06 T3/T5). Drafting it with the generic prompt below
+    # gave the model nothing sourced to cite and it invented methodology/
+    # tool references (found testing this session, docs/STATUS.md) — the
+    # same mechanism that produced the unsourced charcoal EF before
+    # SPEC-01. When a specific parameter_id is requested, route through
+    # the closed-fact-set pipeline instead (same discipline as SPEC-04's
+    # defendability arguments): the model sees only that one parameter's
+    # already-sourced fields, and a mechanical validator rejects anything
+    # else. Without a parameter_id, falls through to the generic path
+    # below (unchanged) — this integration only applies when the caller
+    # is actually asking for one parameter's block.
+    if subsection.get("content_format") == "parameter_blocks" and parameter_id:
+        text, _model, _fact_set = _draft_parameter_block(parameter_id, project_info)
+        return text
 
     std_label = STANDARD_LABELS.get(standard, standard)
     doc_label = DOC_TYPE_LABELS.get(guide_dt, guide_dt)

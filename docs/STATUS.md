@@ -389,16 +389,65 @@ T5 (résolution de version applicable, mode double piste Verra), T8
 (fusion `GS-TPDDTEC`/`407`), T9 (endpoints/automatisation de la
 détection de nouvelles versions).
 
-**Prérequis avant de pouvoir rédiger 2-3 sections d'un VPA-DD v3.0 avec
-les paramètres RECH (objectif annoncé pour la session suivante)** :
-brancher `methodology_parameters` (SPEC-06 T3) et le résultat
-d'`instantiate_parameter_blocks()` (SPEC-06 T5) dans le contexte que
-`ai_writer.py::generate_section_draft()` envoie au modèle — probablement
-une nouvelle fonction `_format_rech_parameters_context()` (ou équivalent)
-lue quand le `content_format` de la sous-section est `parameter_blocks`
-et qu'une méthodologie SPEC-06-extraite est disponible pour le projet.
-Sans ça, la génération sur un bloc de paramètres continuera d'inventer
-plutôt que de citer les 26 paramètres déjà sourcés et en base.
+**Fait (03.08.2026)** : le prérequis ci-dessus est comblé.
+`carbongpt/repository/parameter_block_drafting.py` applique à la
+rédaction de bloc de paramètre la même discipline qu'à
+`defendability.py` (SPEC-04) : le modèle ne voit qu'un jeu de faits fermé
+— UN paramètre `methodology_parameters` (identifiant ICS, description,
+unité, source de données, méthode de mesure, fréquence, référence de
+section et page) — et `validate_parameter_block_content()` rejette
+mécaniquement tout nombre, référence de section, ou jeton en majuscules
+(nom de méthodologie/outil/norme) absent de ce jeu de faits — réutilise
+directement les regex nombre/section de `defendability.py`, pas
+réimplémentées. `ai_writer.py::generate_section_draft()` accepte
+maintenant un paramètre `parameter_id` optionnel : quand la sous-section
+est de type `parameter_blocks` et qu'un `parameter_id` est fourni, la
+génération passe par ce pipeline sourcé au lieu du prompt générique.
+Repli inchangé (prompt générique) si aucun `parameter_id` n'est fourni —
+rien ne casse pour l'usage existant. Portée limitée à RECH v5.0
+(`methodology_code='407'`) pour l'instant : `project_info['methodology']`
+reste un champ texte non fiable (le projet `id=12` a « TPDDTEC », pas
+« 407 ») et ce dépôt n'a pas encore de résolveur
+projet → méthodologie fiable — généraliser au-delà de RECH est un travail
+distinct, non fait ici.
+
+**Démonstration réelle sur le projet `id=12`** : bloc ex ante (ICS 17,
+WCCF) et bloc monitoring (ICS 22, taux d'usage) rédigés via le pipeline
+de production complet (`generate_section_draft`, pas un script à part).
+Aucun des deux textes n'invente de référence de méthodologie, d'outil ou
+d'équation — le garde-fou n'a déclenché aucun rejet sur ces deux essais
+réels. Vérifié séparément que le garde-fou bloque bien le motif exact
+observé au tour précédent (« TPDDTEC Version 4.0 », « TOOL33 Version
+03.0 ») quand il est rejoué contre le vrai jeu de faits — capturé dans
+`test_parameter_block_drafting.py`. Nuance trouvée en le testant :
+« TPDDTEC » seul n'est pas bloqué, à raison — le nom du document RECH
+v5.0 en base est littéralement « ...(RECH) (formerly TPDDTEC) », donc
+c'est un fait vrai et sourcé ; ce sont les numéros de version inventés et
+l'outil CDM TOOL33 (jamais mentionné par RECH pour ce paramètre) qui sont
+rejetés. Bug de budget de tokens trouvé et corrigé au passage (même
+défaut que SPEC-04 en session précédente) : `max_tokens=500` coupait le
+bloc ICS 22 en plein milieu de phrase — RECH v5.0 documente ce paramètre
+en détail (niveaux Mandatory/Good practice/Best practice de suivi
+d'usage) ; porté à 1600.
+
+**Résultat trouvé en testant, honnête** : le bloc ICS 22 (monitoring) est
+directement utilisable — complet, fidèle à RECH v5.0, aucune invention.
+Le bloc ICS 17 (ex ante) n'est PAS présentable tel quel, mais pas à cause
+d'une hallucination : le texte source de RECH v5.0 lui-même écrit
+littéralement « Source of data: Value(s) applied » pour ICS 16/17 (une
+bizarrerie de rédaction du document, pas une erreur d'extraction) et le
+champ méthode de mesure hérite un artefact déjà documenté au moment de
+l'extraction (SPEC-06 T3 : « Choice of data or » ouvre le champ sans
+attendre la suite de l'étiquette, un compromis assumé plutôt qu'une
+reconnaissance complète des fragments — voir le commit d'implémentation
+T3). Le garde-fou a fait exactement ce qu'on lui demandait : ne rien
+inventer, même quand la source elle-même est confuse — préférer un bloc
+fidèle mais maladroit à un bloc propre mais faux. Le nettoyage du champ
+« Choice of data or » de l'extracteur T3 reste à faire.
+
+Tests : `test_parameter_block_drafting.py` (13, dont la nuance TPDDTEC/
+CDM), `test_ai_writer_parameter_block_routing.py` (3, routage mocké).
+265/265 tests de la suite complète passent.
 
 ---
 
