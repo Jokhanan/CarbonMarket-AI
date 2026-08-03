@@ -227,11 +227,17 @@ charbon). Démontrée avec un vrai appel au modèle (clés en place le
 
 ## SPEC-05 — Ingestion et analyse automatique des templates officiels
 
-**Statut : T0-T3 et T7 implémentés (03.08.2026) — VPA-DD Gold Standard v3.0
-ingéré, analysé, consultable en base. T4 (annexes/Safeguarding), T5
-(résolution de version), T6 (adaptateur de compatibilité), T8 (fusion
+**Statut : T0-T3, T6 et T7 implémentés (03.08.2026) — VPA-DD Gold Standard
+v3.0 ingéré, analysé, consultable en base, et maintenant réellement
+branché à `generate_full_document()`/`doc_exporter.py` via l'adaptateur
+T6. T4 (annexes/Safeguarding), T5 (résolution de version), T8 (fusion
 méthodologie) et T9 (détection de nouvelles versions au-delà du strict
-nécessaire) restent à faire — voir `docs/SPEC-05.md`.**
+nécessaire) restent à faire — voir `docs/SPEC-05.md`. T4 mis de côté ce
+tour-ci sur autorisation explicite de l'utilisateur, et parce que la
+table Safeguarding du v3.0 (27 lignes, format Principe/Sous-principe/
+Risques/Indicateurs) diffère structurellement de celle du v2.3 (339
+lignes, 116 questions Oui/Non) que SPEC-05.md T4 avait initialement en
+tête — à reconcevoir, pas juste reprendre le plan existant.**
 
 Changement de cap après une reconnaissance sans code sur les cinq parcours
 documentaires. Constat central : `carbongpt/guides/*.py` et
@@ -307,18 +313,92 @@ complète (13 sous-sections).
 
 Tests : `carbongpt/tests/test_gs_template_ingest.py` (9, fixture HTML
 sauvegardée) et `carbongpt/tests/test_template_docx_parser.py` (9, contre
-les vrais fichiers v2.3/v3.0 déjà dans `document_repository/`). 201/201
-tests de la suite complète passent.
+les vrais fichiers v2.3/v3.0 déjà dans `document_repository/`).
+
+**T6 (03.08.2026)** : `carbongpt/guides/__init__.py::load_guide()` vérifie
+maintenant d'abord si une version de template analysée existe en base
+(`document_template_versions.parsed_at IS NOT NULL`) pour le couple
+demandé ; si oui, un objet `_DbBackedGuide` construit à la volée depuis
+`template_fields` est retourné, exposant exactement la même interface que
+les modules Python (`.SUBSECTIONS`, `.get_subsections()`,
+`.get_subsection()`, `.get_parent_sections()`,
+`.get_subsections_for_parent()`) — vérifié champ par champ contre ce que
+`ai_writer.py` et `ai_review.py` lisent réellement (certains accès sont
+`dict[...]` directs, pas `.get(...)`, donc `title`/`parent_section`
+doivent toujours être présents). Sinon, repli sur `GUIDE_REGISTRY` exactement
+comme avant — vérifié en simulant une panne de base (```get_cursor```
+monkeypatché pour lever une exception) : les 8 couples chargent toujours,
+aucune erreur ne remonte à l'appelant.
+
+Seul `("GoldStandard", "VPA-DD")` bascule aujourd'hui (161 sous-sections,
+VPA-DD v3.0) ; les 7 autres couples restent sur leur module Python
+inchangé (diff Git vide sur les 8 fichiers `carbongpt/guides/gs_*.py` /
+`vcs_*.py` et sur `ai_writer.py`). Pour les blocs de paramètres (SPEC-05,
+`field_type='parameter_block'`), l'adaptateur reconstruit un
+`template_scaffold` en relisant les vrais libellés de colonnes du
+`.docx` — un ajout concret au-delà de la simple compatibilité, utile pour
+la session suivante.
+
+**Case à cocher moderne — corrigé aussi ce tour-ci** :
+`doc_exporter.py::_check_checkbox_in_cell` ne reconnaissait que le
+mécanisme de formulaire hérité (`w:ffData/w:checkBox`, glyphes Wingdings).
+**Constat plus large que prévu** : vérifié directement dans les deux
+fichiers réels, ni le v2.3 (guide en production jusqu'ici) ni le v3.0
+n'utilisent ce mécanisme — 0 `w:ffData` dans les deux, 495 et 479
+cases à cocher modernes (`w:sdt`/`w14:checkbox`) respectivement. **La
+case à cocher ne fonctionnait donc déjà pas avant cette session**, pas
+seulement pour v3.0. Corrigé : `_check_checkbox_in_cell` reconnaît
+maintenant les deux mécanismes — pour le moderne, bascule
+`w14:checked/@w14:val` à `1` ET remplace le glyphe visible (`☐` U+2610 →
+`☒` U+2612, lu dynamiquement depuis `w14:checkedState`, jamais supposé).
+Vérifié par un test réel qui coche une case du v3.0 et du v2.3 et
+confirme les deux changements. Note découverte au passage : v2.3 place
+« Real case VPA » et « Regular VPA » dans deux paragraphes séparés (une
+seule case cochée par appel) alors que v3.0 les met dans le même
+paragraphe (les deux cases voisines cochées ensemble) — comportement du
+code déjà existant, pas une régression, juste documenté par le test.
+
+**Constat critique trouvé en testant la génération de bout en bout** :
+`load_guide()` fonctionne, mais un essai réel de rédaction sur T37 (bloc
+ex ante) du projet `id=12` a produit un texte qui **invente des détails
+de méthodologie non sourcés** (« TPDDTEC Version 4.0 », « TOOL33
+Version 03.0 », des équations non fournies) — un risque d'hallucination
+direct. Cause identifiée avec précision : `ai_writer.py`'s
+`_format_methodology_parameters_context()` et
+`_format_confirmed_parameters_context()` lisent
+`project_info["project_intake"]["methodology_parameters"]` (un champ
+JSON de l'intake projet) et `parameter_engine.get_parameters_as_dict()`
+(le système `project_parameters` de SPEC-03) — **ni l'un ni l'autre ne
+lit la table `methodology_parameters` de SPEC-06** (les 26 paramètres
+RECH extraits) **ni le résultat de
+`parameter_instantiation.instantiate_parameter_blocks()`**. Le
+`template_scaffold` construit par l'adaptateur ne contient que des
+libellés de colonnes, aucune valeur — sans données sourcées à citer, le
+modèle en invente. C'est le blocage principal pour l'objectif annoncé de
+la session suivante (voir plus bas).
+
+Tests : `test_guides_db_adapter.py` (8), `test_doc_exporter.py` (5).
+249/249 tests de la suite complète passent. Diff Git vide sur les 8
+guides Python et `ai_writer.py`.
 
 **Travail de suite identifié, non fait (session suivante)** : T4
-(décomposition de l'annexe Safeguarding en 27 `checklist_item` individuels
-et détection des pièces jointes), T5 (résolution de version applicable,
-mode double piste Verra), T6 (adaptateur `load_guide()`/
-`_resolve_template_path()` — c'est lui qui rendra cette analyse
-réellement utile à `generate_full_document()`), T8 (fusion `GS-TPDDTEC`/
-`407`), T9 (endpoints/automatisation de la détection de nouvelles
-versions — la fonction `check_for_template_updates()` existe déjà,
-minimale).
+(décomposition de l'annexe Safeguarding du v3.0 — 27 lignes
+Principe/Sous-principe/Risques/Indicateurs, structure différente de celle
+envisagée initialement pour le v2.3 — et détection des pièces jointes),
+T5 (résolution de version applicable, mode double piste Verra), T8
+(fusion `GS-TPDDTEC`/`407`), T9 (endpoints/automatisation de la
+détection de nouvelles versions).
+
+**Prérequis avant de pouvoir rédiger 2-3 sections d'un VPA-DD v3.0 avec
+les paramètres RECH (objectif annoncé pour la session suivante)** :
+brancher `methodology_parameters` (SPEC-06 T3) et le résultat
+d'`instantiate_parameter_blocks()` (SPEC-06 T5) dans le contexte que
+`ai_writer.py::generate_section_draft()` envoie au modèle — probablement
+une nouvelle fonction `_format_rech_parameters_context()` (ou équivalent)
+lue quand le `content_format` de la sous-section est `parameter_blocks`
+et qu'une méthodologie SPEC-06-extraite est disponible pour le projet.
+Sans ça, la génération sur un bloc de paramètres continuera d'inventer
+plutôt que de citer les 26 paramètres déjà sourcés et en base.
 
 ---
 

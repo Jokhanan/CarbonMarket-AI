@@ -7,6 +7,11 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Modern structured-document-tag checkboxes (Word 2010+ content controls) —
+# see _check_checkbox_in_cell(). Same namespace docs/SPEC-05.md's
+# template_docx_parser.py already uses to DETECT these; here they're TICKED.
+_W14_NS = "{http://schemas.microsoft.com/office/word/2010/wordml}"
+
 STANDARD_LABELS = {
     "GoldStandard": "Gold Standard",
     "Verra": "Verra VCS",
@@ -366,6 +371,34 @@ def _check_checkbox_in_cell(cell_element, target_text, ns):
                         "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}char",
                         "00FE"
                     )
+
+        # Modern content-control checkboxes (w:sdt/w14:checkbox) — confirmed
+        # 03.08.2026: VPA-DD v3.0 uses 479 of these, none of the legacy
+        # mechanisms above. Without this, export to v3.0 ticks nothing.
+        # Two things make a checkbox visually "checked" in Word: the state
+        # flag (w14:checked/@w14:val) AND the displayed glyph run, which is
+        # a literal Unicode character (☐ U+2610 unchecked), not a Wingdings
+        # w:sym char code — confirmed by inspecting the real XML, not assumed.
+        for sdt_el in para_el.findall(".//w:sdt", ns):
+            checkbox_el = sdt_el.find(f".//{_W14_NS}checkbox")
+            if checkbox_el is None:
+                continue
+            checked_el = checkbox_el.find(f"{_W14_NS}checked")
+            checked_state_el = checkbox_el.find(f"{_W14_NS}checkedState")
+            if checked_el is not None:
+                checked_el.set(f"{_W14_NS}val", "1")
+            if checked_state_el is None:
+                continue
+            checked_codepoint = checked_state_el.get(f"{_W14_NS}val")
+            if not checked_codepoint:
+                continue
+            checked_char = chr(int(checked_codepoint, 16))
+            sdt_content = sdt_el.find("w:sdtContent", ns)
+            if sdt_content is None:
+                continue
+            for t_el in sdt_content.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+                if t_el.text and ord(t_el.text[:1] or "\0") in (0x2610, 0x2612):
+                    t_el.text = checked_char
 
 
 GS_MR_TEMPLATE_REMAP = {
