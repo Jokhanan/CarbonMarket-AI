@@ -103,13 +103,17 @@ def _find_current_document_url(soup: BeautifulSoup, version: str) -> str | None:
     """The current version's file isn't linked from the revision-history
     table (that row has no <a href>, same as gs_ingest.py's methodology
     pages) — it's a separate download link near the top of the page. Match
-    by version number appearing in the href, restricted to .docx/.doc, and
-    prefer the one NOT containing 'Guide' or 'TC' (track changes)."""
+    by version number appearing in the href, restricted to .docx/.doc/.pdf
+    (fill-in templates are .docx ; the cross-cutting requirement documents
+    reused by this same parser for SPEC-06 T2 — 101/102/103/104/119/201 —
+    are published as .pdf, found while ingesting them: without .pdf here,
+    every one of their current versions silently had no download link),
+    and prefer the one NOT containing 'Guide' or 'TC' (track changes)."""
     version_token = re.sub(r"[.\s]", "", version)  # "3.0" -> "30"
     candidates = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
-        if not (href.lower().endswith(".docx") or href.lower().endswith(".doc")):
+        if not href.lower().endswith((".docx", ".doc", ".pdf")):
             continue
         href_token = re.sub(r"[.\s]", "", href)
         if re.search(rf"[Vv]{re.escape(version_token)}(?![0-9])", href_token):

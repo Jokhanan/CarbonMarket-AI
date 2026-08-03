@@ -90,6 +90,16 @@ class TestRechV5Extraction:
         assert "PAGE:" not in (ics1["key"] or "")
         assert "GS4GG PAA M400-08" not in (ics1["description"] or "")
 
+    def test_ics_7_unit_is_not_contaminated_by_equations_referred_field(self, params):
+        # ICS 7 is the only parameter with an "Equations referred:" field
+        # between "Data unit:" and "Purpose of data:" — unrecognised in an
+        # earlier version, its value ("N/A") bled into "unit" ("N/A
+        # Equations N/A referred:"). Caught by the user reviewing the
+        # delivered table.
+        ics7 = next(p for p in params if p["parameter_id"] == "ICS 7")
+        assert ics7["unit"] == "N/A"
+        assert "equations" not in (ics7["unit"] or "").lower()
+
     def test_page_spanning_parameters_are_not_contaminated(self, params):
         # ICS 15 and ICS 19 span a page break in the source PDF — found
         # corrupted with header/footer boilerplate before the fix.

@@ -324,9 +324,7 @@ minimale).
 
 ## SPEC-06 — Moteur d'instanciation (template × méthodologie × exigences transverses)
 
-**Statut : T1, T3 et T5 implémentés (03.08.2026). T2 (exigences
-transverses), T4 (liaison champ↔exigence) et T6 (modélisation des faits
-non déductibles) restent pour la session suivante.**
+**Statut : implémentée en entier (03.08.2026) — T1 à T6.**
 
 Correction demandée sur le rapport SPEC-05 : « 3 `parameter_block` » dans
 le VPA-DD v3.0 comptait des **patrons** de bloc (ex ante 10 champs,
@@ -412,17 +410,79 @@ officielle — Gold Standard n'a pas republié ce document lors du
 rafraîchissement de mai 2026. Reste le plus ancien document du corpus
 utilisé par RECH/cookstoves.
 
-Tests : `test_rech_parameter_extractor.py` (9, contre le vrai PDF),
-`test_parameter_instantiation.py` (7, base réelle). 217/217 tests de la
-suite complète passent. Diff Git vide sur `carbongpt/guides/`,
-`doc_exporter.py`, `ai_writer.py`, `gs_template_ingest.py`,
-`template_docx_parser.py` (SPEC-05) — rien de cassé.
+**Bug trouvé par l'utilisateur en relisant la table livrée, corrigé** :
+ICS 7 a un champ « Equations referred: » que RECH n'utilise que pour ce
+seul paramètre parmi les 26 — non reconnu par l'extracteur, sa valeur
+(« N/A ») se déversait dans `unit` (« N/A Equations N/A referred: »).
+Ajouté comme frontière de champ reconnue mais non stockée ; test de
+non-régression ajouté.
 
-**Travail de suite identifié, non fait (session suivante)** : T2
-(ingestion des 7 documents transversaux — le mécanisme et le piège de
-balisage sont déjà documentés ci-dessus), T4 (table de correspondance
-champ↔exigence), T6 (modélisation des faits non déductibles dans
-`project_open_questions`).
+**T2** : `carbongpt/repository/gs_crosscutting_ingest.py`. Réutilise
+`gs_template_ingest.py` (parseur `lxml`) sans dupliquer son code — importe
+directement `fetch_template_page`, `parse_template_revision_history`,
+`download_document`. Nouvelle table `crosscutting_requirements`
+(migration additive). Deux bugs trouvés en ingérant réellement les 7
+pages :
+1. La page 118 (SDG Impact Tool Monitoring Indicators) n'a **aucun** bloc
+   REVISION HISTORY — une seule version publiée depuis sa création
+   (v1.0, 18.10.2025), pas encore d'historique à afficher. Repli dédié
+   (`_parse_single_version`) qui lit le lien de téléchargement et la date
+   affichée près du titre plutôt que de forcer le motif REVISION HISTORY.
+2. `gs_template_ingest.py::_find_current_document_url` (SPEC-05) ne
+   reconnaissait que `.docx`/`.doc` — juste pour les templates à remplir.
+   Les 7 documents transversaux sont publiés en **`.pdf`** : les 5 dont
+   le lien de la version courante n'était pas dans le tableau (comme pour
+   le VPA-DD v3.0, SPEC-05) revenaient silencieusement sans fichier
+   téléchargé. Corrigé en élargissant l'extension acceptée — revérifié
+   contre les tests VPA-DD existants (SPEC-05), aucune régression.
+
+Les 7 documents ingérés, versionnés et datés comme les méthodologies —
+101 v2.1 (31.01.2025), 102 v2.1 (14.06.2022), 103 v2.1 (29.06.2023),
+104 v2.0 (16.05.2023), 118 v1.0 (18.10.2025), 119 v1.1 (02.02.2026),
+201 v1.2 (23.10.2019, confirmé non republié en mai 2026).
+
+**T4** : `carbongpt/repository/field_requirement_linking.py`. Table de
+correspondance vérifiée à la main (pas d'extraction automatique par
+similarité de texte — écartée explicitement dans SPEC-06.md comme
+heuristique fragile) entre les 9 sections de niveau 1 du VPA-DD v3.0 et
+leurs sources : RECH v5.0 pour « Application of methodology(ies) » ;
+103+104 pour Safeguarding/Genre ; 104 seule pour Gender equality
+assessment ; 118 pour Sustainable development contribution (source aussi
+du patron de bloc T55, laissé non associé par T5) ; 102 pour Stakeholder
+Consultation ; 101+201 pour Project description ; 101 pour Appendices
+(couverture partielle, mélange plusieurs sujets). Deux sections sans
+aucune source : « Contact information of CME » (donnée administrative
+pure) et « LUF additional information » (hors périmètre RECH/cookstoves,
+gouvernée par l'Activity Requirement 203, non ingéré). 12 liens écrits.
+`find_unlinked_sections()` retrouve ces deux gaps mécaniquement, pas
+depuis une liste maintenue à la main.
+
+**T6** : `carbongpt/repository/non_deducible_facts.py`. Catalogue de 5
+catégories de faits non déductibles (choix de piste genre, échelle du
+VPA, données de terrain, statut CORSIA/A6.4/PACM, coordonnées CME) —
+important : une section « couverte » par une source (T4) fournit la
+RÈGLE, pas toujours la VALEUR ; ce module documente précisément où
+l'écart reste malgré une source liée. `ensure_open_questions_for_project()`
+réutilise `project_open_questions` (SPEC-03) sans nouvelle table — 5
+questions créées et vérifiées sur le projet réel `id=12`.
+
+Tests : `test_rech_parameter_extractor.py` (10, dont la régression ICS 7),
+`test_parameter_instantiation.py` (7), `test_gs_crosscutting_ingest.py` (7),
+`test_field_requirement_linking.py` (6), `test_non_deducible_facts.py` (5).
+236/236 tests de la suite complète passent. Diff Git vide sur
+`carbongpt/guides/`, `doc_exporter.py`, `ai_writer.py` — rien de cassé.
+`gs_template_ingest.py` (SPEC-05, pas la liste protégée) modifié pour le
+bug `.pdf` ci-dessus, revérifié sans régression sur ses propres tests.
+
+SPEC-06 est maintenant entièrement implémentée (T1 à T6).
+
+**Travail de suite identifié, non fait** : T4 ne lie que les 9 sections
+de niveau 1 et les 3 blocs de paramètres — pas les 161 champs
+individuels du VPA-DD v3.0 (SPEC-05). « Appendices » (H303) mériterait une
+liaison sous-section par sous-section, plus précise que la référence
+générale à 101 retenue ici. Land-use & Forests (203) non ingéré — pas
+pertinent pour RECH/cookstoves, mais bloquerait toute extension future à
+des méthodologies forestières.
 
 ---
 

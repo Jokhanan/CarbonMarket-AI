@@ -76,6 +76,12 @@ _PARAM_ID_RE = re.compile(r"Parameter ID\s+([A-Za-z0-9 ]+?)(?=\s*\n)")
 _LABEL_FRAGMENTS: dict[str, list[str]] = {
     "key_label": ["Data/parameter:"],
     "unit": ["Data unit:"],
+    # Present for some parameters only (ICS 7 confirmed) — a boundary that
+    # must be recognised even though its own value isn't stored, otherwise
+    # it silently bleeds into "unit"'s value (found while testing — the
+    # user caught it in the delivered table: ICS 7's unit read "N/A
+    # Equations N/A referred:").
+    "equations_referred": ["Equations", "referred:"],
     "purpose": ["Purpose of data:"],
     "value_applied": ["Value(s) applied:"],
     "source_of_data": ["Source of data:"],
@@ -95,7 +101,7 @@ _LABEL_FRAGMENTS: dict[str, list[str]] = {
 # part of what the user asked to see (SPEC-06: identifiant/description/
 # unité/source/méthode/fréquence/classification/section/page).
 _IGNORED_FIELDS = {"measuring_instrument", "type_of_instrument", "accuracy_class",
-                    "calibration_requirements", "location"}
+                    "calibration_requirements", "location", "equations_referred"}
 
 # "Measurement" alone opens either measurement_frequency_note ("...and
 # updating frequency") or measurement_method ("...methods and procedures:")

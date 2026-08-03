@@ -1229,6 +1229,55 @@ CREATE INDEX IF NOT EXISTS idx_methodology_parameters_version ON methodology_par
 -- -- explicit widening, idempotent (ALTER COLUMN TYPE to the same type is a
 -- harmless no-op on repeat runs).
 ALTER TABLE methodology_parameters ALTER COLUMN key TYPE TEXT;
+
+-- SPEC-06 (03.08.2026, T2) : exigences transverses Gold Standard (101,
+-- 102, 103, 104, 118, 119, 201 -- voir docs/SPEC-06.md). Table plate
+-- (code+version par ligne), calquee sur methodology_version_history
+-- comme demande par la spec, pas de table d'identite separee -- ces
+-- documents n'ont pas d'equivalent au regroupement par "methodologie"
+-- que methodologies/methodology_version_history modelise pour RECH.
+CREATE TABLE IF NOT EXISTS crosscutting_requirements (
+    id SERIAL PRIMARY KEY,
+    standard VARCHAR(50) NOT NULL DEFAULT 'GoldStandard',
+    code VARCHAR(20) NOT NULL,
+    name VARCHAR(255),
+    version VARCHAR(20) NOT NULL,
+    released_date DATE,
+    effective_from DATE,
+    effective_until DATE,
+    is_current BOOLEAN DEFAULT FALSE,
+    document_name VARCHAR(500),
+    source_url TEXT,
+    download_url TEXT,
+    local_path TEXT,
+    sha256 VARCHAR(64),
+    ingested_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (code, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_crosscutting_requirements_code ON crosscutting_requirements(code);
+
+-- SPEC-06 (03.08.2026, T4) : lien tracable entre un champ de template
+-- (SPEC-05 template_fields) et sa ou ses sources d'exigence. Une ligne
+-- par (champ, source) -- un champ peut avoir plusieurs sources.
+CREATE TABLE IF NOT EXISTS template_field_requirements (
+    id SERIAL PRIMARY KEY,
+    template_field_id INTEGER NOT NULL REFERENCES template_fields(id) ON DELETE CASCADE,
+    requirement_type VARCHAR(20) NOT NULL CHECK (requirement_type IN ('methodology', 'crosscutting')),
+    methodology_version_id INTEGER REFERENCES methodology_version_history(id) ON DELETE CASCADE,
+    crosscutting_requirement_id INTEGER REFERENCES crosscutting_requirements(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT chk_exactly_one_source CHECK (
+        (requirement_type = 'methodology' AND methodology_version_id IS NOT NULL AND crosscutting_requirement_id IS NULL)
+        OR
+        (requirement_type = 'crosscutting' AND crosscutting_requirement_id IS NOT NULL AND methodology_version_id IS NULL)
+    ),
+    UNIQUE (template_field_id, requirement_type, methodology_version_id, crosscutting_requirement_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_template_field_requirements_field ON template_field_requirements(template_field_id);
 """
 
 
