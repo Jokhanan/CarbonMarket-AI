@@ -1178,6 +1178,57 @@ CREATE TABLE IF NOT EXISTS template_fields (
 );
 
 CREATE INDEX IF NOT EXISTS idx_template_fields_version ON template_fields(template_version_id);
+
+-- SPEC-06 (03.08.2026, T1) : paramètres de calcul d'une méthodologie,
+-- extraits et classés ex ante / monitoring, pour instancier les patrons de
+-- bloc de template_fields (SPEC-05) le bon nombre de fois. Additive
+-- uniquement, ne modifie aucune table existante.
+
+CREATE TABLE IF NOT EXISTS methodology_parameters (
+    id SERIAL PRIMARY KEY,
+    methodology_version_id INTEGER NOT NULL REFERENCES methodology_version_history(id) ON DELETE CASCADE,
+    parameter_id VARCHAR(50) NOT NULL,
+    -- TEXT, pas VARCHAR(100) : la colonne "Data/parameter" de RECH v5.0
+    -- porte parfois un symbole court (EF_b,f,CO2) mais souvent le nom
+    -- complet du paramètre en toutes lettres (ex. "Activity technology
+    -- description and thermal efficiency", >100 caractères) -- trouvé en
+    -- important les 26 paramètres réels (03.08.2026).
+    key TEXT,
+    description TEXT,
+    unit VARCHAR(255),
+    purpose TEXT,
+    -- 'both' : la methodologie laisse explicitement le choix a la
+    -- certification (ex. fNRB -- "Determined ex-ante and fixed... OR
+    -- updated... biennially"). Jamais tranche automatiquement -- voir
+    -- docs/SPEC-06.md, le cas fNRB y est traite explicitement.
+    timing_classification VARCHAR(20) NOT NULL CHECK (timing_classification IN
+        ('ex_ante', 'monitoring', 'both')),
+    measurement_frequency_note TEXT,
+    measurement_method TEXT,
+    source_of_data TEXT,
+    responsible_entity TEXT,
+    qa_qc_procedures TEXT,
+    section_ref VARCHAR(50),
+    page_ref VARCHAR(20),
+    -- Meme discipline que regulatory_values (SPEC-01) : jamais 'manual'
+    -- pose par un extracteur automatique, jamais consomme comme verifie
+    -- sans que verified_by/verified_at soient explicitement renseignes.
+    extraction_method VARCHAR(20) NOT NULL DEFAULT 'llm_extracted'
+        CHECK (extraction_method IN ('manual', 'llm_extracted', 'llm_unverified')),
+    verified_by VARCHAR(100),
+    verified_at TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (methodology_version_id, parameter_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_methodology_parameters_version ON methodology_parameters(methodology_version_id);
+
+-- CREATE TABLE IF NOT EXISTS above doesn't retroactively widen a column on
+-- a table already created earlier in this same session with key VARCHAR(100)
+-- -- explicit widening, idempotent (ALTER COLUMN TYPE to the same type is a
+-- harmless no-op on repeat runs).
+ALTER TABLE methodology_parameters ALTER COLUMN key TYPE TEXT;
 """
 
 

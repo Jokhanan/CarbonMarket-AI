@@ -324,7 +324,9 @@ minimale).
 
 ## SPEC-06 — Moteur d'instanciation (template × méthodologie × exigences transverses)
 
-**Statut : spec écrite (03.08.2026), non implémentée.**
+**Statut : T1, T3 et T5 implémentés (03.08.2026). T2 (exigences
+transverses), T4 (liaison champ↔exigence) et T6 (modélisation des faits
+non déductibles) restent pour la session suivante.**
 
 Correction demandée sur le rapport SPEC-05 : « 3 `parameter_block` » dans
 le VPA-DD v3.0 comptait des **patrons** de bloc (ex ante 10 champs,
@@ -355,6 +357,72 @@ que les pages de template (SPEC-05 T0) — pas la structure propre des
 pages de méthodologie. Le mécanisme d'ingestion SPEC-01 est réutilisable
 dans son principe, mais l'implémentation doit reprendre le parseur `lxml`
 de `gs_template_ingest.py`, pas celui de `gs_ingest.py`.
+
+**T1** : migration additive — `methodology_parameters` (`key` en `TEXT`,
+pas `VARCHAR(100)` comme prévu dans la spec — RECH nomme certains
+paramètres avec leur nom complet en toutes lettres, trouvé en important
+les 26 vrais paramètres, corrigé avant de committer).
+
+**T3** : `carbongpt/repository/rech_parameter_extractor.py`. **Bug
+sérieux trouvé en testant contre le vrai PDF** : une première version
+aplatissait les espaces d'un bloc pour reconstituer les étiquettes de
+champ fragmentées sur plusieurs lignes — ça a échoué silencieusement sur
+les 9 paramètres monitorés (`measurement_frequency_note` toujours vide,
+y compris pour le fNRB, dont dépend justement la classification 'both').
+Cause : dans ce PDF, la valeur n'est pas seulement coupée par
+l'étiquette, elle est **intercalée entre ses fragments**
+(« Measurement Determined ex-ante... / and updating biennially... /
+frequency (Mandatory update...) »). Remplacé par une machine à états
+ligne par ligne qui reconnaît chaque fragment d'étiquette connu et
+n'assigne un champ ambigu (« Measurement » ouvre soit la fréquence soit
+la méthode) qu'une fois la suite désambiguïsée. Deuxième bug trouvé en
+testant : un bloc à cheval sur deux pages absorbait l'en-tête/pied de
+page suivant dans son dernier champ (ICS 15, ICS 19) — corrigé en
+retirant l'en-tête/pied de page répété avant découpage en blocs.
+
+Classification ex ante/monitoring : **le signal primaire est la section
+RECH elle-même** (§14.2 « Data and parameters not monitored » vs §14.3
+« Data and parameters monitored », dont le texte introductif dit
+littéralement leur nature) — plus fiable que le seul contenu de
+`Measurement and updating frequency`, absent par construction pour les
+paramètres de §14.2 (rien à monitorer). Ce contenu sert de signal
+secondaire pour détecter le cas « les deux » (fNRB, ICS 20 : sous §14.3
+mais son propre texte offre une option ex ante fixe) — jamais tranché
+automatiquement, conforme à la demande explicite.
+
+26 paramètres extraits et stockés, tous `extraction_method='llm_extracted'`,
+`verified_by`/`verified_at` NULL — aucun marqué vérifié sans confirmation
+de l'utilisateur.
+
+**T5** : `carbongpt/repository/parameter_instantiation.py`. Les trois
+patrons de bloc du VPA-DD v3.0 (SPEC-05 T7) ne sont pas distingués par
+comptage de lignes (fragile) mais par lecture réelle des libellés de leurs
+lignes dans le `.docx` (présence de « QA/QC », « Entity/person », etc.
+pour le patron monitoring ; « SDG », « Net benefit » pour le patron SDG,
+non couvert par RECH — remonté comme non associé, jamais deviné).
+
+**Résultat sur RECH v5.0 × VPA-DD v3.0** : patron ex ante (T37) → 18
+instances (ICS 1-17 + fNRB) ; patron monitoring (T40) → 9 instances
+(ICS 18, 19, 21-26 + fNRB) ; patron SDG (T55) → non associé (source :
+document 118, hors périmètre T2) ; 0 paramètre en attente de révision.
+
+**Document 201 (Community Services Activity Requirements) vérifié** :
+toujours en v1.2 (23.10.2019), confirmé « CURRENT DOCUMENT » sur la page
+officielle — Gold Standard n'a pas republié ce document lors du
+rafraîchissement de mai 2026. Reste le plus ancien document du corpus
+utilisé par RECH/cookstoves.
+
+Tests : `test_rech_parameter_extractor.py` (9, contre le vrai PDF),
+`test_parameter_instantiation.py` (7, base réelle). 217/217 tests de la
+suite complète passent. Diff Git vide sur `carbongpt/guides/`,
+`doc_exporter.py`, `ai_writer.py`, `gs_template_ingest.py`,
+`template_docx_parser.py` (SPEC-05) — rien de cassé.
+
+**Travail de suite identifié, non fait (session suivante)** : T2
+(ingestion des 7 documents transversaux — le mécanisme et le piège de
+balisage sont déjà documentés ci-dessus), T4 (table de correspondance
+champ↔exigence), T6 (modélisation des faits non déductibles dans
+`project_open_questions`).
 
 ---
 
