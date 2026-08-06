@@ -20,24 +20,11 @@ consigne système : bloqué par un contrôle après génération, comme SPEC-04.
 
 import json
 import logging
-import re
 from typing import Any
 
-from carbongpt.repository.defendability import _NUMBER_RE, _SECTION_RE
+from carbongpt.repository.defendability import _ALLCAPS_TOKEN_RE, _NUMBER_RE, _SECTION_RE
 
 logger = logging.getLogger(__name__)
-
-# Jetons ressemblant à un nom de méthodologie/outil/norme externe — 3+
-# lettres majuscules consécutives (TPDDTEC, TOOL, CDM, ISO, WBT, KPT...).
-# Légitime seulement si le même jeton apparaît déjà dans le jeu de faits
-# (parce qu'il est réellement sourcé dans measurement_method/
-# source_of_data extraits de RECH v5.0) — jamais supposé. Les nombres
-# adjacents (ex. "33" dans "TOOL33", "4.0" dans "Version 4.0") sont déjà
-# couverts par le contrôle numérique hérité de SPEC-04 — les deux
-# contrôles ensemble couvrent le cas réel rencontré sans qu'un détecteur
-# d'équations dédié soit nécessaire (une équation inventée fabrique
-# presque toujours des constantes numériques absentes du jeu de faits).
-_ALLCAPS_TOKEN_RE = re.compile(r"\b[A-Z]{3,}\b")
 
 _LANGUAGE_INSTRUCTIONS = {
     "en": "Write the block in English.",

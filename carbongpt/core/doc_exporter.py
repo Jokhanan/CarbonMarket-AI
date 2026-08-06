@@ -401,6 +401,161 @@ def _check_checkbox_in_cell(cell_element, target_text, ns):
                     t_el.text = checked_char
 
 
+def _resolve_gs_vpa_dd_v3_template():
+    """Returns (local_path, template_version_id) for the current, analyzed
+    VPA-DD v3.0 template (SPEC-05 T7) if one exists in the database — same
+    query shape as carbongpt.guides._load_db_backed_guide(), so this only
+    ever finds a file when load_guide() would also be serving the v3.0
+    structure for drafting. Returns (None, None) on any DB error or if
+    nothing is ingested/analyzed yet — never raises, exactly like the
+    guide adapter (a database outage degrades to the old v2.3 export path,
+    it never breaks export)."""
+    try:
+        from carbongpt.repository.db import get_cursor
+        with get_cursor() as cur:
+            cur.execute(
+                """SELECT dtv.local_path, dtv.id FROM document_template_versions dtv
+                   JOIN document_templates dt ON dt.id = dtv.template_id
+                   WHERE dt.standard = 'GoldStandard' AND dt.doc_type = 'VPA-DD'
+                         AND dtv.is_current = true AND dtv.parsed_at IS NOT NULL"""
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.warning("VPA-DD v3.0 template lookup failed — falling back to v2.3 export: %s", exc)
+        return None, None
+    if row is None or not row["local_path"] or not os.path.isfile(row["local_path"]):
+        return None, None
+    return row["local_path"], row["id"]
+
+
+_PARAM_BLOCK_SEPARATOR_RE = re.compile(r"=== PARAMETER BLOCK: (.+?) ===\n?")
+
+
+def _parse_field_value_block(text):
+    """Parses drafted 'Field: Value' lines (parameter_block_drafting.py's
+    output format) into a dict keyed by lowercased field label, for
+    matching against a template table's real row labels."""
+    fields = {}
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        label, _, value = line.partition(":")
+        label = label.strip().lower()
+        if not label:
+            continue
+        fields[label] = value.strip()
+    return fields
+
+
+def _fill_parameter_block_table_row(table, block_fields):
+    for row in table.rows:
+        label_cell_text = row.cells[0].text.strip().lower()
+        if not label_cell_text or len(row.cells) < 2:
+            continue
+        for label, value in block_fields.items():
+            if label in label_cell_text or label_cell_text in label:
+                row.cells[1].text = value
+                break
+
+
+def _fill_parameter_block_field(table, combined_text):
+    """Fills a parameter_block table with one row-filled copy of the
+    ORIGINAL template table per instance found in combined_text
+    (ai_writer.py::_draft_full_parameter_block_section's "=== PARAMETER
+    BLOCK: <id> ===" separator) — the first instance fills the table
+    already in the document, every following instance is a deep copy of
+    the SAME pristine (unfilled) table inserted right after it, so a real
+    VPA-DD ends up with as many blocks as RECH v5.0 parameters map to this
+    patron (SPEC-06 T5), not just one.
+
+    Takes the target `table` object directly (a python-docx Table already
+    resolved from doc.tables[N]) rather than an index — see
+    _fill_gs_vpa_dd_v3's docstring for why: re-deriving doc.tables[N]
+    after an earlier field's insertion would silently hit the wrong table,
+    since every insertion shifts every later element's position in the
+    document body."""
+    from docx.table import Table
+
+    parts = _PARAM_BLOCK_SEPARATOR_RE.split(combined_text)
+    # split() on a capturing group alternates: [preamble, id_0, body_0, id_1, body_1, ...]
+    instances = [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+    if not instances:
+        return
+
+    pristine = copy.deepcopy(table._tbl)
+    anchor = table._tbl
+    for i, (_parameter_id, body) in enumerate(instances):
+        target_tbl = table._tbl if i == 0 else copy.deepcopy(pristine)
+        if i > 0:
+            anchor.addnext(target_tbl)
+        anchor = target_tbl
+        if body.strip().startswith("[NOT AVAILABLE") or body.strip().startswith("[ERROR"):
+            continue
+        _fill_parameter_block_table_row(Table(target_tbl, table._parent), _parse_field_value_block(body))
+
+
+def _fill_gs_vpa_dd_v3(doc, sections_map, project_info):
+    """v1.0: fills the REAL VPA-DD v3.0 docx (not the old, hand-mapped
+    v2.3 file) using the exact structural anchors template_docx_parser.py
+    recorded when it analyzed this same file (SPEC-05 T3) — field_key
+    "H{paragraph_index}" -> doc.paragraphs[N], "T{table_index}" ->
+    doc.tables[N]. Both indices are guaranteed to match because they come
+    from python-docx's own doc.paragraphs/doc.tables lists, the same lists
+    template_docx_parser.py indexed against, on the identical file
+    (local_path resolved from the same document_template_versions row).
+
+    Unlike the older _fill_gs_titled_template()/_fill_vcs_template(), there
+    is no ">>" placeholder convention or hand-maintained title map here —
+    v3.0 uses real Word headings with no such markers (SPEC-05 T7). Content
+    is inserted directly after the heading paragraph; any boilerplate text
+    Gold Standard left in the official template following that heading is
+    NOT stripped (the older fillers' placeholder-removal logic is specific
+    to the older templates' ">>"  convention, which v3.0 doesn't have) —
+    a known, documented limitation, not an oversight.
+
+    Critical ordering requirement, found generating a real document
+    (v1.0, 04.08.2026): doc.paragraphs and doc.tables are resolved ONCE,
+    into `paragraphs`/`tables`, BEFORE any content is inserted — never
+    re-derived mid-loop via a fresh doc.paragraphs[N]/doc.tables[N]
+    lookup. Every insertion (a new paragraph, or — for a parameter_block —
+    several duplicated tables) shifts the position of every later element
+    in the document body; re-deriving "the Nth paragraph/table" after an
+    earlier field already mutated the document silently grabs the WRONG
+    element for every field processed afterwards (confirmed: without this,
+    T40's monitoring blocks were written into an unrelated Safeguarding
+    risk-assessment table, because T37 was processed first and its 15
+    extra duplicated tables shifted every following table's real position
+    by 15). Because the field_key-derived index (H{paragraph_index},
+    T{table_index}, SPEC-05 T3) is resolved against this fixed, one-time
+    snapshot, and `_insert_content_into_doc`/`_fill_parameter_block_field`
+    both operate on the actual element OBJECT handed to them (not an
+    index), each field lands on the anchor it was actually analyzed
+    against — regardless of what order sections_map happens to iterate in
+    (a plain dict keyed by field_key, not guaranteed to be in document
+    order) or what any other field inserts elsewhere."""
+    paragraphs = doc.paragraphs
+    tables = doc.tables
+    for field_key, content in sections_map.items():
+        if not content or not content.strip():
+            continue
+        if field_key.startswith("H"):
+            try:
+                para_index = int(field_key[1:])
+            except ValueError:
+                continue
+            if para_index >= len(paragraphs):
+                continue
+            _insert_content_into_doc(doc, paragraphs[para_index]._element, content, project_info)
+        elif field_key.startswith("T"):
+            try:
+                table_index = int(field_key[1:])
+            except ValueError:
+                continue
+            if table_index >= len(tables):
+                continue
+            _fill_parameter_block_field(tables[table_index], content)
+
+
 GS_MR_TEMPLATE_REMAP = {
     "A.3": "A.4",
     "A.4": None,
@@ -969,7 +1124,6 @@ def export_template_word(sections_content, project_info, template_type="pdd"):
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     standard = project_info.get("standard", "")
-    template_path = _resolve_template_path(standard, template_type)
 
     sections_map = {}
     for sec in sections_content:
@@ -978,11 +1132,23 @@ def export_template_word(sections_content, project_info, template_type="pdd"):
         if content and content.strip():
             sections_map[sid] = content
 
+    # v1.0: VPA-DD now has a real, DB-ingested v3.0 template (SPEC-05 T7) —
+    # export to it instead of the hard-coded v2.3 file whenever it's
+    # available, matching what load_guide() already serves for drafting
+    # (SPEC-05 T6). Falls back to the old v2.3 path on any DB outage or if
+    # not yet ingested — never breaks export for a pair not migrated.
+    v3_local_path, _v3_template_version_id = (
+        _resolve_gs_vpa_dd_v3_template() if standard == "GoldStandard" and template_type == "vpa_dd" else (None, None)
+    )
+    template_path = v3_local_path or _resolve_template_path(standard, template_type)
+
     if template_path:
         try:
             doc = Document(template_path)
             if sections_map:
-                if standard == "GoldStandard" and template_type == "vpa_dd":
+                if v3_local_path:
+                    _fill_gs_vpa_dd_v3(doc, sections_map, project_info)
+                elif standard == "GoldStandard" and template_type == "vpa_dd":
                     _fill_gs_titled_template(doc, sections_map, project_info, GS_VPA_DD_TITLE_MAP)
                 elif standard == "GoldStandard" and template_type == "poa_dd":
                     _fill_gs_titled_template(doc, sections_map, project_info, GS_POA_DD_TITLE_MAP)
@@ -992,6 +1158,8 @@ def export_template_word(sections_content, project_info, template_type="pdd"):
                     _fill_vcs_template(doc, sections_map, project_info)
                 else:
                     _fill_gs_template(doc, sections_map, project_info)
+            elif v3_local_path:
+                pass  # no generated content and no v2.3-shaped KPI table to fill on v3.0
             else:
                 if standard == "Verra":
                     _fill_vcs_kpi_table(doc, project_info)

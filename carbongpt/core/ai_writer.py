@@ -1,7 +1,7 @@
 import json
 import logging
 
-from carbongpt.guides import load_guide, DOC_TYPE_LABELS, GUIDE_REGISTRY
+from carbongpt.guides import load_guide, DOC_TYPE_LABELS, GUIDE_REGISTRY, _DbBackedGuide
 from carbongpt.core.knowledge_retrieval import (
     retrieve_section_context, format_context_for_prompt,
     map_section_to_domain, map_section_to_purpose, retrieve_section_exemplar,
@@ -912,6 +912,90 @@ def _draft_parameter_block(parameter_id, project_info):
     return text, model, fact_set
 
 
+_PARAM_BLOCK_SEPARATOR = "=== PARAMETER BLOCK: {parameter_id} ==="
+
+
+def _draft_full_parameter_block_section(field_key, project_info):
+    """v1.0: for generate_full_document(), a parameter_blocks-format
+    section (T37/T40, SPEC-05) must contain one drafted block per
+    methodology_parameters instance mapped to it (SPEC-06 T5's
+    instantiate_parameter_blocks()) — not a single generic draft, and not
+    a single parameter (that's generate_section_draft's parameter_id=
+    contract, used by the section-by-section UI). Scoped to
+    (GoldStandard, VPA-DD v3.0) x RECH v5.0, matching _draft_parameter_block's
+    own scope limit.
+
+    Returns concatenated section text, each instance separated by a
+    machine-parseable marker (doc_exporter.py's v3.0 filler splits on it to
+    fill one table per instance) — a per-instance ParameterBlockValidationError
+    does not fail the whole section, it's recorded inline instead, matching
+    the drafting philosophy elsewhere in this codebase: surface what failed,
+    don't silently drop it or fall back to unsourced text.
+    """
+    from carbongpt.repository.db import get_cursor
+    from carbongpt.repository.parameter_instantiation import instantiate_parameter_blocks
+
+    with get_cursor() as cur:
+        cur.execute(
+            """SELECT dtv.id AS template_version_id FROM document_template_versions dtv
+               JOIN document_templates dt ON dt.id = dtv.template_id
+               WHERE dt.standard = 'GoldStandard' AND dt.doc_type = 'VPA-DD'
+                     AND dtv.is_current = true AND dtv.parsed_at IS NOT NULL"""
+        )
+        tv_row = cur.fetchone()
+        cur.execute(
+            "SELECT id FROM methodology_version_history WHERE methodology_code = '407' AND is_current = true"
+        )
+        meth_row = cur.fetchone()
+    if tv_row is None or meth_row is None:
+        raise ValueError("VPA-DD v3.0 and/or RECH v5.0 not bootstrapped — cannot instantiate parameter blocks")
+
+    mapping = instantiate_parameter_blocks(tv_row["template_version_id"], meth_row["id"])
+    block = None
+    for candidate in (mapping["ex_ante_block"], mapping["monitoring_block"]):
+        if candidate and candidate["field_key"] == field_key:
+            block = candidate
+            break
+    if block is None:
+        unmapped = next((u for u in mapping["unmapped_blocks"] if u["field_key"] == field_key), None)
+        reason = unmapped["reason"] if unmapped else "no methodology_parameters instance maps to this patron"
+        return (
+            "[NOT AVAILABLE: this parameter block patron is not covered by RECH v5.0's own "
+            f"parameters. {reason} No block can be generated here without inventing unsourced "
+            "figures.]"
+        )
+
+    parts = []
+    for instance in block["instances"]:
+        parameter_id = instance["parameter_id"]
+        parts.append(_PARAM_BLOCK_SEPARATOR.format(parameter_id=parameter_id))
+        try:
+            text, _model, _fact_set = _draft_parameter_block(parameter_id, project_info)
+            parts.append(text)
+        except Exception as e:
+            logger.error("Failed to draft parameter block %s for %s: %s", parameter_id, field_key, e)
+            parts.append(f"[ERROR: could not draft this parameter block from sourced data — {e}]")
+
+    return "\n\n".join(parts)
+
+
+def _draft_prose_section(field_key, project_info):
+    """v1.0: drafts a prose (narrative) VPA-DD v3.0 section through the
+    closed-fact-set pipeline (prose_section_drafting.py) — same discipline
+    as _draft_parameter_block above. Scoped to (GoldStandard, VPA-DD v3.0)
+    since that's the only DB-backed guide today (SPEC-05 T6).
+
+    Returns (section_text, model_used, fact_set)."""
+    from carbongpt.repository.prose_section_drafting import (
+        build_prose_section_fact_set,
+        generate_prose_section_content,
+    )
+
+    fact_set = build_prose_section_fact_set(field_key, project_info)
+    text, model = generate_prose_section_content(fact_set)
+    return text, model, fact_set
+
+
 def generate_section_draft(
     standard,
     project_doc_type,
@@ -947,6 +1031,20 @@ def generate_section_draft(
     # is actually asking for one parameter's block.
     if subsection.get("content_format") == "parameter_blocks" and parameter_id:
         text, _model, _fact_set = _draft_parameter_block(parameter_id, project_info)
+        return text
+
+    # v1.0 (objectif produit : VPA-DD complet sous RECH v5.0 / template v3.0):
+    # the same gap existed for prose sections as for parameter blocks above
+    # — the generic prompt below has nothing sourced to cite for a specific
+    # VPA-DD v3.0 section, and invents details when it can't find any (same
+    # mechanism documented in docs/STATUS.md). Route through the closed-
+    # fact-set pipeline whenever the guide serving this section is the
+    # DB-backed one (SPEC-05 T6) — the only case where SPEC-06 T4's field-
+    # requirement links actually exist to build a fact set from. Every
+    # other (standard, doc_type) pair falls through unchanged to the
+    # generic path below, exactly as before this integration.
+    if subsection.get("content_format") == "prose" and isinstance(guide, _DbBackedGuide):
+        text, _model, _fact_set = _draft_prose_section(section_id, project_info)
         return text
 
     std_label = STANDARD_LABELS.get(standard, standard)
@@ -1178,15 +1276,24 @@ def generate_full_document(
             progress_callback(idx, total, section_id, subsections[section_id].get("title", ""))
 
         try:
-            text = generate_section_draft(
-                standard=standard,
-                project_doc_type=project_doc_type,
-                section_id=section_id,
-                project_info=project_info,
-                existing_pdd_text=existing_pdd_text,
-                reference_docs_text=reference_docs_text,
-                user_instructions=user_instructions,
-            )
+            # v1.0: a parameter_blocks-format section drafted section-by-section
+            # (generate_section_draft) needs an explicit parameter_id — full-
+            # document generation has none, one call must produce every
+            # instance mapped to this patron (SPEC-06 T5). Only for the
+            # DB-backed VPA-DD v3.0 guide; every other doc type keeps the
+            # unchanged single-call path below.
+            if subsections[section_id].get("content_format") == "parameter_blocks" and isinstance(guide, _DbBackedGuide):
+                text = _draft_full_parameter_block_section(section_id, project_info)
+            else:
+                text = generate_section_draft(
+                    standard=standard,
+                    project_doc_type=project_doc_type,
+                    section_id=section_id,
+                    project_info=project_info,
+                    existing_pdd_text=existing_pdd_text,
+                    reference_docs_text=reference_docs_text,
+                    user_instructions=user_instructions,
+                )
             results.append({
                 "section_id": section_id,
                 "section_title": subsections[section_id].get("title", ""),

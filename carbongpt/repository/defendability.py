@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 _SECTION_RE = re.compile(r"§\s*\d+(?:\.\d+)*|\bpage\s+\d+\b", re.I)
 
+# Tokens resembling an external methodology/tool/standard name — 3+
+# consecutive uppercase letters (TPDDTEC, TOOL, CDM, ISO, WBT, KPT...).
+# Legitimate only if the same token already appears in the fact set (it is
+# then genuinely sourced). Shared by every closed-fact-set drafting module
+# (defendability.py, parameter_block_drafting.py, prose_section_drafting.py)
+# — found once here (SPEC-06, parameter_block_drafting.py) rather than
+# reimplemented per module.
+_ALLCAPS_TOKEN_RE = re.compile(r"\b[A-Z]{3,}\b")
+
 # A candidate value's "applicability.region" field (sourced from the
 # methodology) describes which category of country a RULE applies to, e.g.
 # "Sub-Saharan Africa or Least Developed Countries" — it is NOT a sourced

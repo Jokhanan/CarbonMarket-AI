@@ -1,6 +1,6 @@
 # STATUS.md — État du projet
 
-Dernière mise à jour : 03.08.2026
+Dernière mise à jour : 04.08.2026
 
 ---
 
@@ -63,10 +63,30 @@ trace de référence en cas de doute sur un choix ou un chiffre.
 - **Moteur de résolution de paramètre (SPEC-03)** : `resolve_parameter()`,
   `answer_question()`, `override_parameter()` démontrés sur le projet réel
   12 pour `EF_CO2`/`EF_nonCO2` — volontairement limité à ces deux clés.
-- **265/265 tests passent** (suite complète, dernière exécution
-  03.08.2026). Diff Git vide vérifié à chaque tour sur les fichiers
-  protégés (`carbongpt/guides/*.py`, `ai_writer.py`, `doc_exporter.py`)
-  quand la spec ne les touchait pas explicitement.
+- **v1.0 (04.08.2026) — VPA-DD complet, rédaction sourcée pour la prose et
+  export réel sur le template v3.0** : `prose_section_drafting.py`
+  applique la même discipline anti-hallucination que
+  `parameter_block_drafting.py` aux 101 sections narratives du VPA-DD
+  v3.0 — jeu de faits construit depuis `field_requirement_linking`
+  (SPEC-06 T4, avec héritage vers l'ancêtre de niveau 1 pour les
+  sous-sections), `methodology_parameters`, `crosscutting_requirements`,
+  les données réelles du projet, et les questions ouvertes de
+  `non_deducible_facts` (SPEC-06 T6). Branché dans
+  `generate_section_draft()` uniquement quand le guide est celui issu de
+  la base (VPA-DD v3.0) — aucun autre couple standard/document affecté.
+  `generate_full_document()` sait maintenant aussi instancier tous les
+  blocs de paramètres d'une section (pas un seul) et `doc_exporter.py`
+  exporte réellement vers le vrai fichier v3.0 (plus l'ancien v2.3
+  câblé en dur) — voir la section « v1.0 » plus bas pour le résultat
+  complet, honnête, généré sur le projet réel `id=12` : **127 sections
+  sur 161 rédigées avec succès** (le reste bloqué à raison, ou par une
+  lacune de couverture déjà connue de SPEC-06 T4 — détail plus bas).
+  303/303 tests passent.
+- **303/303 tests passent** (suite complète, dernière exécution
+  04.08.2026). Diff Git vide vérifié à chaque tour sur les fichiers
+  protégés (`carbongpt/guides/*.py`) quand la spec ne les touchait pas
+  explicitement ; `ai_writer.py` et `doc_exporter.py` modifiés
+  intentionnellement ce tour-ci (v1.0), voir plus bas.
 
 ### Ce qui reste ouvert (par domaine)
 
@@ -85,49 +105,63 @@ trace de référence en cas de doute sur un choix ou un chiffre.
   **T9** (détection de nouvelles versions au-delà du déclenchement manuel).
 - **Aucun résolveur générique projet → méthodologie** : le champ
   méthodologie d'un projet est du texte libre non fiable (le projet 12
-  porte « TPDDTEC », pas « 407 ») ; `_draft_parameter_block()` a RECH v5.0
-  codé en dur. Généraliser à d'autres méthodologies suppose de résoudre ce
-  point d'abord.
+  porte « TPDDTEC », pas « 407 ») ; `_draft_parameter_block()` et
+  `prose_section_drafting.py` ont RECH v5.0 codé en dur. Généraliser à
+  d'autres méthodologies suppose de résoudre ce point d'abord.
 - **Bruit d'extraction ICS 17** (« Choice of data or » dans
   `rech_parameter_extractor.py`) : compromis assumé, documenté, jamais
-  nettoyé — repéré deux fois maintenant sans être traité.
+  nettoyé — repéré trois fois maintenant sans être traité.
 - **Verra** : jamais réellement ingéré — seule la structure de page a été
   vérifiée pour les 7 documents transversaux Gold Standard ; aucun travail
   Verra n'a démarré dans tout cet arc SPEC-05/06.
 - **SPEC-06 T4** : la traçabilité s'arrête aux 9 sections de niveau 1 et
   aux 3 patrons de bloc — pas encore aux 161 champs individuels du
   VPA-DD v3.0. « Appendices » (H303) mélange plusieurs sujets sous une
-  seule référence à 101, imprécis.
+  seule référence à 101, imprécis. **Conséquence concrète trouvée en
+  générant le document réel (v1.0)** : des sous-sections qui parlent
+  clairement de méthodologie (ex. H304 « Applicability of methodologies »,
+  sous APPENDICES) n'héritent que du lien de leur ancêtre de niveau 1
+  (101 seul pour APPENDICES) — RECH v5.0 n'est pas dans leur jeu de faits
+  même si le contenu l'exige, donc ces sections échouent au lieu
+  d'inventer. C'est le garde-fou qui fonctionne, mais la vraie correction
+  est d'affiner T4 à un niveau plus fin que les 9 sections racines.
 - **Land-use & Forests (Activity Requirement 203)** non ingéré — hors
   périmètre RECH/cookstoves, mais bloquerait toute extension future vers
   des méthodologies forestières.
+- **Libellés de `non_deducible_facts.py` en français** : les 5 catégories
+  (SPEC-06 T6) ont leur `label`/`why_not_deducible` écrits en français ;
+  quand ils atterrissent tels quels dans un placeholder généré (v1.0,
+  ex. « [To be confirmed by the project developer: Coordonnées
+  administratives du CME] »), le document — censé être entièrement en
+  anglais pour Gold Standard — mélange les deux langues à cet endroit
+  précis. Trouvé en relisant le `.docx` réel généré sur le projet 12, pas
+  corrigé ce tour-ci (faible risque, localisé, mais réel).
+- **`document_language` absent de `project_info` dans `write_all_sections()`**
+  (`carbongpt/app/project_routes.py`) : le point d'entrée API existant ne
+  transmet pas `document_language` à `generate_full_document()` — sans
+  incidence pour le projet 12 (sa colonne vaut déjà `'en'`, le défaut du
+  pipeline), mais un projet configuré en français produirait quand même un
+  VPA-DD en anglais tant que ce n'est pas ajouté à ce dict.
 
 ### Prochaines étapes, par ordre de priorité
 
-1. **Étendre la rédaction sourcée aux sections prose du VPA-DD v3.0.**
-   C'était l'objectif annoncé après SPEC-05 T6 : faire rédiger 2-3
-   sections complètes, pas seulement des blocs de paramètres. Aujourd'hui
-   seul `content_format == "parameter_blocks"` est routé vers un pipeline
-   sourcé (`parameter_block_drafting.py`) ; les 101 champs `prose` du
-   v3.0 passent encore par le prompt générique de `ai_writer.py`, qui n'a
-   pas accès aux faits de `methodology_parameters`/
-   `field_requirement_linking`/`non_deducible_facts` construits ce
-   trimestre. C'est le point qui rapprocherait le plus vite le système
-   d'un VPA-DD réellement rédigeable.
-2. **Construire le résolveur projet → méthodologie**, aujourd'hui absent.
+1. **Corriger la fuite de langue de `non_deducible_facts.py`** (labels en
+   français injectés dans un document anglais) — correctif ciblé, faible
+   risque, déjà localisé avec précision (voir ci-dessus).
+2. **Affiner SPEC-06 T4 à un niveau plus fin que les 9 sections racines** —
+   c'est ce qui débloquerait le plus de sections actuellement en échec
+   (ex. H304, H272, H275... toutes des sous-sections qui ont clairement
+   besoin de RECH v5.0 mais n'héritent que du lien de leur ancêtre).
+3. **Construire le résolveur projet → méthodologie**, aujourd'hui absent.
    Bloque à la fois l'extension au-delà de RECH v5.0 et la généralisation
    de `resolve_parameter()` à d'autres paramètres RECH (NCV, PCAP,
    embodied, leakage marché) — chacun a besoin de sa propre hiérarchie
    dans `regulatory_value_preferences`, comme fait pour le charbon en
    SPEC-03.
-3. **Nettoyer l'artefact d'extraction ICS 17** (« Choice of data or ») —
-   correctif ciblé et de faible risque dans
-   `rech_parameter_extractor.py`, déjà documenté deux fois sans être
-   traité.
-4. **Reprendre SPEC-05 T4** (annexe Safeguarding) avec la structure réelle
-   du v3.0 (27 lignes Principe/Sous-principe/Risques/Indicateurs), à
-   concevoir de zéro plutôt qu'en reprenant le plan pensé pour les 339
-   lignes du v2.3.
+4. **Nettoyer l'artefact d'extraction ICS 17** (« Choice of data or ») et
+   le data-gap `key` vide d'ICS 12/13 (NCV) — correctifs ciblés et de
+   faible risque dans `rech_parameter_extractor.py`, déjà documentés
+   plusieurs fois sans être traités.
 
 ---
 
@@ -739,6 +773,153 @@ liaison sous-section par sous-section, plus précise que la référence
 générale à 101 retenue ici. Land-use & Forests (203) non ingéré — pas
 pertinent pour RECH/cookstoves, mais bloquerait toute extension future à
 des méthodologies forestières.
+
+---
+
+## v1.0 — VPA-DD complet : rédaction sourcée en prose + export réel sur le template v3.0
+
+**Objectif produit fixé par l'utilisateur (04.08.2026)** : *« On arrête les
+specs. v1.0 = un VPA-DD complet, de bout en bout, sous RECH v5.0 sur le
+template v3.0. C'est ce que faisait déjà la version Replit, mais avec des
+chiffres sourcés et le template à jour. »* Un seul écart identifié avec ce
+qui existait déjà : les blocs de paramètres passaient par le pipeline
+sourcé (SPEC-06), mais les sections en prose passaient encore par
+l'ancien chemin générique, qui invente. Cette session fait pour la prose
+ce qui avait été fait pour les paramètres, puis génère et exporte le
+document réel sur le projet `id=12`.
+
+**`carbongpt/repository/prose_section_drafting.py`** (nouveau) : même
+discipline que `parameter_block_drafting.py` (SPEC-06) et
+`defendability.py` (SPEC-04) — le modèle ne voit qu'un jeu de faits fermé,
+et `validate_prose_section_content()` rejette mécaniquement tout nombre,
+référence de section, ou nom de méthodologie/outil/norme absent de ce jeu
+de faits. Régularisation au passage : la constante partagée
+`_ALLCAPS_TOKEN_RE` (détection de jetons ressemblant à un nom externe) a
+été déplacée dans `defendability.py`, dont `parameter_block_drafting.py`
+l'importe maintenant au lieu de la redéfinir — trouvée une fois, réutilisée
+partout, pas retrouvée une troisième fois pour ce module.
+
+`build_prose_section_fact_set(field_key, project_info)` assemble, pour
+UNE section : la section elle-même (titre, section parente) ; ses sources
+gouvernantes (`field_requirement_linking`, SPEC-06 T4 — avec héritage vers
+l'ancêtre de niveau 1 par correspondance de titre pour toute sous-section,
+puisque seules les 9 sections racines et les 3 patrons de bloc ont un lien
+direct) ; les 26 paramètres RECH v5.0 quand la méthodologie gouverne la
+section ; l'identité et les paramètres réels du projet
+(`user_projects`) ; les valeurs déjà résolues (`project_parameters`,
+avec leur statut confirmed/default, jamais présenté comme plus certain
+qu'il ne l'est) ; et les questions ouvertes pertinentes
+(`non_deducible_facts`/`project_open_questions`, SPEC-06 T6), avec leur
+statut répondu/ouvert.
+
+**`ai_writer.py`** : `generate_section_draft()` route maintenant une
+section `prose` vers ce pipeline dès que le guide chargé est celui issu de
+la base (VPA-DD v3.0, `isinstance(guide, _DbBackedGuide)`) — les 7 autres
+couples standard/document, tous sur guide Python, ne sont pas touchés.
+`generate_full_document()` gagne la même capacité pour les blocs de
+paramètres que `generate_section_draft()` avait déjà pour une rédaction à
+l'unité (`parameter_id`) : une nouvelle fonction
+`_draft_full_parameter_block_section()` instancie et rédige TOUS les
+paramètres mappés à un patron (via `instantiate_parameter_blocks()`,
+SPEC-06 T5), pas un seul — sinon la génération complète du document
+n'aurait jamais rédigé que le premier paramètre de chaque patron. Un
+paramètre individuel qui échoue au validateur ne fait pas échouer toute la
+section : son échec est inséré en clair (`[ERROR: ...]`), les autres
+continuent.
+
+**Bug trouvé et corrigé avant toute démonstration réelle** : le premier
+essai sur les 161 sections du VPA-DD v3.0 a échoué à 60 % (65/161
+réussies) — la quasi-totalité des échecs venaient du même endroit :
+`unknown methodology/tool/standard tokens: ['INSERT']`. Le contrôle
+anti-hallucination rejetait le mot « INSERT » que la consigne système
+elle-même demande au modèle d'écrire (`[INSERT: donnée manquante]`) — un
+bug auto-infligé, pas une hallucination captée. Le même contrôle
+rejetait aussi du vocabulaire générique légitime (VPA, VVB, GHG, SDG,
+CME, NDC, GWP, GPS, VER) : des noms de type de document/rôle/concept
+inhérents à la rédaction de n'importe quel VPA-DD, jamais un fait citable
+qui pourrait être faux — à la différence de « ISO 3166 » (une norme
+externe précise, toujours bloquée à raison si non sourcée) ou « TOOL33 »
+(le cas réel qui a motivé tout ce garde-fou, SPEC-06). Corrigé par
+`_STRUCTURAL_VOCABULARY`, une liste explicite et volontairement étroite,
+distincte des noms d'outils/normes externes qui restent bloqués. Après
+correction : 127/161.
+
+**Second bug, plus sérieux, trouvé en relisant le `.docx` produit (pas
+seulement les logs)** : `doc_exporter.py::_fill_gs_vpa_dd_v3` résolvait
+chaque champ H/T-préfixé via `doc.paragraphs[N]`/`doc.tables[N]` recalculé
+à chaque itération — or chaque insertion (un nouveau paragraphe, ou pour
+un patron de paramètre plusieurs tables dupliquées) décale la position de
+tout ce qui suit dans le corps du document. Constaté concrètement : le
+patron ex ante (T37, traité en premier par ordre alphabétique de
+field_key) a inséré 15 tables supplémentaires, décalant de 15 positions
+tout ce qui suivait — si bien que le patron monitoring (T40) a rempli,
+au lieu de sa vraie table, une table de risques Safeguarding sans rapport,
+dupliquée 9 fois avec le mauvais contenu. Corrigé : `doc.paragraphs`/
+`doc.tables` sont maintenant capturés UNE SEULE FOIS avant toute
+insertion, et chaque fonction de remplissage reçoit l'objet élément déjà
+résolu (jamais un indice recalculé). Test de non-régression ajouté
+(`test_two_parameter_block_sections_do_not_shift_each_other`) qui aurait
+détecté ce bug précis. Reproduit et vérifié sur le vrai fichier après
+correction : 16/18 blocs ex ante et 9/9 blocs monitoring correctement
+remplis, un seul tableau de 37 lignes dans tout le document (celui
+d'origine, plus de doublons).
+
+**Résultat final, généré pour de vrai sur le projet `id=12`** (script
+`scripts/generate_vpa_dd_v3_project12.py`, lecture seule sur le projet —
+aucune écriture dans `write_sessions`/`project_parameters`/
+`project_open_questions`) :
+
+- **127 sections sur 161 rédigées avec succès**, 34 en échec — répartition
+  honnête des échecs :
+  - **13 « ISO »** : le modèle a voulu citer une norme externe précise
+    (ex. ISO 3166 pour les codes pays) non présente dans le jeu de faits —
+    le garde-fou fait exactement ce qui est demandé, refuser une citation
+    non sourcée même vraie.
+  - **12 « RECH » non lié** : des sous-sections qui ont clairement besoin
+    de RECH v5.0 (ex. H304 « Applicability of methodologies », sous
+    APPENDICES) n'héritent que du lien de leur ancêtre de niveau 1, qui
+    ne pointe pas vers la méthodologie — lacune de granularité de
+    SPEC-06 T4 déjà documentée, pas un bug de cette session.
+  - **9 autres** : nombres ou sigles techniques précis non sourcés
+    (AFOLU, CAP, NRB, CCD, NAMA, CPA, ou des numéros de sous-clauses
+    inventés) — captures légitimes, un par un vérifiés non génériques.
+  - **2 blocs de paramètres (ICS 12, ICS 13, patron T37)** : rejetés pour
+    « NCV » — `methodology_parameters.key` est vide pour ces deux
+    paramètres en base (lacune d'extraction SPEC-06 T3 déjà connue), le
+    modèle n'invente pas le nom du paramètre à sa place.
+- Les blocs de paramètres restent la partie la plus solide : bloc ICS 22
+  (usage) déjà jugé directement utilisable en session précédente ; ici,
+  16/18 blocs ex ante et 9/9 blocs monitoring rédigés sans invention.
+- **Défaut trouvé en relisant le contenu réel, pas corrigé** : les
+  libellés de `non_deducible_facts.py` sont en français ; un placeholder
+  généré comme « [To be confirmed by the project developer: Coordonnées
+  administratives du CME] » mélange donc le français et l'anglais dans un
+  document qui doit être entièrement en anglais pour Gold Standard.
+  Localisé, faible risque, mais réel — voir « prochaines étapes ».
+- Le projet `id=12` lui-même a très peu de données réelles saisies
+  (`project_intake` vide, pas de coordonnées, pas de description) — beaucoup
+  de sections réussies contiennent donc des placeholders `[INSERT: ...]`
+  légitimes plutôt que du texte substantiel : c'est le reflet honnête de
+  ce que le projet contient, pas une faiblesse du pipeline de rédaction.
+
+**Comparaison avec la version Replit** : je n'ai pas le document produit
+par la version Replit sous les yeux pour un diff ligne à ligne — je ne
+peux comparer que ce que l'utilisateur en a dit. Ce que ce tour-ci change
+concrètement par rapport à ce point de départ : (1) le template exporté
+est le vrai VPA-DD v3.0 de Gold Standard (mai 2026), plus l'ancien fichier
+v2.3 câblé en dur ; (2) chaque affirmation regulatory/méthodologique dans
+la prose est tracée à une source réelle (RECH v5.0 ou un document
+transversal précis) et mécaniquement vérifiée, plus une génération libre ;
+(3) 34 sections sur 161 sont honnêtement marquées en échec plutôt que
+remplies par une invention plausible. Ce que ce tour-ci n'apporte
+toujours pas : un document totalement complet sans aucun trou (127/161,
+pas 161/161) et le nettoyage du mélange de langue signalé ci-dessus.
+
+Tests : `test_prose_section_drafting.py` (22, dont la précision structurelle/
+externe du vocabulaire ALLCAPS), `test_ai_writer_parameter_block_routing.py`
+(+11 nouveaux : routage prose, `_draft_full_parameter_block_section`),
+`test_doc_exporter_vpa_dd_v3.py` (16, dont la régression de décalage
+d'index). 303/303 tests de la suite complète passent.
 
 ---
 
